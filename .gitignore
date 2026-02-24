@@ -1,0 +1,13 @@
+build-*/
+build/
+*.o
+*.a
+*.elf
+*.bin
+*.cdi
+*.dol
+*.lzo
+.DS_Store
+include/kosload/version.h
+.github/
+.claude/

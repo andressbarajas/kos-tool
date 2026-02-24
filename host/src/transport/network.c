@@ -1,0 +1,800 @@
+/* host/src/transport/network.c */
+/*
+ * Network transport implementation for kostool.
+ *
+ * Ported from dcload-ip/host-src/tool/dc-tool.c.
+ * Implements the dcload-ip v2 UDP protocol with version negotiation,
+ * adaptive FIFO pacing, packet recovery, and retry limits.
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdint.h>
+
+#ifdef _WIN32
+#include <winsock2.h>
+#else
+#include <arpa/inet.h>
+#endif
+
+#include <kosload/protocol.h>
+#include <kostool/transport.h>
+#include <kostool/platform.h>
+
+/* FIFO delay constants per adapter type */
+#define BBA_RX_FIFO_DELAY_TIME   1800     /* microseconds */
+#define BBA_RX_FIFO_DELAY_COUNT  10       /* packets per burst */
+#define LAN_RX_FIFO_DELAY_TIME   1250     /* microseconds */
+#define LAN_RX_FIFO_DELAY_COUNT  1        /* packets per burst */
+#define DEFAULT_RX_FIFO_DELAY    (NET_PACKET_TIMEOUT_USEC / 51)
+#define DEFAULT_RX_FIFO_COUNT    15
+
+/* BBA and LAN adapter model IDs returned by dcload (octal, matches legacy) */
+#define BBA_MODEL  0400
+#define LAN_MODEL  0300
+
+/* Retry limits to prevent infinite loops on persistent failures */
+#define MAX_CMD_RETRIES       20   /* max retries for command ack (LOADBIN, DONEBIN, etc.) */
+#define MAX_RECV_REREQUESTS   10   /* max full passes over recv bitmap */
+
+/* Drain delay after a LOADBIN retry to let stale in-flight PARTBINs expire.
+ * This mitigates silent data corruption from attempt N-1's packets arriving
+ * during attempt N's transfer. */
+#define LOADBIN_DRAIN_DELAY_USEC  (NET_PACKET_TIMEOUT_USEC * 2)
+
+/* Adaptive pacing: increase FIFO delay when recovery reports misses */
+#define PACING_INCREASE_FACTOR  2  /* multiply delay on miss */
+#define PACING_MAX_DELAY_USEC   50000  /* 50ms cap */
+
+/* Auto-fast threshold: transfers with this many chunks or fewer skip FIFO
+ * pacing automatically.  Empirically, 23-chunk (32KB) transfers have zero
+ * loss even without pacing, while 205+ chunk transfers start dropping.
+ * 50 chunks (~72KB) gives comfortable headroom. */
+#define AUTO_FAST_CHUNK_THRESHOLD  50
+
+/* Uncomment to enable per-transfer statistics output */
+// #define NET_TRANSFER_STATS
+
+/* ===== Low-level UDP helpers ===== */
+
+/*
+ * Send a command packet: 4-byte command ID + 4-byte address + 4-byte size + optional data.
+ * All multi-byte fields in network byte order.
+ */
+static int send_cmd(kostool_context_t *ctx, const char cmd[4],
+                    uint32_t addr, uint32_t size,
+                    const uint8_t *data, uint32_t dsize) {
+    uint8_t buf[2048];
+    uint32_t tmp;
+
+    if (dsize > sizeof(buf) - 12)
+        dsize = sizeof(buf) - 12;
+
+    memcpy(buf, cmd, 4);
+    tmp = htonl(addr);
+    memcpy(buf + 4, &tmp, 4);
+    tmp = htonl(size);
+    memcpy(buf + 8, &tmp, 4);
+    if (data && dsize > 0)
+        memcpy(buf + 12, data, dsize);
+
+    int ret = ctx->socket_ops->send(ctx->global_socket, buf, 12 + dsize);
+    if (ret < 0) return -1;
+    return 0;
+}
+
+/*
+ * Receive a response packet with timeout.
+ * Returns bytes received, or -1 on timeout.
+ */
+static int recv_resp(kostool_context_t *ctx, uint8_t *buffer,
+                     size_t buffer_size, uint32_t timeout_usec) {
+    uint64_t start = ctx->time_ops->time_usec();
+
+    while ((ctx->time_ops->time_usec() - start) < timeout_usec) {
+        int rv = ctx->socket_ops->recv(ctx->global_socket, buffer, buffer_size);
+        if (rv > 0)
+            return rv;
+    }
+
+    return -1;
+}
+
+/*
+ * Drain any stale packets from the receive buffer.
+ * Call after a LOADBIN retry to discard in-flight PARTBINs from the
+ * previous attempt that could corrupt the new transfer.
+ */
+static void drain_rx_buffer(kostool_context_t *ctx, uint32_t drain_usec) {
+    uint8_t discard[2048];
+    uint64_t start = ctx->time_ops->time_usec();
+
+    while ((ctx->time_ops->time_usec() - start) < drain_usec) {
+        ctx->socket_ops->recv(ctx->global_socket, discard, sizeof(discard));
+    }
+}
+
+/*
+ * Send a command and wait for a matching response, with retry limit.
+ * Returns 0 on success (buffer contains the response), -1 on failure.
+ */
+static int send_and_wait(kostool_context_t *ctx, const char cmd[4],
+                         uint32_t addr, uint32_t size,
+                         const uint8_t *data, uint32_t dsize,
+                         uint8_t *buffer, size_t buffer_size,
+                         const char expected[4]) {
+    for (int attempt = 0; attempt < MAX_CMD_RETRIES; attempt++) {
+        send_cmd(ctx, cmd, addr, size, data, dsize);
+        if (recv_resp(ctx, buffer, buffer_size, NET_PACKET_TIMEOUT_USEC) > 0 &&
+            memcmp(buffer, expected, 4) == 0)
+            return 0;
+        if (!ctx->fast_mode && attempt > 0 && (attempt % 5) == 0)
+            fprintf(stderr, "send_and_wait: retrying %s (attempt %d/%d)...\n",
+                    cmd, attempt + 1, MAX_CMD_RETRIES);
+    }
+    fprintf(stderr, "send_and_wait: %s failed after %d attempts\n",
+            cmd, MAX_CMD_RETRIES);
+    return -1;
+}
+
+/*
+ * Encode dc-tool version into a uint32 for handshake: (major<<16)|(minor<<8)|patch
+ * Returns 0 if force_legacy is set.
+ *
+ * send_cmd() already applies htonl() to the address field, so we must NOT
+ * apply htonl() here — that would double byte-swap and corrupt the version.
+ * Version must be >= 2.0.0 so firmware's DCTOOL_MAJOR >= 2 for v2 features
+ * (1440-byte payloads, v2 syscall port, "DC02" write commands).
+ */
+static uint32_t make_encoded_version(int force_legacy) {
+    if (force_legacy) return 0;
+    /* kostool version 2.0.0 → 0x00020000 */
+    return (2 << 16) | (0 << 8) | 0;
+}
+
+/*
+ * Version negotiation and adapter detection.
+ * Dual-socket strategy: legacy port 31313 and v2 port 53535.
+ * The DC will respond on whichever port it understands.
+ */
+static int prepare_comms(kostool_context_t *ctx) {
+    if (ctx->installed_adapter != 0)
+        return 0;  /* Already initialized */
+
+    uint32_t encoded_ver = make_encoded_version(ctx->force_legacy);
+    uint8_t buffer[2048];
+    int flip = 0;
+
+    /* Start with v2 socket unless forcing legacy */
+    if (ctx->force_legacy)
+        ctx->global_socket = ctx->socket_legacy;
+    else
+        ctx->global_socket = ctx->socket_fd;
+
+    /* Send version command, alternating between v2 and legacy sockets */
+    do {
+        send_cmd(ctx, NET_CMD_VERSION, encoded_ver, 0, NULL, 0);
+        if (recv_resp(ctx, buffer, sizeof(buffer), NET_PACKET_TIMEOUT_USEC) != -1)
+            break;
+        /* Try the other socket */
+        flip ^= 1;
+        ctx->global_socket = flip ? ctx->socket_legacy : ctx->socket_fd;
+    } while (1);
+
+    /* Keep trying until we get a VERSION response */
+    while (memcmp(buffer, NET_CMD_VERSION, 4) != 0) {
+        do {
+            flip ^= 1;
+            ctx->global_socket = flip ? ctx->socket_legacy : ctx->socket_fd;
+            send_cmd(ctx, NET_CMD_VERSION, encoded_ver, 0, NULL, 0);
+        } while (recv_resp(ctx, buffer, sizeof(buffer), NET_PACKET_TIMEOUT_USEC) == -1);
+    }
+
+    /* Close the socket we don't need */
+    if (ctx->global_socket == ctx->socket_fd) {
+        ctx->socket_ops->close(ctx->socket_legacy);
+        ctx->socket_legacy = -1;
+    } else {
+        ctx->socket_ops->close(ctx->socket_fd);
+        ctx->socket_fd = -1;
+    }
+
+    /* Extract adapter type and capabilities from the VERSION response.
+     * kosload encodes: address = (capabilities << 16) | adapter_model
+     * Legacy dcload has no capabilities, so upper 16 bits are zero. */
+    net_command_t *cmd = (net_command_t *)buffer;
+    uint32_t raw_addr = ntohl(cmd->address);
+    ctx->installed_adapter = raw_addr & 0xFFFF;
+    ctx->remote_capabilities = (raw_addr >> 16) & 0xFFFF;
+
+    /* Store version string for firmware update decisions */
+    snprintf(ctx->remote_version_string,
+             sizeof(ctx->remote_version_string), "%s", (char *)cmd->data);
+
+    /* Accept both legacy octal (0400=256, 0300=192) and hex (0x0400=1024,
+     * 0x0300=768) adapter IDs for compatibility with old CDI builds */
+    int is_bba = (ctx->installed_adapter == BBA_MODEL ||
+                  ctx->installed_adapter == 0x0400);
+    int is_lan = (ctx->installed_adapter == LAN_MODEL ||
+                  ctx->installed_adapter == 0x0300);
+
+    printf("%s\n", ctx->remote_version_string);
+
+    if (ctx->force_legacy) {
+        printf("Forcing 1024-byte payloads...\n");
+        ctx->legacy_mode = 1;
+    }
+
+    if (is_bba) {
+        if (!ctx->fast_mode) {
+            ctx->rx_fifo_delay = BBA_RX_FIFO_DELAY_TIME;
+            ctx->rx_fifo_delay_count = BBA_RX_FIFO_DELAY_COUNT;
+        } else {
+            ctx->rx_fifo_delay = 0;
+        }
+    } else if (is_lan) {
+        if (!ctx->fast_mode) {
+            ctx->rx_fifo_delay = LAN_RX_FIFO_DELAY_TIME;
+            ctx->rx_fifo_delay_count = LAN_RX_FIFO_DELAY_COUNT;
+        } else {
+            ctx->rx_fifo_delay = 0;
+        }
+    } else {
+        ctx->installed_adapter = BBA_MODEL;
+        ctx->legacy_mode = 1;
+        ctx->rx_fifo_delay = DEFAULT_RX_FIFO_DELAY;
+        ctx->rx_fifo_delay_count = DEFAULT_RX_FIFO_COUNT;
+    }
+
+    return 0;
+}
+
+/* ===== Transport interface implementation ===== */
+
+static int network_init(kostool_context_t *ctx) {
+    if (!ctx->hostname) {
+        fprintf(stderr, "No hostname specified (use -t)\n");
+        return -1;
+    }
+
+    /* Initialize socket subsystem (WinSock on Windows, no-op on POSIX) */
+    if (ctx->socket_ops->init && ctx->socket_ops->init() != 0) {
+        fprintf(stderr, "Socket initialization failed\n");
+        return -1;
+    }
+
+    /* Parse hostname:port if present */
+    char *host_copy = strdup(ctx->hostname);
+    uint16_t port = NET_DEFAULT_PORT;
+    char *colon = strchr(host_copy, ':');
+    if (colon) {
+        *colon = '\0';
+        port = (uint16_t)atoi(colon + 1);
+    }
+    ctx->port = port;
+
+    /* Create both sockets: legacy (31313) and v2 (user port or 53535) */
+    ctx->socket_fd = ctx->socket_ops->udp_socket();
+    ctx->socket_legacy = ctx->socket_ops->udp_socket();
+    if (ctx->socket_fd < 0 || ctx->socket_legacy < 0) {
+        fprintf(stderr, "Failed to create UDP sockets\n");
+        free(host_copy);
+        return -1;
+    }
+
+    /* Connect legacy socket first */
+    int rc;
+    rc = ctx->socket_ops->connect(ctx->socket_legacy, host_copy, NET_LEGACY_PORT);
+    if (rc < 0) {
+        fprintf(stderr, "Failed to connect to %s:%d (legacy)\n", host_copy, NET_LEGACY_PORT);
+        free(host_copy);
+        return -1;
+    }
+
+    /* Connect v2 socket */
+    rc = ctx->socket_ops->connect(ctx->socket_fd, host_copy, port);
+    if (rc < 0) {
+        fprintf(stderr, "Failed to connect to %s:%d\n", host_copy, port);
+        free(host_copy);
+        return -1;
+    }
+
+    free(host_copy);
+
+    /* Set both sockets non-blocking */
+    ctx->socket_ops->set_nonblocking(ctx->socket_fd);
+    ctx->socket_ops->set_nonblocking(ctx->socket_legacy);
+
+    /* Initialize FIFO delay defaults */
+    ctx->rx_fifo_delay = DEFAULT_RX_FIFO_DELAY;
+    ctx->rx_fifo_delay_count = DEFAULT_RX_FIFO_COUNT;
+
+    /* Run VERS handshake now so remote_version_string and
+     * remote_capabilities are available for auto-update. */
+    prepare_comms(ctx);
+
+    return 0;
+}
+
+static void network_shutdown(kostool_context_t *ctx) {
+    /* Close GDB sockets */
+    if (ctx->gdb_enabled && ctx->gdb_client_socket >= 0) {
+        char gdb_buf[] = "+$X0f#ee";
+        ctx->socket_ops->send(ctx->gdb_client_socket, gdb_buf, strlen(gdb_buf));
+        ctx->time_ops->sleep_usec(1000000);
+        ctx->socket_ops->close(ctx->gdb_client_socket);
+        ctx->gdb_client_socket = -1;
+    }
+    if (ctx->gdb_enabled && ctx->gdb_server_socket >= 0) {
+        ctx->socket_ops->close(ctx->gdb_server_socket);
+        ctx->gdb_server_socket = -1;
+    }
+
+    /* Close main sockets.
+     * global_socket aliases either socket_fd or socket_legacy after
+     * prepare_comms(), so clear the matching one to avoid double-close. */
+    if (ctx->global_socket > 0) {
+        if (ctx->global_socket == ctx->socket_fd)
+            ctx->socket_fd = -1;
+        else if (ctx->global_socket == ctx->socket_legacy)
+            ctx->socket_legacy = -1;
+        ctx->socket_ops->close(ctx->global_socket);
+        ctx->global_socket = -1;
+    }
+    if (ctx->socket_fd > 0) {
+        ctx->socket_ops->close(ctx->socket_fd);
+        ctx->socket_fd = -1;
+    }
+    if (ctx->socket_legacy > 0) {
+        ctx->socket_ops->close(ctx->socket_legacy);
+        ctx->socket_legacy = -1;
+    }
+
+    if (ctx->socket_ops->cleanup)
+        ctx->socket_ops->cleanup();
+}
+
+/*
+ * Send binary data to DC via UDP.
+ * Protocol:
+ * 1. Send LOADBIN with dest_addr and size, wait for ack
+ * 2. Send data in PARTBIN chunks (1024 or 1440 bytes) with adaptive FIFO pacing
+ * 3. Send DONEBIN, wait for ack
+ * 4. If ack indicates missing data, resend those chunks (with retry limit)
+ *
+ * Reliability improvements over legacy dc-tool:
+ * - Retry limits on all loops to prevent hangs
+ * - Drain delay after LOADBIN retry to discard stale in-flight packets
+ * - Adaptive pacing: increase FIFO delay when packet loss detected
+ */
+static int network_send_data(kostool_context_t *ctx, const uint8_t *data,
+                             uint32_t dest_addr, uint32_t size) {
+    uint8_t buffer[2048];
+
+    if (!size) return -1;
+
+    prepare_comms(ctx);
+
+#ifdef NET_TRANSFER_STATS
+    uint32_t stat_total_chunks = 0;
+    uint32_t stat_recovery_rounds = 0;
+    uint32_t stat_retransmitted_bytes = 0;
+    uint32_t stat_loadbin_retries = 0;
+    uint64_t stat_start_time = ctx->time_ops->time_usec();
+#endif
+
+    /* Send LOADBIN and wait for ack */
+    if (send_and_wait(ctx, NET_CMD_LOADBIN, dest_addr, size, NULL, 0,
+                      buffer, sizeof(buffer), NET_CMD_LOADBIN) != 0) {
+        fprintf(stderr, "send_data: LOADBIN failed, giving up\n");
+        return -1;
+    }
+
+    /* Send data in chunks with adaptive pacing */
+    uint32_t chunk_size = ctx->legacy_mode ? NET_LEGACY_PAYLOAD_SIZE : NET_PAYLOAD_SIZE;
+    uint32_t pacing_count = 0;
+    uint32_t current_fifo_delay = ctx->rx_fifo_delay;
+
+    uint32_t num_chunks = (size + chunk_size - 1) / chunk_size;
+#ifdef NET_TRANSFER_STATS
+    stat_total_chunks = num_chunks;
+#endif
+
+    /* Auto-fast: skip FIFO pacing for small transfers (e.g. syscall I/O).
+     * These fit in the BBA's RX FIFO without loss, so pacing is pure waste. */
+    int auto_fast = (num_chunks <= AUTO_FAST_CHUNK_THRESHOLD);
+    if (auto_fast)
+        current_fifo_delay = 0;
+
+    for (uint32_t offset = 0; offset < size; offset += chunk_size) {
+        uint32_t remaining = size - offset;
+        uint32_t send_size = (remaining >= chunk_size) ? chunk_size : remaining;
+
+        send_cmd(ctx, NET_CMD_PARTBIN, dest_addr + offset, send_size,
+                 data + offset, send_size);
+
+        /* FIFO pacing: pause periodically to let DC empty its RX buffer */
+        pacing_count++;
+        if (ctx->rx_fifo_delay_count && pacing_count >= ctx->rx_fifo_delay_count) {
+            uint64_t start = ctx->time_ops->time_usec();
+            while ((ctx->time_ops->time_usec() - start) < current_fifo_delay)
+                ;
+            pacing_count = 0;
+        }
+    }
+
+    /* Brief delay before DONEBIN to ensure data packets are sent */
+    if (!ctx->fast_mode && !auto_fast) {
+        uint64_t start = ctx->time_ops->time_usec();
+        while ((ctx->time_ops->time_usec() - start) < NET_PACKET_TIMEOUT_USEC / 10)
+            ;
+    }
+
+    /* Send DONEBIN and handle packet recovery with retry limit */
+    int loadbin_retries = 0;
+
+    if (send_and_wait(ctx, NET_CMD_DONEBIN, 0, 0, NULL, 0,
+                      buffer, sizeof(buffer), NET_CMD_DONEBIN) != 0) {
+        /* DONEBIN failed — retry the entire LOADBIN sequence */
+        fprintf(stderr, "send_data: DONEBIN failed, retrying LOADBIN...\n");
+
+        /* Drain stale packets before retrying */
+        drain_rx_buffer(ctx, LOADBIN_DRAIN_DELAY_USEC);
+#ifdef NET_TRANSFER_STATS
+        stat_loadbin_retries++;
+        stat_retransmitted_bytes += size;
+#endif
+
+        if (send_and_wait(ctx, NET_CMD_LOADBIN, dest_addr, size, NULL, 0,
+                          buffer, sizeof(buffer), NET_CMD_LOADBIN) != 0) {
+            fprintf(stderr, "send_data: LOADBIN retry failed, giving up\n");
+            return -1;
+        }
+
+        /* Resend all data */
+        pacing_count = 0;
+        for (uint32_t offset = 0; offset < size; offset += chunk_size) {
+            uint32_t remaining = size - offset;
+            uint32_t send_size = (remaining >= chunk_size) ? chunk_size : remaining;
+            send_cmd(ctx, NET_CMD_PARTBIN, dest_addr + offset, send_size,
+                     data + offset, send_size);
+            pacing_count++;
+            if (ctx->rx_fifo_delay_count && pacing_count >= ctx->rx_fifo_delay_count) {
+                uint64_t start = ctx->time_ops->time_usec();
+                while ((ctx->time_ops->time_usec() - start) < current_fifo_delay)
+                    ;
+                pacing_count = 0;
+            }
+        }
+
+        if (!ctx->fast_mode) {
+            uint64_t start = ctx->time_ops->time_usec();
+            while ((ctx->time_ops->time_usec() - start) < NET_PACKET_TIMEOUT_USEC / 10)
+                ;
+        }
+
+        if (send_and_wait(ctx, NET_CMD_DONEBIN, 0, 0, NULL, 0,
+                          buffer, sizeof(buffer), NET_CMD_DONEBIN) != 0) {
+            fprintf(stderr, "send_data: DONEBIN retry failed, giving up\n");
+            return -1;
+        }
+    }
+
+    /* Resend any missing chunks reported by DC.
+     * No limit on recovery rounds — match legacy dc-tool-ip behavior where
+     * the loop runs until all chunks are received.  Adaptive pacing increases
+     * FIFO delay on each miss, so packet loss naturally converges to zero. */
+    net_command_t *cmd = (net_command_t *)buffer;
+    while (ntohl(cmd->size) != 0) {
+        uint32_t miss_addr = ntohl(cmd->address);
+        uint32_t miss_size = ntohl(cmd->size);
+        uint32_t miss_off = miss_addr - dest_addr;
+
+        /* Validate the miss range */
+        if (miss_off + miss_size > size) {
+            fprintf(stderr, "send_data: invalid miss range 0x%x+%u, aborting recovery\n",
+                    miss_addr, miss_size);
+            break;
+        }
+
+        /* Adapt pacing: packet loss means we're sending too fast.
+         * Skip in fast mode — user explicitly accepted the risk. */
+        if (!ctx->fast_mode && current_fifo_delay < PACING_MAX_DELAY_USEC) {
+            current_fifo_delay *= PACING_INCREASE_FACTOR;
+            if (current_fifo_delay > PACING_MAX_DELAY_USEC)
+                current_fifo_delay = PACING_MAX_DELAY_USEC;
+        }
+
+        send_cmd(ctx, NET_CMD_PARTBIN, miss_addr, miss_size,
+                 data + miss_off, miss_size);
+
+#ifdef NET_TRANSFER_STATS
+        stat_recovery_rounds++;
+        stat_retransmitted_bytes += miss_size;
+#endif
+
+        if (send_and_wait(ctx, NET_CMD_DONEBIN, 0, 0, NULL, 0,
+                          buffer, sizeof(buffer), NET_CMD_DONEBIN) != 0) {
+            /* DONEBIN failed during recovery — retry LOADBIN with drain */
+            loadbin_retries++;
+#ifdef NET_TRANSFER_STATS
+            stat_loadbin_retries++;
+#endif
+            if (loadbin_retries > 3) {
+                fprintf(stderr, "send_data: too many LOADBIN retries during recovery, giving up\n");
+                return -1;
+            }
+
+            fprintf(stderr, "send_data: DONEBIN failed during recovery, draining and retrying...\n");
+            drain_rx_buffer(ctx, LOADBIN_DRAIN_DELAY_USEC);
+
+            if (send_and_wait(ctx, NET_CMD_LOADBIN, dest_addr, size, NULL, 0,
+                              buffer, sizeof(buffer), NET_CMD_LOADBIN) != 0) {
+                fprintf(stderr, "send_data: LOADBIN retry failed during recovery\n");
+                return -1;
+            }
+            break;  /* Restart from scratch would need full resend — let caller retry */
+        }
+    }
+
+#ifdef NET_TRANSFER_STATS
+    /* Print packet loss statistics */
+    uint64_t stat_elapsed = ctx->time_ops->time_usec() - stat_start_time;
+    double elapsed_ms = (double)stat_elapsed / 1000.0;
+    double throughput_kbps = (elapsed_ms > 0) ? ((double)size * 8.0) / elapsed_ms : 0;
+
+    printf("  Transfer stats: %u bytes in %.1f ms (%.1f kbit/s)\n",
+           size, elapsed_ms, throughput_kbps);
+    printf("  Chunks: %u total, %u retransmitted (%u recovery rounds)\n",
+           stat_total_chunks, stat_recovery_rounds,
+           stat_recovery_rounds);
+    if (stat_retransmitted_bytes > 0)
+        printf("  Retransmitted: %u bytes (%.2f%% overhead)\n",
+               stat_retransmitted_bytes,
+               (double)stat_retransmitted_bytes * 100.0 / (double)size);
+    if (stat_loadbin_retries > 0)
+        printf("  LOADBIN retries: %u\n", stat_loadbin_retries);
+#endif
+
+    return 0;
+}
+
+/*
+ * Receive binary data from DC via UDP.
+ * Protocol:
+ * 1. Send SENDBIN/SENDBINQ with src_addr and size
+ * 2. Receive PARTBIN packets, track which chunks arrived in a map
+ * 3. On DONEBIN or timeout, re-request missing chunks
+ *
+ * Improvements: retry limit on re-request loop to prevent infinite loops.
+ */
+static int network_recv_data(kostool_context_t *ctx, uint8_t *data,
+                             uint32_t src_addr, uint32_t size, int quiet) {
+    uint8_t buffer[2048];
+    int retval;
+
+    prepare_comms(ctx);
+
+    uint32_t chunk_size = ctx->legacy_mode ? NET_LEGACY_PAYLOAD_SIZE : NET_PAYLOAD_SIZE;
+    uint32_t num_chunks = (size + chunk_size - 1) / chunk_size;
+
+    uint8_t *map = calloc(1, num_chunks);
+    if (!map) return -1;
+
+    /* Request the binary */
+    const char *cmd_id = quiet ? NET_CMD_SENDBINQ : NET_CMD_SENDBIN;
+    send_cmd(ctx, cmd_id, src_addr, size, NULL, 0);
+
+    /* Receive packets */
+    int packets = 0;
+    uint64_t start = ctx->time_ops->time_usec();
+
+    while ((ctx->time_ops->time_usec() - start) < NET_PACKET_TIMEOUT_USEC &&
+           packets < (int)(num_chunks + 1)) {
+        memset(buffer, 0, 2048);
+
+        while ((retval = ctx->socket_ops->recv(ctx->global_socket, buffer, 2048)) < 0 &&
+               (ctx->time_ops->time_usec() - start) < NET_PACKET_TIMEOUT_USEC)
+            ;
+
+        if (retval > 0) {
+            start = ctx->time_ops->time_usec();
+            net_command_t *pkt = (net_command_t *)buffer;
+
+            if (memcmp(pkt->id, NET_CMD_DONEBIN, 4) != 0) {
+                uint32_t pkt_addr = ntohl(pkt->address);
+                uint32_t pkt_size = ntohl(pkt->size);
+                uint32_t chunk_idx = (pkt_addr - src_addr) / chunk_size;
+
+                if (chunk_idx < num_chunks) {
+                    map[chunk_idx] = 1;
+                    memcpy(data + (pkt_addr - src_addr), buffer + NET_COMMAND_LEN, pkt_size);
+                }
+            }
+            packets++;
+        }
+    }
+
+    /* Re-request any missing chunks with retry limit */
+    int passes = 0;
+    for (uint32_t c = 0; c < num_chunks; c++) {
+        if (map[c]) continue;
+
+        uint32_t req_addr = src_addr + c * chunk_size;
+        uint32_t req_size = ((size - c * chunk_size) >= chunk_size) ? chunk_size : (size - c * chunk_size);
+
+        send_cmd(ctx, NET_CMD_SENDBINQ, req_addr, req_size, NULL, 0);
+
+        start = ctx->time_ops->time_usec();
+        while ((retval = ctx->socket_ops->recv(ctx->global_socket, buffer, 2048)) < 0 &&
+               (ctx->time_ops->time_usec() - start) < NET_PACKET_TIMEOUT_USEC)
+            ;
+
+        if (retval > 0) {
+            net_command_t *pkt = (net_command_t *)buffer;
+            if (memcmp(pkt->id, NET_CMD_DONEBIN, 4) != 0) {
+                uint32_t pkt_addr = ntohl(pkt->address);
+                uint32_t pkt_size = ntohl(pkt->size);
+                uint32_t idx = (pkt_addr - src_addr) / chunk_size;
+                if (idx < num_chunks) {
+                    map[idx] = 1;
+                    memcpy(data + (pkt_addr - src_addr), buffer + NET_COMMAND_LEN, pkt_size);
+                }
+            }
+
+            /* Consume the DONEBIN */
+            while ((retval = ctx->socket_ops->recv(ctx->global_socket, buffer, 2048)) < 0 &&
+                   (ctx->time_ops->time_usec() - start) < NET_PACKET_TIMEOUT_USEC)
+                ;
+        }
+
+        /* Restart check from beginning, but limit total passes */
+        passes++;
+        if (passes >= MAX_RECV_REREQUESTS) {
+            fprintf(stderr, "recv_data: exceeded %d re-request passes, transfer may be incomplete\n",
+                    MAX_RECV_REREQUESTS);
+            break;
+        }
+        c = (uint32_t)-1;
+    }
+
+    free(map);
+    return 0;
+}
+
+static int network_send_command(kostool_context_t *ctx, const char cmd[4],
+                                uint32_t addr, uint32_t size,
+                                const uint8_t *data, uint32_t data_size) {
+    prepare_comms(ctx);
+    return send_cmd(ctx, cmd, addr, size, data, data_size);
+}
+
+static int network_recv_response(kostool_context_t *ctx, uint8_t *buffer,
+                                 size_t buffer_size, uint32_t timeout_usec) {
+    return recv_resp(ctx, buffer, buffer_size, timeout_usec);
+}
+
+static int network_execute(kostool_context_t *ctx, uint32_t addr,
+                           int console_enabled, int cdfs_redir) {
+    uint8_t buffer[2048];
+
+    prepare_comms(ctx);
+
+    uint32_t flags = ((uint32_t)cdfs_redir << 1) | (uint32_t)console_enabled;
+
+    /* Build EXEC data payload: [argc (4 bytes BE)] [command_line string with NUL] */
+    uint8_t exec_data[4 + 256];
+    uint32_t exec_data_len = 0;
+
+    if (ctx->prog_argc > 0) {
+        uint32_t argc_be = htonl(ctx->prog_argc);
+        memcpy(exec_data, &argc_be, 4);
+        uint32_t cmdline_len = (uint32_t)strlen(ctx->prog_command_line) + 1;
+        memcpy(exec_data + 4, ctx->prog_command_line, cmdline_len);
+        exec_data_len = 4 + cmdline_len;
+    }
+
+    /* For v2+ dcload, use uncached address */
+    if (!ctx->legacy_mode || ctx->force_legacy)
+        printf("Sending execute command (0x%08x, console=%d, cdfsredir=%d)...",
+               addr | 0xa0000000, console_enabled, cdfs_redir);
+    else
+        printf("Sending execute command (0x%08x, console=%d, cdfsredir=%d)...",
+               addr, console_enabled, cdfs_redir);
+
+    if (ctx->prog_argc > 0)
+        printf("args(%u): \"%s\"...", ctx->prog_argc, ctx->prog_command_line);
+
+    if (send_and_wait(ctx, NET_CMD_EXECUTE, addr, flags,
+                      exec_data_len ? exec_data : NULL, exec_data_len,
+                      buffer, sizeof(buffer), NET_CMD_EXECUTE) != 0) {
+        fprintf(stderr, "execute failed\n");
+        return -1;
+    }
+
+    printf("executing\n");
+    return 0;
+}
+
+static int network_reset(kostool_context_t *ctx) {
+    prepare_comms(ctx);
+    printf("Resetting...\n");
+    return send_cmd(ctx, NET_CMD_REBOOT, 0, 0, NULL, 0);
+}
+
+static int network_maple(kostool_context_t *ctx, const uint8_t *cmd,
+                         size_t cmd_size, uint8_t *resp, size_t *resp_size) {
+    uint8_t buffer[2048];
+
+    prepare_comms(ctx);
+
+    send_cmd(ctx, NET_CMD_MAPLE, 0, 0, cmd, (uint32_t)cmd_size);
+    int rv = recv_resp(ctx, buffer, sizeof(buffer), NET_PACKET_TIMEOUT_USEC);
+    if (rv <= 0) return -1;
+
+    net_command_t *pkt = (net_command_t *)buffer;
+    uint32_t data_len = ntohl(pkt->size);
+    if (resp && resp_size) {
+        if (data_len > *resp_size) data_len = (uint32_t)*resp_size;
+        memcpy(resp, buffer + NET_COMMAND_LEN, data_len);
+        *resp_size = data_len;
+    }
+
+    return 0;
+}
+
+static int network_pmcr(kostool_context_t *ctx, const uint8_t *cmd,
+                        size_t cmd_size, uint8_t *resp, size_t *resp_size) {
+    uint8_t buffer[2048];
+
+    prepare_comms(ctx);
+
+    send_cmd(ctx, NET_CMD_PMCR, 0, 0, cmd, (uint32_t)cmd_size);
+    int rv = recv_resp(ctx, buffer, sizeof(buffer), NET_PACKET_TIMEOUT_USEC);
+    if (rv <= 0) return -1;
+
+    net_command_t *pkt = (net_command_t *)buffer;
+    uint32_t data_len = ntohl(pkt->size);
+    if (resp && resp_size) {
+        if (data_len > *resp_size) data_len = (uint32_t)*resp_size;
+        memcpy(resp, buffer + NET_COMMAND_LEN, data_len);
+        *resp_size = data_len;
+    }
+
+    return 0;
+}
+
+static int network_set_rtc(kostool_context_t *ctx, uint32_t timestamp) {
+    uint8_t buffer[2048];
+
+    prepare_comms(ctx);
+
+    printf("Syncing RTC...");
+    if (send_and_wait(ctx, NET_CMD_SETRTC, timestamp, 0, NULL, 0,
+                      buffer, sizeof(buffer), NET_CMD_SETRTC) != 0) {
+        fprintf(stderr, "failed\n");
+        return -1;
+    }
+    printf("done\n");
+
+    return 0;
+}
+
+const transport_ops_t network_transport_ops = {
+    .name = "network",
+    .capabilities = TRANSPORT_CAP_RESET | TRANSPORT_CAP_MAPLE |
+                    TRANSPORT_CAP_PMCR | TRANSPORT_CAP_RECOVERY,
+    .init = network_init,
+    .shutdown = network_shutdown,
+    .send_data = network_send_data,
+    .recv_data = network_recv_data,
+    .send_command = network_send_command,
+    .recv_response = network_recv_response,
+    .execute = network_execute,
+    .reset = network_reset,
+    .change_speed = NULL,
+    .maple_command = network_maple,
+    .pmcr_command = network_pmcr,
+    .set_rtc = network_set_rtc,
+};
