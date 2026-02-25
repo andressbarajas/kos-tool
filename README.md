@@ -124,6 +124,14 @@ brew install libelf
 pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-libelf make
 ```
 
+### VGA-Only (Naomi / System SP)
+
+Arcade boards like Naomi and System SP don't have standard A/V cable detect wiring. To build Dreamcast firmware that forces VGA output and skips cable detection:
+
+```bash
+make dc VGAONLY=1
+```
+
 ### Static IP (Dreamcast/GameCube)
 
 By default, network firmware uses DHCP. To build with a static IP:
