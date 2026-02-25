@@ -317,7 +317,7 @@ EXBUILD := $(BUILDDIR)/examples
 
 # All examples with a main.c that compile for DC
 DC_EXAMPLES := \
-    cdfs-test console-test download-test exception-test \
+    cdfs-test console-test dc-probe download-test exception-test \
     exit-test file-test gdb-test maple-test rainbow-test \
     syscall-test
 
