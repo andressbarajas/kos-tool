@@ -136,6 +136,12 @@ $(TARGET): $(OBJS) $(FW_OBJS) $(MINILZO_A) | $(BUILDDIR)
 $(BUILDDIR)/%.o: src/%.c $(VERSION_H) | $(BUILDDIR)/transport $(BUILDDIR)/binary $(BUILDDIR)/platform
 	$(CC) $(CFLAGS) -c $< -o $@
 
+# firmware_update.o uses #ifdef HAS_FIRMWARE_* to emit stubs for missing
+# firmware.  When firmware availability changes (e.g. dc built before gc),
+# FW_OBJS changes and firmware_update.o must be recompiled with the new
+# FW_DEFS to avoid duplicate symbol errors at link time.
+$(BUILDDIR)/firmware_update.o: $(FW_OBJS)
+
 $(MINILZO_A):
 	$(MAKE) -C $(MINILZO_DIR) CC="$(CC)" AR=ar CFLAGS="-O2" BUILDDIR=build-host
 
