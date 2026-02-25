@@ -97,4 +97,7 @@ void exi_dma(int channel, void *addr, int len, int mode);
 /* Read device ID */
 uint32_t exi_get_id(int channel, int device);
 
+/* Read channel status register (EXT bit, etc.) */
+uint32_t exi_get_status(int channel);
+
 #endif /* KOSLOAD_GC_EXI_H */

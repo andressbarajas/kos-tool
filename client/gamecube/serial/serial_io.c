@@ -10,10 +10,10 @@
 #include <kosload/serial_io.h>
 #include "usbgecko.h"
 
-void serial_io_init(unsigned int speed)
+int serial_io_init(unsigned int speed)
 {
     (void)speed;  /* USBGecko has fixed transfer rate */
-    usbgecko_init();
+    return usbgecko_init();
 }
 
 void serial_io_putchar(unsigned char c)

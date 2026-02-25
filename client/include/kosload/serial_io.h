@@ -10,7 +10,7 @@
 #ifndef KOSLOAD_SERIAL_IO_H
 #define KOSLOAD_SERIAL_IO_H
 
-void serial_io_init(unsigned int speed);
+int serial_io_init(unsigned int speed);
 void serial_io_putchar(unsigned char c);
 unsigned char serial_io_getchar(void);
 void serial_io_flush(void);

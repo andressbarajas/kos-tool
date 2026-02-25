@@ -122,3 +122,8 @@ uint32_t exi_get_id(int channel, int device)
 
     return id;
 }
+
+uint32_t exi_get_status(int channel)
+{
+    return *exi_reg(channel, EXI_STATUS);
+}

@@ -555,7 +555,8 @@ static void serial_restore_screen(void)
 
 static int serial_transport_init(void)
 {
-    serial_io_init(SERIAL_DEFAULT_SPEED);
+    if (serial_io_init(SERIAL_DEFAULT_SPEED) != 0)
+        return -1;
     lzo_init();
     wrkmem = 0;
     booted = NOT_BOOTED;
@@ -741,7 +742,7 @@ static void serial_transport_start(void)
 
 const client_transport_ops_t client_serial_transport_ops = {
     .name = "serial",
-    .init_error_msg = NULL,
+    .init_error_msg = "NO SERIAL ADAPTER DETECTED!",
     .init = serial_transport_init,
     .loop = serial_transport_loop,
     .syscall_send = serial_transport_syscall_send,

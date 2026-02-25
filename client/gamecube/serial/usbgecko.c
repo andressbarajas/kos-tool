@@ -17,10 +17,42 @@ static int gecko_device = USBGECKO_DEVICE;
 
 static int probe_gecko(int channel, int device)
 {
-    uint32_t id = exi_get_id(channel, device);
-    if (id != USBGECKO_ID)
+    uint32_t val;
+    uint16_t tx_status, rx_status;
+
+    /* Quick check: EXT bit (read-only) indicates device present.
+     * Available on channels 0 and 1 only. */
+    if (!(exi_get_status(channel) & EXI_STATUS_EXT))
         return 0;
 
+    /* Try standard EXI device ID first (fast path). */
+    val = exi_get_id(channel, device);
+    if (val == USBGECKO_ID)
+        goto found;
+
+    /* Many USB Gecko adapters don't respond to the standard EXI ID
+     * command (returning 0x00000000 instead of 0x01010000). Fall back
+     * to querying TX and RX status: a real USB Gecko returns status
+     * words where only bit 10 (0x0400) may be set, while empty slots
+     * return 0xFFFF from bus pull-ups and other EXI devices return
+     * unpredictable values with other bits set. */
+    exi_select(channel, device, EXI_CLK_32MHZ);
+    val = exi_imm(channel, USBGECKO_CMD_TX_STATUS, 2, EXI_IMM_READWRITE);
+    exi_deselect(channel);
+    tx_status = (val >> 16) & 0xFFFF;
+
+    exi_select(channel, device, EXI_CLK_32MHZ);
+    val = exi_imm(channel, USBGECKO_CMD_RX_STATUS, 2, EXI_IMM_READWRITE);
+    exi_deselect(channel);
+    rx_status = (val >> 16) & 0xFFFF;
+
+    /* Reject if any bits other than the status flag (0x0400) are set. */
+    if ((tx_status & ~USBGECKO_TX_READY) != 0)
+        return 0;
+    if ((rx_status & ~USBGECKO_RX_READY) != 0)
+        return 0;
+
+found:
     gecko_channel = channel;
     gecko_device = device;
     return 1;

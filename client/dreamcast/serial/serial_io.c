@@ -7,9 +7,10 @@
 #include <kosload/serial_io.h>
 #include "scif.h"
 
-void serial_io_init(unsigned int speed)
+int serial_io_init(unsigned int speed)
 {
     scif_init((int)speed);
+    return 0;  /* SCIF is always present on Dreamcast */
 }
 
 void serial_io_putchar(unsigned char c)
