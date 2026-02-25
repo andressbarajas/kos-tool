@@ -33,7 +33,7 @@ MINILZO_A   := $(MINILZO_DIR)/build-gc/minilzo.a
 
 # ---------- Architecture flags ----------
 
-ARCH_CFLAGS  := -mcpu=750 -meabi -mhard-float -fno-builtin -nostdlib -nostartfiles -Wall -Wextra
+ARCH_CFLAGS  := -mcpu=750 -meabi -mhard-float -O2 -fno-builtin -nostdlib -nostartfiles -Wall -Wextra
 ARCH_ASFLAGS := -mcpu=750 -meabi -Wa,-mregnames
 
 # ---------- Freestanding flags ----------
@@ -51,7 +51,9 @@ FREE_CFLAGS := \
     -fno-stack-protector \
     -fno-stack-check \
     -fno-merge-constants \
-    -fno-merge-all-constants
+    -fno-merge-all-constants \
+    -ffunction-sections \
+    -fdata-sections
 
 # ---------- Include paths ----------
 
@@ -195,7 +197,7 @@ SERIAL_OBJS := \
 SERIAL_ELF := $(SERIALDIR)/gc-load-ser.elf
 SERIAL_BIN := $(SERIALDIR)/gc-load-ser.bin
 
-GC_SERIAL_LDFLAGS := -nostdlib -Wl,-n
+GC_SERIAL_LDFLAGS := -nostdlib -Wl,-n -Wl,--gc-sections
 
 # Serial C object rules
 $(SERIALDIR)/main.o: $(CLIENTDIR)/common/main.c $(VERSION_H) | $(SERIALDIR)
@@ -229,7 +231,7 @@ endif
 
 IP_CFLAGS := $(CFLAGS) $(IP_INCLUDES)
 
-GC_IP_LDFLAGS := -nostdlib -Wl,-n
+GC_IP_LDFLAGS := -nostdlib -Wl,-n -Wl,--gc-sections
 
 IP_OBJS := \
     $(IPDIR)/main.o \

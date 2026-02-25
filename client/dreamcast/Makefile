@@ -44,7 +44,9 @@ FREE_CFLAGS := \
     -fno-stack-protector \
     -fno-stack-check \
     -fno-merge-constants \
-    -fno-merge-all-constants
+    -fno-merge-all-constants \
+    -ffunction-sections \
+    -fdata-sections
 
 # ---------- Include paths ----------
 
@@ -180,7 +182,7 @@ SERIAL_OBJS := \
 SERIAL_ELF := $(SERIALDIR)/dc-load-ser.elf
 SERIAL_BIN := $(SERIALDIR)/dc-load-ser.bin
 
-DC_LDFLAGS := -nostartfiles -nostdlib -static -Wl,--warn-common -Wl,--no-undefined -Wl,-z,now
+DC_LDFLAGS := -nostartfiles -nostdlib -static -Wl,--warn-common -Wl,--no-undefined -Wl,-z,now -Wl,--gc-sections
 
 # Serial C object rules
 $(SERIALDIR)/main.o: $(CLIENTDIR)/common/main.c $(VERSION_H) | $(SERIALDIR)

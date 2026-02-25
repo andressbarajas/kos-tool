@@ -24,6 +24,14 @@ go:
     lis     r11, go_saved_lr@ha
     stw     r0, go_saved_lr@l(r11)
 
+    # Save callee-saved registers (r2, r13-r31) so the ABI contract
+    # is maintained when the loaded program returns via .Lgo_return.
+    # At -O2, the compiler keeps values in these registers across calls.
+    lis     r11, go_saved_regs@ha
+    addi    r11, r11, go_saved_regs@l
+    stw     r2, 0(r11)
+    stmw    r13, 4(r11)
+
     # Save target address in CTR
     mtctr   r3
 
@@ -80,6 +88,10 @@ go:
 
 .Lgo_return:
     # Loaded program returned from main(). Restore loader context.
+    lis     r11, go_saved_regs@ha
+    addi    r11, r11, go_saved_regs@l
+    lwz     r2, 0(r11)
+    lmw     r13, 4(r11)
     lis     r11, go_saved_sp@ha
     lwz     r1, go_saved_sp@l(r11)
     lis     r11, go_saved_lr@ha
@@ -93,3 +105,5 @@ go_saved_sp:
     .space 4
 go_saved_lr:
     .space 4
+go_saved_regs:
+    .space 80
