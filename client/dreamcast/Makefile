@@ -231,6 +231,8 @@ IP_OBJS := \
     $(IPDIR)/adapter.o \
     $(IPDIR)/rtl8139.o \
     $(IPDIR)/lan_adapter.o \
+    $(IPDIR)/w5500.o \
+    $(IPDIR)/w5500_spi_dc.o \
     $(IPDIR)/net.o \
     $(IPDIR)/packet.o \
     $(IPDIR)/dhcp.o \
@@ -266,6 +268,12 @@ $(IPDIR)/rtl8139.o: net/rtl8139.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
 $(IPDIR)/lan_adapter.o: net/lan_adapter.c $(VERSION_H) | $(IPDIR)
+	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
+
+$(IPDIR)/w5500.o: $(CLIENTDIR)/common/drivers/w5500.c $(VERSION_H) | $(IPDIR)
+	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
+
+$(IPDIR)/w5500_spi_dc.o: net/w5500_spi_dc.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
 $(IPDIR)/net.o: net/net.c $(VERSION_H) | $(IPDIR)

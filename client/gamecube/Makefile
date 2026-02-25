@@ -209,6 +209,8 @@ IP_OBJS := \
     $(IPDIR)/adapter.o \
     $(IPDIR)/bba.o \
     $(IPDIR)/enc28j60.o \
+    $(IPDIR)/w5500.o \
+    $(IPDIR)/w5500_spi_gc.o \
     $(IPDIR)/net.o \
     $(IPDIR)/packet.o \
     $(IPDIR)/dhcp.o
@@ -242,6 +244,12 @@ $(IPDIR)/bba.o: net/bba.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
 $(IPDIR)/enc28j60.o: net/enc28j60.c $(VERSION_H) | $(IPDIR)
+	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
+
+$(IPDIR)/w5500.o: $(CLIENTDIR)/common/drivers/w5500.c $(VERSION_H) | $(IPDIR)
+	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
+
+$(IPDIR)/w5500_spi_gc.o: net/w5500_spi_gc.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
 $(IPDIR)/net.o: net/net.c $(VERSION_H) | $(IPDIR)

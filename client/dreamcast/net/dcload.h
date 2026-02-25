@@ -16,6 +16,7 @@
 /* Background colors (RGB565 format) — black like dcload-serial */
 #define BBA_BG_COLOR   0x0010
 #define LAN_BG_COLOR   0x0100
+#define W5500_BG_COLOR 0x0210   /* Dark cyan-ish */
 #define ERROR_BG_COLOR 0x2000
 #define STR_COLOR      0xffff
 
@@ -24,8 +25,9 @@
 #define PERFCOUNTER_SCALE SH4_FREQUENCY
 
 /* Adapter model IDs — must match legacy dcload-ip (octal values) */
-#define LAN_MODEL 0300
-#define BBA_MODEL 0400
+#define LAN_MODEL   0300
+#define BBA_MODEL   0400
+#define W5500_MODEL 0500
 
 /* Global state */
 extern volatile unsigned char booted;

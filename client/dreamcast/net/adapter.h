@@ -69,6 +69,7 @@ int adapter_detect();
 extern adapter_t *bb;
 extern adapter_t adapter_la;
 extern adapter_t adapter_bba;
+extern adapter_t adapter_w5500;
 
 // Set this variable to non-zero if you want the loop to exit.
 extern volatile unsigned char escape_loop;

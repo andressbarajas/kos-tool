@@ -34,6 +34,7 @@ int adapter_detect(void);
 extern adapter_t *bb;
 extern adapter_t adapter_bba;
 extern adapter_t adapter_enc28j60;
+extern adapter_t adapter_w5500;
 
 /* Loop control variables */
 extern volatile unsigned char escape_loop;
