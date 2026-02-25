@@ -68,6 +68,7 @@ int binary_auto_load(const char *filename, uint32_t default_addr,
     static const binary_ops_t *formats[] = {
         &elf_binary_ops,
         &srec_binary_ops,
+        &dol_binary_ops,
         &raw_binary_ops,
     };
 

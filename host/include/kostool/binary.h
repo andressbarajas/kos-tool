@@ -28,9 +28,10 @@ typedef struct binary_ops {
 extern const binary_ops_t elf_binary_ops;
 extern const binary_ops_t bfd_binary_ops;
 extern const binary_ops_t srec_binary_ops;
+extern const binary_ops_t dol_binary_ops;
 extern const binary_ops_t raw_binary_ops;
 
-/* Auto-detect format and load: tries ELF, SREC, then raw */
+/* Auto-detect format and load: tries ELF, SREC, DOL, then raw */
 int binary_auto_load(const char *filename, uint32_t default_addr,
                      uint32_t *entry_addr, binary_section_cb cb, void *ud);
 

@@ -100,6 +100,7 @@ CORE_SRCS := \
     src/binary/elf.c \
     src/binary/bfd.c \
     src/binary/srec.c \
+    src/binary/dol.c \
     src/binary/raw.c
 
 ALL_SRCS := $(CORE_SRCS) $(PLATFORM_SRCS)
