@@ -258,7 +258,11 @@ void start(void)
 
 #else /* Not Dreamcast */
 
-#define KOSLOAD_BASE         0x80003100
+#ifdef GC_KOSLOAD_BASE
+#define KOSLOAD_BASE         GC_KOSLOAD_BASE
+#else
+#define KOSLOAD_BASE         0x817EC000
+#endif
 #define KOSLOAD_MAGIC_ADDR   (*(volatile unsigned int *)(KOSLOAD_BASE + 4))
 #define KOSLOAD_SYSCALL_ADDR (*(volatile unsigned int *)(KOSLOAD_BASE + 8))
 #define KOSLOAD_MAGIC        0xdeadbeef

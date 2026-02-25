@@ -1,8 +1,8 @@
 /* Bootstrap linker script for kosload (GameCube)
  *
- * Loads at 0x81300000 — high in MEM1, well above both the
- * loader's target address (0x80003100) and Swiss's working memory.
- * The bootstrap copies the embedded loader binary to 0x80003100
+ * Loads at 0x81300000 — below the loader's target region at the
+ * top of MEM1 (GC_LOADER_BASE, set by mk/memory.mk).
+ * The bootstrap copies the embedded loader binary to GC_LOADER_BASE
  * and jumps there.
  */
 

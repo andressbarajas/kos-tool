@@ -180,7 +180,7 @@ typedef struct {
 
 /* Default load addresses */
 #define DC_DEFAULT_LOAD_ADDR    0x8c010000
-#define GC_DEFAULT_LOAD_ADDR    0x80100000
+#define GC_DEFAULT_LOAD_ADDR    0x80003100
 
 /* ===== KOS Open Flags (for flag translation) ===== */
 

@@ -3,8 +3,10 @@
 # Dreamcast: Assembles a 1st_read bootstrap that embeds the kosload firmware,
 #            then optionally creates a CDI image using mkdcdisc.
 #
-# GameCube:  Converts ELF firmware to DOL format using elf2dol,
-#            then optionally creates an ISO image using mkisofs.
+# GameCube:  Assembles a bootstrap that embeds the kosload firmware,
+#            converts to DOL, then optionally creates an ISO image.
+#            The bootstrap loads at 0x80003100 (valid for apploader)
+#            and copies the firmware to GC_LOADER_BASE at top of MEM1.
 #
 # Usage:
 #   make dc          Build Dreamcast 1st_read ELFs + CDIs (if mkdcdisc available)
@@ -18,6 +20,8 @@
 
 ROOT ?= $(CURDIR)/..
 
+include $(ROOT)/mk/memory.mk
+
 # ---------- Output directory (same as main build) ----------
 
 BUILDDIR := $(ROOT)/build
@@ -30,6 +34,17 @@ DC_CC        := $(DC_TOOLCHAIN)/$(DC_PREFIX)gcc
 DC_OBJCOPY   := $(DC_TOOLCHAIN)/$(DC_PREFIX)objcopy
 
 DC_ASFLAGS := -ml -m4-single-only
+
+# ---------- GameCube toolchain ----------
+
+GC_TOOLCHAIN ?= /opt/toolchains/gc/powerpc-eabi/bin
+GC_PREFIX    := powerpc-eabi-
+GC_CC        := $(GC_TOOLCHAIN)/$(GC_PREFIX)gcc
+
+GC_ASFLAGS := -mcpu=750 -meabi -Wa,-mregnames
+
+# GC loader memory layout (from mk/memory.mk)
+GC_LOADER_BASE := $(shell printf '0x%08x' $$(($(GC_MEM1_TOP) - $(GC_LOADER_SIZE))))
 
 # ---------- External tool auto-detection ----------
 # Users can override these by setting MKDCDISC= or MKISOFS= on the command line.
@@ -51,12 +66,15 @@ DC_EXCEPTION_S := $(ROOT)/client/dreamcast/exception.S
 DC_LOADER_S    := dreamcast/loader.S
 DC_DISABLE_S   := dreamcast/disable.S
 
+GC_LOADER_S    := gamecube/loader.S
+GC_LOADER_LD   := gamecube/loader.ld
+
 # ---------- Firmware inputs (from main build) ----------
 
 DC_SER_BIN := $(BUILDDIR)/dc-load-ser.bin
 DC_IP_BIN  := $(BUILDDIR)/dc-load-ip.bin
-GC_SER_ELF := $(BUILDDIR)/gc-load-ser.elf
-GC_IP_ELF  := $(BUILDDIR)/gc-load-ip.elf
+GC_SER_BIN := $(BUILDDIR)/gc-load-ser.bin
+GC_IP_BIN  := $(BUILDDIR)/gc-load-ip.bin
 
 # ---------- Intermediate outputs ----------
 
@@ -64,6 +82,9 @@ DC_EXCEPTION_BIN := $(LOCALDIR)/exception.bin
 
 DC_SER_1ST_READ := $(LOCALDIR)/1st_read-serial.elf
 DC_IP_1ST_READ  := $(LOCALDIR)/1st_read-ip.elf
+
+GC_SER_BOOTSTRAP := $(LOCALDIR)/gc-bootstrap-serial.elf
+GC_IP_BOOTSTRAP  := $(LOCALDIR)/gc-bootstrap-ip.elf
 
 ELF2DOL := $(LOCALDIR)/elf2dol
 GBI_HDR := tools/gbi.hdr
@@ -193,16 +214,52 @@ $(ELF2DOL): tools/elf2dol.c | $(LOCALDIR)
 	@cc -std=c11 -O2 -Wall -o $@ $<
 
 # ============================================================
-# GameCube: DOL conversion
+# GameCube: Bootstrap (embeds firmware, copies to high memory)
+# ============================================================
+#
+# loader.S uses .incbin to pull in "kosload.bin" from the
+# assembler include path.  The bootstrap loads at 0x80003100
+# (standard GC entry, valid for apploader) and copies the
+# embedded firmware to GC_LOADER_BASE at top of MEM1.
+#
+# Same staging pattern as the Dreamcast bootstrap.
+
+$(LOCALDIR)/gc-serial $(LOCALDIR)/gc-ip:
+	@mkdir -p $@
+
+# Stage kosload.bin for each variant
+$(LOCALDIR)/gc-serial/kosload.bin: $(GC_SER_BIN) | $(LOCALDIR)/gc-serial
+	@cp $< $@
+
+$(LOCALDIR)/gc-ip/kosload.bin: $(GC_IP_BIN) | $(LOCALDIR)/gc-ip
+	@cp $< $@
+
+# Assemble bootstrap
+$(GC_SER_BOOTSTRAP): $(GC_LOADER_S) $(GC_LOADER_LD) $(LOCALDIR)/gc-serial/kosload.bin
+	@echo "  AS      $@ (serial)"
+	@$(GC_CC) $(GC_ASFLAGS) -DGC_LOADER_BASE=$(GC_LOADER_BASE) \
+	    -nostartfiles -nostdlib -Wl,-n -T $(GC_LOADER_LD) \
+	    -Wa,-I$(LOCALDIR)/gc-serial \
+	    $(GC_LOADER_S) -o $@
+
+$(GC_IP_BOOTSTRAP): $(GC_LOADER_S) $(GC_LOADER_LD) $(LOCALDIR)/gc-ip/kosload.bin
+	@echo "  AS      $@ (ip)"
+	@$(GC_CC) $(GC_ASFLAGS) -DGC_LOADER_BASE=$(GC_LOADER_BASE) \
+	    -nostartfiles -nostdlib -Wl,-n -T $(GC_LOADER_LD) \
+	    -Wa,-I$(LOCALDIR)/gc-ip \
+	    $(GC_LOADER_S) -o $@
+
+# ============================================================
+# GameCube: DOL conversion (from bootstrap ELF)
 # ============================================================
 
-$(GC_SER_DOL): $(ELF2DOL) $(GC_SER_ELF) | $(BUILDDIR)
+$(GC_SER_DOL): $(ELF2DOL) $(GC_SER_BOOTSTRAP) | $(BUILDDIR)
 	@echo "  ELF2DOL $@"
-	@$(ELF2DOL) $(GC_SER_ELF) $@
+	@$(ELF2DOL) $(GC_SER_BOOTSTRAP) $@
 
-$(GC_IP_DOL): $(ELF2DOL) $(GC_IP_ELF) | $(BUILDDIR)
+$(GC_IP_DOL): $(ELF2DOL) $(GC_IP_BOOTSTRAP) | $(BUILDDIR)
 	@echo "  ELF2DOL $@"
-	@$(ELF2DOL) $(GC_IP_ELF) $@
+	@$(ELF2DOL) $(GC_IP_BOOTSTRAP) $@
 
 # ============================================================
 # GameCube: ISO creation (requires mkisofs/genisoimage)

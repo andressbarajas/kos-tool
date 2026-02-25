@@ -17,7 +17,11 @@
 #define SYSCALL_EXIT     22
 
 #if defined(__PPC__) || defined(__powerpc__)
-#define KOSLOAD_BASE    0x80003100
+#ifdef GC_KOSLOAD_BASE
+#define KOSLOAD_BASE    GC_KOSLOAD_BASE
+#else
+#define KOSLOAD_BASE    0x817EC000
+#endif
 #else
 #error "exi-probe is GameCube-only"
 #endif

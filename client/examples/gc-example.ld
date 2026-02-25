@@ -6,7 +6,7 @@ OUTPUT_FORMAT("elf32-powerpc")
 OUTPUT_ARCH(powerpc)
 
 SECTIONS {
-    . = 0x80100000;
+    . = 0x80003100;
     .text   : { *(.text.start) *(.text .text.*) }
     .rodata : { *(.rodata .rodata.*) }
     .data   : { *(.data .data.*) }

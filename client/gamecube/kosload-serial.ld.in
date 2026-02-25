@@ -1,4 +1,4 @@
-/* GameCube linker script for kosload-serial */
+/* GameCube linker script for kosload-serial (generated from .ld.in) */
 
 OUTPUT_FORMAT("elf32-powerpc", "elf32-powerpc", "elf32-powerpc")
 OUTPUT_ARCH(powerpc:common)
@@ -6,10 +6,10 @@ ENTRY(start)
 
 MEMORY
 {
-  /* Loader region in MEM1, after system area + exception vectors.
-   * 0x80003100 to 0x80013100 = 64KB for code + data + BSS.
-   * Stack grows down from 0x80013100. */
-  loader (rwx) : ORIGIN = 0x80003100, LENGTH = 0x10000
+  /* Loader region at top of MEM1.
+   * ORIGIN and LENGTH are set by mk/memory.mk via sed substitution.
+   * Stack grows down from the top of MEM1. */
+  loader (rwx) : ORIGIN = @GC_LOADER_BASE@, LENGTH = @GC_LOADER_SIZE@
 }
 
 SECTIONS
@@ -105,7 +105,7 @@ SECTIONS
   .debug_loc      0 : { *(.debug_loc) }
   .debug_macinfo  0 : { *(.debug_macinfo) }
 
-  _stack = 0x80013100;
+  _stack = @GC_MEM1_TOP@;
 
   ASSERT(( (_stack - _end) > 800 ), "Error: Not enough stack space: need at least 800 bytes")
   ASSERT(( _end <= (ORIGIN(loader) + LENGTH(loader)) ), "Error: Region 'loader' overflowed")

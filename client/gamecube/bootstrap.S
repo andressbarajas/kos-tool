@@ -2,7 +2,8 @@
 #
 # Loads at a safe high address (0x81300000) so that Swiss and other
 # DOL loaders can copy it without memory conflicts.  Copies the
-# embedded kosload binary down to 0x80003100, flushes caches, and
+# embedded kosload binary to the loader region at top of MEM1
+# (GC_LOADER_BASE, set by mk/memory.mk), flushes caches, and
 # jumps to the loader entry point.
 #
 # The kosload .bin is linked in as a binary blob via objcopy,
@@ -29,9 +30,9 @@ start:
     lis     r3, _binary_loader_payload_bin_start@ha
     addi    r3, r3, _binary_loader_payload_bin_start@l
 
-    # Destination: loader base address
-    lis     r4, 0x8000
-    ori     r4, r4, 0x3100
+    # Destination: loader base address (GC_LOADER_BASE from mk/memory.mk)
+    lis     r4, (GC_LOADER_BASE >> 16)
+    ori     r4, r4, (GC_LOADER_BASE & 0xFFFF)
 
     # Calculate size in bytes
     lis     r5, _binary_loader_payload_bin_end@ha
@@ -40,7 +41,7 @@ start:
 
     # Save size and dest for cache flush later
     mr      r7, r5      # r7 = size
-    mr      r8, r4      # r8 = dest (0x80003100)
+    mr      r8, r4      # r8 = dest (GC_LOADER_BASE)
 
     # Word-aligned copy (size is always aligned from objcopy)
     addi    r5, r5, 3
@@ -56,7 +57,7 @@ start:
 
     # Flush D-cache and invalidate I-cache over destination range
     # so the CPU sees the freshly-copied code.
-    mr      r3, r8          # r3 = dest start (0x80003100)
+    mr      r3, r8          # r3 = dest start (GC_LOADER_BASE)
     addi    r5, r7, 31
     srwi    r5, r5, 5       # number of 32-byte cache lines
     mtctr   r5
@@ -70,5 +71,5 @@ start:
     isync
 
     # Jump to loader entry point
-    mtctr   r8              # r8 = 0x80003100
+    mtctr   r8              # r8 = GC_LOADER_BASE
     bctr

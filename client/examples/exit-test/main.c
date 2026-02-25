@@ -16,7 +16,11 @@
 #if defined(__sh__) || defined(__SH4_SINGLE__)
 #define KOSLOAD_BASE    0x8c004000
 #elif defined(__PPC__) || defined(__powerpc__)
-#define KOSLOAD_BASE    0x80003100
+#ifdef GC_KOSLOAD_BASE
+#define KOSLOAD_BASE    GC_KOSLOAD_BASE
+#else
+#define KOSLOAD_BASE    0x817EC000
+#endif
 #else
 #error "Unsupported architecture"
 #endif

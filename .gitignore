@@ -9,5 +9,6 @@ build/
 *.lzo
 .DS_Store
 include/kosload/version.h
+make-cd/tools/elf2dol
 .github/
 .claude/

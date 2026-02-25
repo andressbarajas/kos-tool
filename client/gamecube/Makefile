@@ -4,6 +4,7 @@ ROOT      ?= $(CURDIR)/../..
 CLIENTDIR := $(CURDIR)/..
 
 include $(ROOT)/mk/version.mk
+include $(ROOT)/mk/memory.mk
 
 # ---------- Toolchain ----------
 
@@ -14,6 +15,12 @@ CC      := $(GC_TOOLCHAIN)/$(PREFIX)gcc
 AR      := $(GC_TOOLCHAIN)/$(PREFIX)ar
 OBJCOPY := $(GC_TOOLCHAIN)/$(PREFIX)objcopy
 SIZE    := $(GC_TOOLCHAIN)/$(PREFIX)size
+
+# ---------- Loader memory layout (from mk/memory.mk) ----------
+# GC_MEM1_TOP, GC_LOADER_SIZE are defined in mk/memory.mk.
+# GC_LOADER_BASE = GC_MEM1_TOP - GC_LOADER_SIZE.
+
+GC_LOADER_BASE := $(shell printf '0x%08x' $$(($(GC_MEM1_TOP) - $(GC_LOADER_SIZE))))
 
 # ---------- Directories ----------
 
@@ -50,10 +57,16 @@ FREE_CFLAGS := \
 
 INCLUDES := -I$(ROOT)/include -I$(CLIENTDIR)/include -I$(CURDIR) -I$(CURDIR)/serial -I$(ROOT)/third_party/minilzo
 
+# ---------- Memory layout defines (passed to C and ASM) ----------
+
+MEMORY_DEFS := -DGC_LOADER_BASE=$(GC_LOADER_BASE) \
+               -DGC_MEM1_TOP=$(GC_MEM1_TOP) \
+               -DGC_LOADER_SIZE=$(GC_LOADER_SIZE)
+
 # ---------- Combined flags ----------
 
-CFLAGS  := $(ARCH_CFLAGS) $(FREE_CFLAGS) $(INCLUDES) -DKOSLOAD_VERSION_STRING=\"$(KOSLOAD_VERSION)\"
-ASFLAGS := $(ARCH_ASFLAGS) $(INCLUDES)
+CFLAGS  := $(ARCH_CFLAGS) $(FREE_CFLAGS) $(INCLUDES) $(MEMORY_DEFS) -DKOSLOAD_VERSION_STRING=\"$(KOSLOAD_VERSION)\"
+ASFLAGS := $(ARCH_ASFLAGS) $(INCLUDES) $(MEMORY_DEFS)
 
 # IP-additional includes
 IP_INCLUDES := -I$(CURDIR)/net
@@ -73,6 +86,25 @@ $(VERSION_H): $(VERSION_H_IN) $(ROOT)/mk/version.mk
 	     -e 's/@KOSLOAD_VERSION@/$(KOSLOAD_VERSION)/g' \
 	     $< > $@.tmp
 	@if ! cmp -s $@.tmp $@ 2>/dev/null; then mv $@.tmp $@; echo "  GEN     $@"; else rm $@.tmp; fi
+
+# ---------- Generated linker scripts (from .ld.in templates) ----------
+
+SERIAL_LD := $(SERIALDIR)/kosload-serial.ld
+IP_LD     := $(IPDIR)/kosload-ip.ld
+
+$(SERIAL_LD): kosload-serial.ld.in $(ROOT)/mk/memory.mk | $(SERIALDIR)
+	@sed -e 's/@GC_LOADER_BASE@/$(GC_LOADER_BASE)/g' \
+	     -e 's/@GC_LOADER_SIZE@/$(GC_LOADER_SIZE)/g' \
+	     -e 's/@GC_MEM1_TOP@/$(GC_MEM1_TOP)/g' \
+	     $< > $@
+	@echo "  GEN     $@"
+
+$(IP_LD): kosload-ip.ld.in $(ROOT)/mk/memory.mk | $(IPDIR)
+	@sed -e 's/@GC_LOADER_BASE@/$(GC_LOADER_BASE)/g' \
+	     -e 's/@GC_LOADER_SIZE@/$(GC_LOADER_SIZE)/g' \
+	     -e 's/@GC_MEM1_TOP@/$(GC_MEM1_TOP)/g' \
+	     $< > $@
+	@echo "  GEN     $@"
 
 # ============================================================
 # Common library (kosload_common.a) — shared by serial and IP
@@ -178,8 +210,8 @@ $(SERIALDIR)/serial_transport.o: $(CLIENTDIR)/serial/serial_transport.c $(VERSIO
 $(SERIALDIR)/cdfs_syscalls.o: $(CLIENTDIR)/serial/cdfs_syscalls.c $(VERSION_H) | $(SERIALDIR)
 	$(CC) $(CFLAGS) $(SERIAL_DEFS) -c $< -o $@
 
-$(SERIAL_ELF): $(SERIAL_OBJS) $(COMMON_A) $(MINILZO_A)
-	$(CC) $(ARCH_CFLAGS) $(GC_SERIAL_LDFLAGS) -T kosload-serial.ld \
+$(SERIAL_ELF): $(SERIAL_OBJS) $(COMMON_A) $(MINILZO_A) $(SERIAL_LD)
+	$(CC) $(ARCH_CFLAGS) $(GC_SERIAL_LDFLAGS) -T $(SERIAL_LD) \
 	    $(SERIAL_OBJS) -Wl,--start-group $(COMMON_A) $(MINILZO_A) -lgcc -Wl,--end-group \
 	    -o $@
 
@@ -261,8 +293,8 @@ $(IPDIR)/packet.o: net/packet.c $(VERSION_H) | $(IPDIR)
 $(IPDIR)/dhcp.o: net/dhcp.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IP_ELF): $(IP_OBJS) $(COMMON_A)
-	$(CC) $(ARCH_CFLAGS) $(GC_IP_LDFLAGS) -T kosload-ip.ld \
+$(IP_ELF): $(IP_OBJS) $(COMMON_A) $(IP_LD)
+	$(CC) $(ARCH_CFLAGS) $(GC_IP_LDFLAGS) -T $(IP_LD) \
 	    $(IP_OBJS) -Wl,--start-group $(COMMON_A) -lgcc -Wl,--end-group \
 	    -o $@
 
@@ -294,6 +326,7 @@ GC_EXAMPLE_ELFS := $(addprefix $(EXBUILD)/,$(addsuffix .elf,$(GC_EXAMPLES)))
 $(EXBUILD)/%.elf: $(EXDIR)/%/main.c $(EXDIR)/gc-example.ld | $(EXBUILD)
 	@echo "  CC      $@"
 	@$(CC) $(ARCH_CFLAGS) -O2 -ffreestanding -fno-zero-initialized-in-bss -nostdlib \
+	    -DGC_KOSLOAD_BASE=$(GC_LOADER_BASE) \
 	    -T $(EXDIR)/gc-example.ld $< -o $@
 
 examples: $(GC_EXAMPLE_ELFS)

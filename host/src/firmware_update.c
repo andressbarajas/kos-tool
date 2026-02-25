@@ -11,8 +11,9 @@
  * not yet implemented).  Firmware is embedded per-console per-transport:
  *   firmware_dc_serial, firmware_dc_ip, firmware_gc_serial, firmware_gc_ip
  *
- * The SH4 trampoline copies the firmware to 0x8c004000 (loader
- * base address), invalidates caches, and jumps to the new loader.
+ * The SH4 trampoline copies the firmware to 0x8c004000 (DC loader
+ * base), the PPC trampoline copies to 0x817EC000 (GC loader base,
+ * top of MEM1).  Both invalidate caches and jump to the new loader.
  */
 
 #include <stdio.h>
@@ -158,9 +159,11 @@ static const arch_update_params_t sh4_params = {
  *   1. Load base register r7 = 0x80100000
  *   2. Disable interrupts (MSR = 0)
  *   3. Set up temporary stack at 0x80200000
- *   4. Copy firmware from 0x80100100 to 0x80003100 (word-at-a-time)
+ *   4. Copy firmware from 0x80100100 to 0x817EC000 (word-at-a-time)
  *   5. Flush D-cache (dcbf) + invalidate I-cache (icbi) over dest range
- *   6. Jump to 0x80003100
+ *   6. Jump to 0x817EC000
+ *
+ * NOTE: dest/entry must match GC_LOADER_BASE in mk/memory.mk.
  *
  * The "size" constant at offset 0x98 must be patched by the host
  * with the actual firmware size (big-endian uint32_t) before upload.
@@ -248,12 +251,12 @@ static const uint8_t ppc_trampoline[256] = {
     /* Constant pool (0x90-0x9F): */
     /* 0x90: source = 0x80100100 */
     0x80, 0x10, 0x01, 0x00,
-    /* 0x94: dest   = 0x80003100 */
-    0x80, 0x00, 0x31, 0x00,
+    /* 0x94: dest   = 0x817EC000 (GC_LOADER_BASE from mk/memory.mk) */
+    0x81, 0x7e, 0xc0, 0x00,
     /* 0x98: size   = PATCHED */
     0x00, 0x00, 0x00, 0x00,
-    /* 0x9C: entry  = 0x80003100 */
-    0x80, 0x00, 0x31, 0x00,
+    /* 0x9C: entry  = 0x817EC000 (GC_LOADER_BASE from mk/memory.mk) */
+    0x81, 0x7e, 0xc0, 0x00,
     /* Remaining bytes zero-padded to 256 */
 };
 
@@ -262,7 +265,7 @@ static const arch_update_params_t ppc_params = {
     .trampoline_size = 256,
     .size_patch_offset = 0x98,
     .load_addr = 0x80100000,
-    .loader_base = 0x80003100,
+    .loader_base = 0x817EC000,  /* GC_LOADER_BASE — keep in sync with mk/memory.mk */
     .big_endian = 1,
 };
 

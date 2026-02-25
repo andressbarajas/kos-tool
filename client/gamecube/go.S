@@ -4,8 +4,9 @@
 # passed in r3. Cache flushing should be done by the caller
 # (target_ops->execute calls cache_flush then go).
 #
-# Sets r1 (stack pointer) to top of MEM1 (24MB) so that loaded
-# programs compiled as plain C functions have a usable stack.
+# Sets ArenaHi (OS low mem 0x80000034) to the loader base so
+# that libogc/devkitPPC heaps stay below the loader, then sets
+# r1 (stack pointer) just below the loader region.
 #
 # Saves the loader's stack pointer and return address so that if
 # the loaded program returns from main(), control passes through
@@ -31,9 +32,15 @@ go:
     addi    r11, r11, .Lgo_return@l
     mtlr    r11
 
-    # Set up stack at top of MEM1 (24MB: 0x81800000 - 32 = 0x817FFFE0)
-    lis     r1, 0x8180
-    addi    r1, r1, -32
+    # Set ArenaHi (OS low mem 0x80000034) = GC_LOADER_BASE so that
+    # libogc heaps stay below the loader reservation.
+    lis     r11, (GC_LOADER_BASE >> 16)
+    ori     r11, r11, (GC_LOADER_BASE & 0xFFFF)
+    lis     r12, 0x8000
+    stw     r11, 0x0034(r12)
+
+    # Set up stack just below loader region (GC_LOADER_BASE - 32)
+    addi    r1, r11, -32
 
     # Clear all other GPRs
     li      r0, 0

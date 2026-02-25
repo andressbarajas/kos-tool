@@ -148,9 +148,9 @@ static void gc_disable_cache(void)
 
 static void gc_reboot(void)
 {
-    /* Jump back to kosload entry point */
+    /* Jump back to kosload entry point (GC_LOADER_BASE from mk/memory.mk) */
     cache_disable();
-    void (*entry)(void) = (void (*)(void))0x80003100;
+    void (*entry)(void) = (void (*)(void))GC_LOADER_BASE;
     entry();
 }
 
@@ -191,9 +191,9 @@ static void gc_set_console_enabled(int enabled)
     console_enabled = enabled;
     /* Write magic value at loader base+4 for loaded program to detect */
     if (enabled)
-        *(volatile unsigned int *)0x80003104 = 0xdeadbeef;
+        *(volatile unsigned int *)(GC_LOADER_BASE + 4) = 0xdeadbeef;
     else
-        *(volatile unsigned int *)0x80003104 = 0xfeedface;
+        *(volatile unsigned int *)(GC_LOADER_BASE + 4) = 0xfeedface;
 }
 
 /* GC RTC via EXI channel 0, device 1 (Macronix MX23L4005).
