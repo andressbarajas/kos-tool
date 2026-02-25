@@ -2,7 +2,7 @@
 /*
  * syscall-test - Comprehensive kosload syscall coverage test
  *
- * Tests all 22 syscall slots in the kosload jump table.
+ * Tests all 24 syscall slots in the kosload jump table.
  * Each test prints a structured PASS/FAIL result.
  *
  * Skipped:
@@ -30,13 +30,15 @@
 #define SYSCALL_STAT      12
 #define SYSCALL_UTIME     13
 /* 14 = assign_wrkmem (stub) */
-#define SYSCALL_EXIT      15
+/* 15 = reserved */
 #define SYSCALL_OPENDIR   16
 #define SYSCALL_CLOSEDIR  17
 #define SYSCALL_READDIR   18
 #define SYSCALL_HOSTINFO  19
 /* 20 = gdbpacket */
 #define SYSCALL_REWINDDIR 21
+#define SYSCALL_EXIT      22
+#define SYSCALL_MKDIR     23
 
 /* Open flags (KOS-compatible) */
 #define O_RDONLY    0x0000
@@ -232,6 +234,13 @@ static int kl_gethostinfo(unsigned int *ip, unsigned int *port)
     return sc(SYSCALL_HOSTINFO, (int)ip, (int)port, 0);
 }
 
+static int kl_mkdir(const char *path, int mode)
+{
+    kosload_syscall_fn sc = get_syscall();
+    if (!sc) return -1;
+    return sc(SYSCALL_MKDIR, (int)path, mode, 0);
+}
+
 static void kl_exit(void)
 {
     kosload_syscall_fn sc = get_syscall();
@@ -297,6 +306,7 @@ static void result(const char *name, int ok)
 
 static const char *test_file = "/tmp/kosload-syscall-test.txt";
 static const char *test_link = "/tmp/kosload-syscall-link.txt";
+static const char *test_dir  = "/tmp/kosload-syscall-testdir";
 
 /* Entry point */
 void start(void) __attribute__((section(".text.start")));
@@ -314,7 +324,7 @@ void start(void)
     int test_len = slen(test_data);
 
     print("\n");
-    print("=== kosload syscall test (all 22 slots) ===\n");
+    print("=== kosload syscall test (all 24 slots) ===\n");
     print("\n");
 
     /* ===== File I/O (slots 0-6, 8-10, 12-13) ===== */
@@ -465,6 +475,22 @@ void start(void)
         result("closedir(dir)", 0);
     }
 
+    /* Slot 23: mkdir */
+    ret = kl_mkdir(test_dir, 0755);
+    result("mkdir(test-dir, 0755)", ret == 0);
+
+    /* Verify mkdir created a directory by opening it */
+    if (ret == 0) {
+        dir = kl_opendir(test_dir);
+        result("opendir(test-dir) after mkdir", dir != 0);
+        if (dir)
+            kl_closedir(dir);
+        /* Cleanup */
+        kl_unlink(test_dir);
+    } else {
+        result("opendir(test-dir) after mkdir", 0);
+    }
+
     /* Slot 7: chdir */
     ret = kl_chdir("/tmp");
     result("chdir(/tmp)", ret == 0);
@@ -524,6 +550,6 @@ void start(void)
     print(" failed\n");
     print("\n");
 
-    /* Slot 15: exit (always last) */
+    /* Slot 22: progexit (always last) */
     kl_exit();
 }

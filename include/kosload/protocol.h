@@ -53,7 +53,8 @@
 #define SERIAL_SYSCALL_CDFSREAD     19
 #define SERIAL_SYSCALL_GDBPACKET    20
 #define SERIAL_SYSCALL_REWINDDIR    21
-#define SERIAL_SYSCALL_DCEXIT       22
+#define SERIAL_SYSCALL_PROGEXIT     22
+#define SERIAL_SYSCALL_MKDIR        23
 
 /* ===== Network Protocol Command IDs (4-byte ASCII) ===== */
 
@@ -94,6 +95,8 @@
 #define NET_CMD_CDFSREAD  "DC19"
 #define NET_CMD_GDBPACKET "DC20"
 #define NET_CMD_REWINDDIR "DC21"
+#define NET_CMD_PROGEXIT  "DC22"
+#define NET_CMD_MKDIR     "DC23"
 #define NET_CMD_EXCEPTION "EXPT"
 
 /* ===== Network Packet Structures ===== */

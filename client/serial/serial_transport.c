@@ -232,9 +232,9 @@ void load_data_block_general(unsigned char *addr, unsigned int total, unsigned i
  * Protocol must match legacy dcload-serial exactly for compatibility
  * with both legacy dc-tool-ser and kos-tool host programs. */
 
-void dcexit(int ret_code)
+void progexit(int ret_code)
 {
-    serial_io_putchar(SERIAL_SYSCALL_DCEXIT);
+    serial_io_putchar(SERIAL_SYSCALL_PROGEXIT);
     put_uint(ret_code);
     serial_io_flush();
 }
@@ -325,6 +325,17 @@ int chmod(const char *path, int mode)
     unsigned int namelen = strlen(path) + 1;
 
     serial_io_putchar(SERIAL_SYSCALL_CHMOD);
+    put_uint(namelen);
+    send_data_block_compressed((unsigned char *)path, namelen);
+    put_uint(mode);
+    return get_uint();
+}
+
+int mkdir(const char *path, int mode)
+{
+    unsigned int namelen = strlen(path) + 1;
+
+    serial_io_putchar(SERIAL_SYSCALL_MKDIR);
     put_uint(namelen);
     send_data_block_compressed((unsigned char *)path, namelen);
     put_uint(mode);
@@ -715,7 +726,7 @@ static int serial_transport_syscall_send(const char cmd_id[4],
 
 static void serial_transport_exit_notify(void)
 {
-    /* Handled by the dcexit() syscall directly */
+    /* Handled by the progexit() syscall directly */
 }
 
 static void serial_transport_stop(void)

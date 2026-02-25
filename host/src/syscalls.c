@@ -4,7 +4,7 @@
 
 #include <kostool/syscalls.h>
 
-/* Stub implementations for all 22 syscalls.
+/* Stub implementations for all 23 syscalls.
  * These will be fully implemented in Phase 6.
  */
 
@@ -29,3 +29,4 @@ int syscall_rewinddir(kostool_context_t *ctx) { (void)ctx; return -1; }
 int syscall_cdfs_read_sectors(kostool_context_t *ctx) { (void)ctx; return -1; }
 int syscall_gdbpacket(kostool_context_t *ctx) { (void)ctx; return -1; }
 int syscall_exit(kostool_context_t *ctx) { (void)ctx; return -1; }
+int syscall_mkdir(kostool_context_t *ctx) { (void)ctx; return -1; }

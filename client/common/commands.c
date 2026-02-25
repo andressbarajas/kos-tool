@@ -45,7 +45,7 @@ extern unsigned short dcload_syscall_port;
 
 /* Forward declarations for syscalls used in error paths */
 extern int write(int fd, const void *buf, unsigned int count);
-extern void dcexit(int ret_code);
+extern void progexit(int ret_code);
 
 /* Direct hardware access (from ASM files) */
 extern void cdfs_redir_enable(void);
@@ -188,7 +188,7 @@ void cmd_execute(ether_header_t *ether, ip_header_t *ip, udp_header_t *udp, comm
 		 * by the executed program (e.g. KOS networking).  Do a full
 		 * re-init so receive buffers and registers are back to our
 		 * known-good configuration.  bb->stop() was already called
-		 * by dcexit(), and bb->start() in build_send_packet() only
+		 * by progexit(), and bb->start() in build_send_packet() only
 		 * toggled 2 bits — not enough after heavy BBA use. */
 		bb->stop();
 		bb->init();
@@ -212,7 +212,7 @@ void cmd_loadbin(ip_header_t *ip, udp_header_t *udp, command_t *command)
 		if (bin_info.load_size > (BIN_INFO_MAP_ENTRIES * 1024))
 		{
 			write(1, "ERROR: Size >11656KB (legacy mode)\r\n", 37);
-			dcexit(-1);
+			progexit(-1);
 			bb->start();
 			return;
 		}
@@ -224,7 +224,7 @@ void cmd_loadbin(ip_header_t *ip, udp_header_t *udp, command_t *command)
 		if (bin_info.load_size > max_size)
 		{
 			write(1, "ERROR: Size exceeds RAM\r\n", 25);
-			dcexit(-1);
+			progexit(-1);
 			bb->start();
 			return;
 		}

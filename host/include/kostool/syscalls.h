@@ -5,7 +5,7 @@
 #include "context.h"
 
 /* Host-side syscall handler interface.
- * These implement the 22 syscalls that the console can request.
+ * These implement the 23 syscalls that the console can request.
  */
 
 int syscall_fstat(kostool_context_t *ctx);
@@ -29,5 +29,6 @@ int syscall_rewinddir(kostool_context_t *ctx);
 int syscall_cdfs_read_sectors(kostool_context_t *ctx);
 int syscall_gdbpacket(kostool_context_t *ctx);
 int syscall_exit(kostool_context_t *ctx);
+int syscall_mkdir(kostool_context_t *ctx);
 
 #endif /* KOSTOOL_SYSCALLS_H */

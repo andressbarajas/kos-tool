@@ -19,7 +19,7 @@
 #define SYSCALL_LSEEK     9
 #define SYSCALL_FSTAT    10
 #define SYSCALL_TIME     11
-#define SYSCALL_EXIT     15
+#define SYSCALL_EXIT     22
 #define SYSCALL_OPENDIR  16
 #define SYSCALL_CLOSEDIR 17
 #define SYSCALL_READDIR  18

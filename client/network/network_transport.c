@@ -149,7 +149,7 @@ static int network_transport_syscall_send(const char cmd_id[4],
 
 static void network_transport_exit_notify(void)
 {
-    /* Handled by the dcexit() syscall directly */
+    /* Handled by the progexit() syscall directly */
 }
 
 static void network_transport_stop(void)

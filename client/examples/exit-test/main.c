@@ -1,6 +1,6 @@
 /* examples/exit-test/main.c */
 /*
- * exit-test - Test dcexit return code reporting
+ * exit-test - Test progexit return code reporting
  *
  * Exits with a non-zero return code to verify the host prints it.
  * Expected host output: "Program returned 42"
@@ -11,7 +11,7 @@
  */
 
 #define SYSCALL_WRITE  1
-#define SYSCALL_EXIT  15
+#define SYSCALL_EXIT  22
 
 #if defined(__sh__) || defined(__SH4_SINGLE__)
 #define KOSLOAD_BASE    0x8c004000
@@ -49,7 +49,7 @@ void start(void)
     sc = get_syscall();
     if (!sc) return;
 
-    print("Testing dcexit return code...\n");
+    print("Testing progexit return code...\n");
     print("Exiting with code 42 (host should print \"Program returned 42\")\n");
 
     sc(SYSCALL_EXIT, 42, 0, 0);

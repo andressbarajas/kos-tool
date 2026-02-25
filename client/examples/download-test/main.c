@@ -24,7 +24,7 @@
  */
 
 #define SYSCALL_WRITE  1
-#define SYSCALL_EXIT  15
+#define SYSCALL_EXIT  22
 
 #if defined(__sh__) || defined(__SH4_SINGLE__)
 #define KOSLOAD_BASE    0x8c004000

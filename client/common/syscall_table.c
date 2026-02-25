@@ -33,13 +33,14 @@ extern int time(unsigned int *);
 extern int stat(const char *, void *);
 extern int utime(const char *, void *);
 extern void assign_wrkmem(unsigned char *);
-extern void dcexit(int);
+extern void progexit(int);
 extern unsigned int opendir(const char *);
 extern int closedir(unsigned int);
 extern void *readdir(unsigned int);
 extern int gethostinfo(unsigned int *, unsigned int *);
 extern unsigned int gdbpacket(const char *, unsigned int, char *);
 extern int rewinddir(unsigned int);
+extern int mkdir(const char *, int);
 
 const syscall_fn_t kosload_syscall_table[] = {
     (syscall_fn_t)read,           /*  0 */
@@ -57,13 +58,15 @@ const syscall_fn_t kosload_syscall_table[] = {
     (syscall_fn_t)stat,           /* 12 */
     (syscall_fn_t)utime,          /* 13 */
     (syscall_fn_t)assign_wrkmem,  /* 14 */
-    (syscall_fn_t)dcexit,         /* 15 */
+    (syscall_fn_t)0,              /* 15 — reserved (legacy dcexit) */
     (syscall_fn_t)opendir,        /* 16 */
     (syscall_fn_t)closedir,       /* 17 */
     (syscall_fn_t)readdir,        /* 18 */
     (syscall_fn_t)gethostinfo,    /* 19 */
     (syscall_fn_t)gdbpacket,      /* 20 */
     (syscall_fn_t)rewinddir,      /* 21 */
+    (syscall_fn_t)progexit,       /* 22 */
+    (syscall_fn_t)mkdir,          /* 23 */
 };
 
 const unsigned int kosload_syscall_count =

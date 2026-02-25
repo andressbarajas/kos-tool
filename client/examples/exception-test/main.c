@@ -32,7 +32,7 @@
 typedef int (*kosload_syscall_fn)(int syscall, int arg1, int arg2, int arg3);
 
 #define SYSCALL_WRITE     1
-#define SYSCALL_EXIT     15
+#define SYSCALL_EXIT     22
 
 static int slen(const char *s) { int n = 0; while (*s++) n++; return n; }
 

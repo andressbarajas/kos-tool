@@ -70,13 +70,13 @@ void assign_wrkmem(unsigned char *user_buffer)
 
 /* ===== Syscall implementations ===== */
 
-void dcexit(int ret_code)
+void progexit(int ret_code)
 {
     bb->stop();
 
     net_command_t *command = (net_command_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
 
-    memcpy(command->id, NET_CMD_EXIT, 4);
+    memcpy(command->id, NET_CMD_PROGEXIT, 4);
     command->address = htonl((unsigned int)ret_code);
     command->size = 0;
     build_send_packet(COMMAND_LEN);
@@ -208,6 +208,21 @@ int chmod(const char *path, int mode)
     int namelen = my_strlen(path);
 
     memcpy(command->id, NET_CMD_CHMOD, 4);
+    command->value0 = htonl(mode);
+    memcpy(command->string, path, namelen + 1);
+
+    build_send_packet(sizeof(net_command_int_string_t) + namelen + 1);
+    bb->loop(0);
+
+    return syscall_retval;
+}
+
+int mkdir(const char *path, int mode)
+{
+    net_command_int_string_t *command = (net_command_int_string_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
+    int namelen = my_strlen(path);
+
+    memcpy(command->id, NET_CMD_MKDIR, 4);
     command->value0 = htonl(mode);
     memcpy(command->string, path, namelen + 1);
 

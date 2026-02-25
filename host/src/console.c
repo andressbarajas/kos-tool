@@ -480,6 +480,20 @@ static void ser_dc_chmod(kostool_context_t *ctx) {
     free(pathname);
 }
 
+static void ser_dc_mkdir(kostool_context_t *ctx) {
+    uint32_t namelen = ser_recv_uint(ctx);
+    if (!namelen || namelen > MAX_PATH_LEN) { ser_send_uint(ctx, -1); return; }
+    char *pathname = malloc(namelen);
+    if (!pathname) { ser_send_uint(ctx, -1); return; }
+    ser_recv_data(ctx, pathname, namelen);
+    int mode = ser_recv_uint(ctx);
+    char buf[MAX_PATH_LEN];
+    const char *resolved = resolve_path(ctx, pathname, buf, sizeof(buf));
+    int ret = mkdir(resolved, mode);
+    ser_send_uint(ctx, ret);
+    free(pathname);
+}
+
 static void ser_dc_lseek(kostool_context_t *ctx) {
     int fd = ser_recv_uint(ctx);
     int offset = ser_recv_uint(ctx);
@@ -819,6 +833,14 @@ static void net_dc_chmod(kostool_context_t *ctx, uint8_t *pkt) {
     net_send_cmd(ctx, NET_CMD_RETVAL, ret, ret, NULL, 0);
 }
 
+static void net_dc_mkdir(kostool_context_t *ctx, uint8_t *pkt) {
+    net_command_int_string_t *cmd = (net_command_int_string_t *)pkt;
+    char buf[MAX_PATH_LEN];
+    const char *resolved = resolve_path(ctx, cmd->string, buf, sizeof(buf));
+    int ret = mkdir(resolved, ntohl(cmd->value0));
+    net_send_cmd(ctx, NET_CMD_RETVAL, ret, ret, NULL, 0);
+}
+
 static void net_dc_lseek(kostool_context_t *ctx, uint8_t *pkt) {
     net_command_3int_t *cmd = (net_command_3int_t *)pkt;
     int ret = lseek(ntohl(cmd->value0), ntohl(cmd->value1), ntohl(cmd->value2));
@@ -1078,7 +1100,8 @@ static int do_serial_console(kostool_context_t *ctx) {
         case SERIAL_SYSCALL_CDFSREAD:  ser_dc_cdfs_read(ctx); break;
         case SERIAL_SYSCALL_GDBPACKET: ser_dc_gdbpacket(ctx); break;
         case SERIAL_SYSCALL_REWINDDIR: ser_dc_rewinddir(ctx); break;
-        case SERIAL_SYSCALL_DCEXIT:
+        case SERIAL_SYSCALL_MKDIR:     ser_dc_mkdir(ctx); break;
+        case SERIAL_SYSCALL_PROGEXIT:
             printf("Program returned %d\n", ser_dc_exit(ctx));
             exit(0);
         default:
@@ -1113,7 +1136,7 @@ static int do_network_console(kostool_context_t *ctx) {
          * can never walk past the buffer. */
         buffer[sizeof(buffer) - 1] = '\0';
 
-        if (!memcmp(buffer, NET_CMD_EXIT, 4)) {
+        if (!memcmp(buffer, NET_CMD_EXIT, 4) || !memcmp(buffer, NET_CMD_PROGEXIT, 4)) {
             net_command_t *exit_cmd = (net_command_t *)buffer;
             int32_t ret_code = (int32_t)ntohl(exit_cmd->address);
             printf("Program returned %d\n", ret_code);
@@ -1142,6 +1165,7 @@ static int do_network_console(kostool_context_t *ctx) {
         else if (!memcmp(buffer, NET_CMD_CDFSREAD, 4))  net_dc_cdfs_read(ctx, buffer);
         else if (!memcmp(buffer, NET_CMD_GDBPACKET, 4)) net_dc_gdbpacket(ctx, buffer);
         else if (!memcmp(buffer, NET_CMD_REWINDDIR, 4)) net_dc_rewinddir(ctx, buffer);
+        else if (!memcmp(buffer, NET_CMD_MKDIR, 4))     net_dc_mkdir(ctx, buffer);
     }
 
     return 0;
