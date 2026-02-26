@@ -32,7 +32,7 @@ else
   LIBELF_CFLAGS  :=
   LIBELF_LDFLAGS := -lelf
   EXTRA_DEFS     :=
-  EXTRA_LDLIBS   := -lws2_32
+  EXTRA_LDLIBS   := -lws2_32 -liphlpapi
 endif
 
 # ---------- Compiler flags ----------

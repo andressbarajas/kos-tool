@@ -219,19 +219,19 @@ int main(int argc, char *argv[]) {
         ctx.prog_command_line[offset] = '\0';
     }
 
-    /* Handle -t auto: broadcast VERS to discover kosload-ip on the network */
+    /* Handle -t auto: broadcast VERS to discover dcload/kosload on the network */
     if (ctx.device_name && strcmp(ctx.device_name, "auto") == 0) {
         ctx.device_name = NULL;
         ctx.hostname = NULL;
 
-        printf("Scanning for kosload-ip on the network...\n");
+        printf("Scanning the network...\n");
         const char *found_ip = discover_network_device();
         if (found_ip) {
-            printf("Found kosload-ip at %s\n", found_ip);
+            printf("Found at %s\n", found_ip);
             ctx.hostname = found_ip;
             if (!transport_name) transport_name = "network";
         } else {
-            fprintf(stderr, "No kosload-ip devices found on the network\n");
+            fprintf(stderr, "No devices found on the network\n");
             fprintf(stderr, "You can also specify the IP directly with -t <ip>\n");
             return 1;
         }

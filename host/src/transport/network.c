@@ -30,9 +30,10 @@
 #define DEFAULT_RX_FIFO_DELAY    (NET_PACKET_TIMEOUT_USEC / 51)
 #define DEFAULT_RX_FIFO_COUNT    15
 
-/* BBA and LAN adapter model IDs returned by dcload (octal, matches legacy) */
-#define BBA_MODEL  0400
-#define LAN_MODEL  0300
+/* Legacy dcload adapter model IDs (octal).
+ * Modern kosload uses ADAPTER_* constants from protocol.h. */
+#define LEGACY_BBA_MODEL  0400
+#define LEGACY_LAN_MODEL  0300
 
 /* Retry limits to prevent infinite loops on persistent failures */
 #define MAX_CMD_RETRIES       20   /* max retries for command ack (LOADBIN, DONEBIN, etc.) */
@@ -212,12 +213,15 @@ static int prepare_comms(kostool_context_t *ctx) {
     snprintf(ctx->remote_version_string,
              sizeof(ctx->remote_version_string), "%s", (char *)cmd->data);
 
-    /* Accept both legacy octal (0400=256, 0300=192) and hex (0x0400=1024,
-     * 0x0300=768) adapter IDs for compatibility with old CDI builds */
-    int is_bba = (ctx->installed_adapter == BBA_MODEL ||
-                  ctx->installed_adapter == 0x0400);
-    int is_lan = (ctx->installed_adapter == LAN_MODEL ||
-                  ctx->installed_adapter == 0x0300);
+    /* Accept legacy octal IDs and modern ADAPTER_* IDs.
+     * Old loaders sometimes report octal 0400/0300 as decimal 256/192. */
+    int is_bba = (ctx->installed_adapter == LEGACY_BBA_MODEL ||
+                  ctx->installed_adapter == ADAPTER_DC_BBA ||
+                  ctx->installed_adapter == ADAPTER_GC_BBA);
+    int is_lan = (ctx->installed_adapter == LEGACY_LAN_MODEL ||
+                  ctx->installed_adapter == ADAPTER_DC_LAN);
+    int is_gc_spi = (ctx->installed_adapter == ADAPTER_GC_ENC ||
+                     ctx->installed_adapter == ADAPTER_GC_W5500);
 
     printf("%s\n", ctx->remote_version_string);
 
@@ -240,8 +244,15 @@ static int prepare_comms(kostool_context_t *ctx) {
         } else {
             ctx->rx_fifo_delay = 0;
         }
+    } else if (is_gc_spi) {
+        //if (!ctx->fast_mode) {
+            ctx->rx_fifo_delay = DEFAULT_RX_FIFO_DELAY;
+            ctx->rx_fifo_delay_count = DEFAULT_RX_FIFO_COUNT;
+        // } else {
+        //     ctx->rx_fifo_delay = 0;
+        // }
     } else {
-        ctx->installed_adapter = BBA_MODEL;
+        ctx->installed_adapter = ADAPTER_DC_BBA;
         ctx->legacy_mode = 1;
         ctx->rx_fifo_delay = DEFAULT_RX_FIFO_DELAY;
         ctx->rx_fifo_delay_count = DEFAULT_RX_FIFO_COUNT;

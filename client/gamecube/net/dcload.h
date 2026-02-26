@@ -24,9 +24,9 @@
 #define PERFCOUNTER_SCALE GC_TBR_FREQUENCY
 
 /* Adapter model IDs */
-#define BBA_MODEL   0x0600
-#define ENC_MODEL   0x0601
-#define W5500_MODEL 0x0700
+#define BBA_MODEL   0x0015
+#define ENC_MODEL   0x2860
+#define W5500_MODEL 0x5501
 
 /* Global state (defined in entry.c) */
 extern volatile bool booted;

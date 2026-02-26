@@ -12,6 +12,8 @@
 #include <kosload/target.h>
 #include <kosload/protocol.h>
 
+#define DC_LOADER_BASE 0x8c004000
+
 /* From video.S (compiler prepends _ to C symbols on SH-ELF) */
 extern void draw_string(int x, int y, const char *str, int color);
 extern void clrscr(int color);
@@ -84,7 +86,7 @@ static void dc_disable_cache_op(void) {
 static void dc_reboot(void) {
     /* Jump back to kosload entry point */
     disable_cache();
-    void (*entry)(void) = (void (*)(void))0x8c004000;
+    void (*entry)(void) = (void (*)(void))DC_LOADER_BASE;
     entry();
 }
 
@@ -110,9 +112,9 @@ static void dc_set_console_enabled(bool enabled) {
      * Use P1 (cached) address — with write-through cache (CCR=0x090b),
      * the write reaches physical memory immediately. Matches legacy. */
     if (enabled)
-        *(volatile unsigned int *)0x8c004004 = 0xdeadbeef;
+        *(volatile unsigned int *)(DC_LOADER_BASE + 4) = 0xdeadbeef;
     else
-        *(volatile unsigned int *)0x8c004004 = 0xfeedface;
+        *(volatile unsigned int *)(DC_LOADER_BASE + 4) = 0xfeedface;
 }
 
 /* AICA RTC registers (P2 uncached addresses) */
