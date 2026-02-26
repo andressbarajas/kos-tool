@@ -20,6 +20,8 @@ extern const target_ops_t *common_get_target(void);
 #define SCREEN_H           480
 #define TARGET_FPS         60
 
+#define BLACK_COLOR        0
+
 /* 32x32 1bpp icon (apple with K), MSB = leftmost pixel */
 static const uint32_t screensaver_icon[32] = {
     0x00000000, 0x01F00000, 0x03FC0600, 0x01FE0F00,
@@ -37,16 +39,16 @@ static void (*restore_callback)(void);
 static unsigned int timer_start;
 static unsigned int last_frame;
 static int active;
-static unsigned int bg_color_saved;
+static unsigned int icon_color_saved;
 static int box_x, box_y;
 static int box_dx, box_dy;
 
-void screensaver_init(void (*restore_cb)(void), unsigned int bg_color)
+void screensaver_init(void (*restore_cb)(void), unsigned int icon_color)
 {
     const target_ops_t *t = common_get_target();
 
     restore_callback = restore_cb;
-    bg_color_saved = bg_color;
+    icon_color_saved = icon_color;
     active = 0;
     timer_start = t->get_ticks();
 }
@@ -94,7 +96,7 @@ void screensaver_poll(void)
 
         /* Activate screensaver */
         active = 1;
-        t->clear_screen(bg_color_saved);
+        t->clear_screen(BLACK_COLOR);
         box_x = 100;
         box_y = 100;
         box_dx = 2;
@@ -112,7 +114,7 @@ void screensaver_poll(void)
     last_frame = now;
 
     /* Erase old position */
-    t->fill_rect(box_x, box_y, ICON_SIZE, ICON_SIZE, bg_color_saved);
+    t->fill_rect(box_x, box_y, ICON_SIZE, ICON_SIZE, BLACK_COLOR);
 
     /* Update position */
     box_x += box_dx;
@@ -130,5 +132,5 @@ void screensaver_poll(void)
 
     /* Draw icon at new position */
     t->draw_bitmap(box_x, box_y, ICON_SIZE, ICON_SIZE,
-                   screensaver_icon, 0xffff);
+                   screensaver_icon, icon_color_saved);
 }

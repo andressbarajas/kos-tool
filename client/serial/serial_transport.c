@@ -31,6 +31,8 @@
 #endif
 #define NAME LOADER_NAME " " KOSLOAD_VERSION_STRING
 
+#define WHITE 0xffff
+
 extern const target_ops_t *common_get_target(void);
 extern kosload_info_t kosload_info;
 
@@ -563,7 +565,7 @@ static int serial_transport_init(void)
     kosload_info.capabilities = KOSLOAD_CAP_SERIAL | KOSLOAD_CAP_CDFS_REDIR;
     kosload_info.transport = KOSLOAD_TRANSPORT_SERIAL;
     kosload_info.baud_rate = SERIAL_DEFAULT_SPEED;
-    screensaver_init(serial_restore_screen, 0);
+    screensaver_init(serial_restore_screen, WHITE);
     return 0;
 }
 
