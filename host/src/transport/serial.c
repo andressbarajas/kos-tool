@@ -336,9 +336,18 @@ static int serial_recv_data(kostool_context_t *ctx, uint8_t *data,
     ctx->serial_ops->write(ctx->serial_handle, &c, 1);
     blread(ctx, &c, 1);
 
+    uint32_t wrkmem_addr = ctx->target_big_endian
+        ? GC_LZO_WRKMEM_ADDR : DC_LZO_WRKMEM_ADDR;
+
+    /* If the read range overlaps wrkmem, the console would corrupt the
+     * data with LZO hash tables. Send 0 to force uncompressed transfer. */
+    if (src_addr < wrkmem_addr + LZO_WRKMEM_SIZE &&
+        src_addr + size > wrkmem_addr)
+        wrkmem_addr = 0;
+
     send_uint(ctx, src_addr);
     send_uint(ctx, size);
-    send_uint(ctx, ctx->target_big_endian ? GC_LZO_WRKMEM_ADDR : DC_LZO_WRKMEM_ADDR);
+    send_uint(ctx, wrkmem_addr);
 
     lzo_recv_data(ctx, data, size, 1);
     return 0;
