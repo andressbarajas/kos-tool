@@ -182,6 +182,16 @@ typedef struct {
 #define DC_DEFAULT_LOAD_ADDR    0x8c010000
 #define GC_DEFAULT_LOAD_ADDR    0x80003100
 
+/* Memory layout constants */
+#define DC_RAM_TOP          0x8d000000
+#define GC_LOADER_BASE      0x817EC000  /* keep in sync with mk/memory.mk */
+#define LZO_WRKMEM_SIZE     0x10000     /* 64 KB — LZO1X_1_MEM_COMPRESS */
+
+/* LZO work memory addresses for serial downloads.
+ * Placed just below the top of usable RAM on each console. */
+#define DC_LZO_WRKMEM_ADDR  (DC_RAM_TOP - LZO_WRKMEM_SIZE)         /* 0x8cff0000 */
+#define GC_LZO_WRKMEM_ADDR  (GC_LOADER_BASE - LZO_WRKMEM_SIZE)     /* 0x817DC000 */
+
 /* ===== KOS Open Flags (for flag translation) ===== */
 
 #define KOS_O_WRONLY    0x0001

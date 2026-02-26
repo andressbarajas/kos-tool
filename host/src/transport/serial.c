@@ -338,7 +338,7 @@ static int serial_recv_data(kostool_context_t *ctx, uint8_t *data,
 
     send_uint(ctx, src_addr);
     send_uint(ctx, size);
-    send_uint(ctx, 0x8cff0000);  /* DC work memory for LZO compression */
+    send_uint(ctx, ctx->target_big_endian ? GC_LZO_WRKMEM_ADDR : DC_LZO_WRKMEM_ADDR);
 
     lzo_recv_data(ctx, data, size, 1);
     return 0;

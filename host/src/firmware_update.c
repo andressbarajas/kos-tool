@@ -265,7 +265,7 @@ static const arch_update_params_t ppc_params = {
     .trampoline_size = 256,
     .size_patch_offset = 0x98,
     .load_addr = 0x80100000,
-    .loader_base = 0x817EC000,  /* GC_LOADER_BASE — keep in sync with mk/memory.mk */
+    .loader_base = GC_LOADER_BASE,
     .big_endian = 1,
 };
 
