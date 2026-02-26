@@ -13,6 +13,7 @@
  */
 
 #include <string.h>
+#include <kosload/target.h>
 #include <kosload/transport.h>
 #include <kosload/info.h>
 #include "adapter.h"
@@ -89,8 +90,9 @@ static int network_transport_init(void)
     /* Reset boot state so display is redrawn (needed after program return) */
     booted = false;
 
-    kosload_info.capabilities = KOSLOAD_CAP_NETWORK | KOSLOAD_CAP_GDB |
-                                KOSLOAD_CAP_CDFS_REDIR;
+    kosload_info.capabilities = KOSLOAD_CAP_NETWORK | KOSLOAD_CAP_GDB;
+    if (target_get_ops()->cdfs_redir_enable)
+        kosload_info.capabilities |= KOSLOAD_CAP_CDFS_REDIR;
     kosload_info.transport = KOSLOAD_TRANSPORT_NETWORK;
 
     if (adapter_detect() < 0)

@@ -49,7 +49,6 @@ extern int write(int fd, const void *buf, unsigned int count);
 extern void progexit(int ret_code);
 
 /* Direct hardware access (from ASM files) */
-extern void cdfs_redir_enable(void);
 
 /* ===== Network globals ===== */
 
@@ -165,10 +164,10 @@ void cmd_execute(ether_header_t *ether, ip_header_t *ip, udp_header_t *udp, comm
 		{
 			const target_ops_t *t = target_get_ops();
 			t->set_console_enabled(cmd_size & 1);
-		}
 
-		if (cmd_size >> 1)
-			cdfs_redir_enable();
+			if ((cmd_size >> 1) && t->cdfs_redir_enable)
+				t->cdfs_redir_enable();
+		}
 
 		running = true;
 

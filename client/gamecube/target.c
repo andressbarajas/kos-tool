@@ -159,31 +159,11 @@ static const char *gc_exception_to_string(uint32_t code)
     return gc_exception_code_to_string(code);
 }
 
-static void gc_cdfs_redir_save(void)
-{
-    /* No optical drive redirection on GameCube */
-}
-
-static void gc_cdfs_redir_enable(void)
-{
-    /* No-op on GameCube */
-}
-
 /* Global wrappers for commands.c which calls these by name (not via vtable).
  * On DC these are provided by disable.S and cdfs_redir.S. */
 void disable_cache(void)
 {
     cache_disable();
-}
-
-void cdfs_redir_enable(void)
-{
-    /* No-op on GameCube */
-}
-
-static void gc_cdfs_redir_disable(void)
-{
-    /* No-op on GameCube */
 }
 
 static void gc_set_console_enabled(bool enabled)
@@ -354,9 +334,6 @@ const target_ops_t gamecube_target_ops = {
     .disable_cache = gc_disable_cache,
     .reboot = gc_reboot,
     .exception_to_string = gc_exception_to_string,
-    .cdfs_redir_save = gc_cdfs_redir_save,
-    .cdfs_redir_enable = gc_cdfs_redir_enable,
-    .cdfs_redir_disable = gc_cdfs_redir_disable,
     .set_console_enabled = gc_set_console_enabled,
     .set_rtc = gc_set_rtc,
     .get_rtc = gc_get_rtc,

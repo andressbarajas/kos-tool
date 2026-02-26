@@ -115,7 +115,6 @@ $(IP_LD): kosload-ip.ld.in $(ROOT)/mk/memory.mk | $(IPDIR)
 # serial/IP-specific #ifdefs unlike DC).
 
 COMMON_C_OBJS := \
-    $(COMMONDIR)/cdfs.o \
     $(COMMONDIR)/info.o \
     $(COMMONDIR)/screensaver.o \
     $(COMMONDIR)/syscall_table.o \
@@ -136,9 +135,6 @@ COMMON_OBJS := $(COMMON_C_OBJS) $(COMMON_S_OBJS)
 COMMON_A    := $(COMMONDIR)/kosload_common.a
 
 # Common C object rules (by source directory)
-$(COMMONDIR)/cdfs.o: $(CLIENTDIR)/common/cdfs.c $(VERSION_H) | $(COMMONDIR)
-	$(CC) $(CFLAGS) -c $< -o $@
-
 $(COMMONDIR)/info.o: $(CLIENTDIR)/common/info.c $(VERSION_H) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -191,8 +187,7 @@ SERIAL_DEFS := -DKOSLOAD_SERIAL_TRANSPORT -DLOADER_NAME=\"gc-load-serial\"
 SERIAL_OBJS := \
     $(SERIALDIR)/main.o \
     $(SERIALDIR)/entry.o \
-    $(SERIALDIR)/serial_transport.o \
-    $(SERIALDIR)/cdfs_syscalls.o
+    $(SERIALDIR)/serial_transport.o
 
 SERIAL_ELF := $(SERIALDIR)/gc-load-ser.elf
 SERIAL_BIN := $(SERIALDIR)/gc-load-ser.bin
@@ -207,9 +202,6 @@ $(SERIALDIR)/entry.o: $(CLIENTDIR)/serial/entry.c $(VERSION_H) | $(SERIALDIR)
 	$(CC) $(CFLAGS) $(SERIAL_DEFS) -c $< -o $@
 
 $(SERIALDIR)/serial_transport.o: $(CLIENTDIR)/serial/serial_transport.c $(VERSION_H) | $(SERIALDIR)
-	$(CC) $(CFLAGS) $(SERIAL_DEFS) -c $< -o $@
-
-$(SERIALDIR)/cdfs_syscalls.o: $(CLIENTDIR)/serial/cdfs_syscalls.c $(VERSION_H) | $(SERIALDIR)
 	$(CC) $(CFLAGS) $(SERIAL_DEFS) -c $< -o $@
 
 $(SERIAL_ELF): $(SERIAL_OBJS) $(COMMON_A) $(MINILZO_A) $(SERIAL_LD)
@@ -238,7 +230,6 @@ IP_OBJS := \
     $(IPDIR)/entry.o \
     $(IPDIR)/network_transport.o \
     $(IPDIR)/network_syscalls.o \
-    $(IPDIR)/cdfs_syscalls.o \
     $(IPDIR)/commands.o \
     $(IPDIR)/adapter.o \
     $(IPDIR)/bba.o \
@@ -266,9 +257,6 @@ $(IPDIR)/network_transport.o: $(CLIENTDIR)/network/network_transport.c $(VERSION
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
 $(IPDIR)/network_syscalls.o: $(CLIENTDIR)/network/network_syscalls.c $(VERSION_H) | $(IPDIR)
-	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
-
-$(IPDIR)/cdfs_syscalls.o: $(CLIENTDIR)/network/cdfs_syscalls.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
 $(IPDIR)/adapter.o: net/adapter.c $(VERSION_H) | $(IPDIR)
@@ -320,7 +308,7 @@ EXBUILD := $(BUILDDIR)/examples
 
 # All examples with a main.c that compile for GC (maple-test is DC-only)
 GC_EXAMPLES := \
-    cdfs-test console-test download-test exception-test \
+    console-test download-test exception-test \
     exit-test exi-probe file-test gdb-test rainbow-test syscall-test
 
 GC_EXAMPLE_ELFS := $(addprefix $(EXBUILD)/,$(addsuffix .elf,$(GC_EXAMPLES)))
