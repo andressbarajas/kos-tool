@@ -36,8 +36,8 @@ static const uint32_t screensaver_icon[32] = {
 
 /* State */
 static void (*restore_callback)(void);
-static unsigned int timer_start;
-static unsigned int last_frame;
+static uint64_t timer_start;
+static uint64_t last_frame;
 static int active;
 static unsigned int icon_color_saved;
 static int box_x, box_y;
@@ -85,11 +85,11 @@ int screensaver_wake(void)
 void screensaver_poll(void)
 {
     const target_ops_t *t = common_get_target();
-    unsigned int now = t->get_ticks();
+    uint64_t now = t->get_ticks();
 
     if (!active) {
         /* Check if idle timeout has elapsed (unsigned subtraction handles wrap) */
-        unsigned int elapsed = now - timer_start;
+        uint64_t elapsed = now - timer_start;
         unsigned int timeout_ticks = IDLE_TIMEOUT_SECS * t->ticks_per_second;
         if (elapsed < timeout_ticks)
             return;

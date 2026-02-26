@@ -20,7 +20,7 @@
 #include "net.h"
 #include "dcload.h"
 #include "dhcp.h"
-#include "perfctr.h"
+#include <kosload/target.h>
 #include "../exi.h"
 #include "../cache.h"
 #include <kosload/screensaver.h>
@@ -307,9 +307,9 @@ static int bba_rx(void)
 
 void bba_loop(int is_main_loop)
 {
-    unsigned int loop_start[2] = {0};
-    unsigned int loop_measure[2] = {0};
-    unsigned int prev_loop_elapsed = 0;
+    const target_ops_t *t = target_get_ops();
+    uint64_t last_sec_tick = 0;
+    unsigned int loop_secs_elapsed = 0;
 
     if (is_main_loop)
     {
@@ -319,7 +319,7 @@ void bba_loop(int is_main_loop)
 
     if (timeout_loop > 0)
     {
-        PMCR_Read(DCLOAD_PMCR, loop_start);
+        last_sec_tick = t->get_ticks();
     }
 
     while (!escape_loop)
@@ -345,30 +345,45 @@ void bba_loop(int is_main_loop)
             bba_out8(BBA_IR, ir & (BBA_IR_REI | BBA_IR_TEI | BBA_IR_FIFOEI | BBA_IR_BUSEI));
         }
 
+        /* Check for link change.  The BBA has no link change interrupt,
+         * so poll NWAYS link status.  Matches the DC RTL8139/LAN adapter
+         * pattern: handle link loss in the loop. */
+        if (__builtin_expect(!(bba_in8(BBA_NWAYS) & BBA_NWAYS_LS), 0))
+        {
+            screensaver_wake();
+
+            if (booted && !running)
+                disp_status("link change...");
+
+            while (!(bba_in8(BBA_NWAYS) & BBA_NWAYS_LS))
+                ;
+
+            if (booted && !running)
+                disp_status("idle...");
+
+            /* If we were waiting in a DHCP timeout loop when link
+             * changed, timeout immediately so we can retry. */
+            if (timeout_loop > 0)
+            {
+                dhcp_attempts = 0;
+                timeout_loop = -1;
+                escape_loop = 1;
+            }
+        }
+
         if (is_main_loop)
         {
-            set_ip_dhcp();
+            dhcp_poll();
             screensaver_poll();
         }
 
         /* Timeout handling for DHCP */
         if (timeout_loop > 0)
         {
-            PMCR_Read(DCLOAD_PMCR, loop_measure);
-            unsigned long long start_val = ((unsigned long long)loop_start[1] << 32) | loop_start[0];
-            unsigned long long cur_val = ((unsigned long long)loop_measure[1] << 32) | loop_measure[0];
-            /* Avoid 64-bit division (__udivdi3 requires libgcc).
-             * GC_TBR_FREQUENCY = 40500000 ~ 2^25.27.
-             * Shift right by 25 then divide by (40500000 >> 25) = 1.
-             * More precisely: 40500000 / 2^22 ~ 9.65, so shift >> 22
-             * and divide by ~10 gives a good seconds approximation.
-             * Simplest: elapsed ticks fits in 32 bits for < 106 seconds,
-             * so just use 32-bit division. */
-            unsigned int elapsed_ticks = (unsigned int)(cur_val - start_val);
-            unsigned int loop_secs_elapsed = elapsed_ticks / GC_TBR_FREQUENCY;
-
-            if (prev_loop_elapsed != loop_secs_elapsed)
-            {
+            uint64_t now = t->get_ticks();
+            if ((now - last_sec_tick) >= t->ticks_per_second) {
+                last_sec_tick = now;
+                loop_secs_elapsed++;
                 if (dhcp_attempts > 1)
                 {
                     disp_dhcp_attempts_count();
@@ -379,7 +394,6 @@ void bba_loop(int is_main_loop)
                     timeout_loop = -1;
                     escape_loop = 1;
                 }
-                prev_loop_elapsed = loop_secs_elapsed;
             }
         }
     }

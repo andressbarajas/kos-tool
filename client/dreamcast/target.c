@@ -39,6 +39,9 @@ extern void scif_init(int bps);
 /* From maple.c */
 extern void maple_init(void);
 
+/* From cdfs.c */
+extern void cdfs_init(void);
+
 /* Console enabled flag — affects serial transport behavior */
 static volatile int console_enabled = 0;
 
@@ -47,8 +50,13 @@ static void dc_tmu2_start(void);
 
 static int dc_init(void) {
     scif_init(57600);
+
     maple_init();
+
     dc_tmu2_start();
+
+    /* Save CDFS BIOS vectors and disable redirection */
+    cdfs_init();
     return 0;
 }
 
@@ -263,6 +271,20 @@ static void update_flashrom_syscfg(uint32_t aica_time)
         return;
 }
 
+static uint32_t dc_get_rtc(void)
+{
+    uint32_t h1, h2, l;
+
+    /* Read high, low, high again to detect rollover of the low 16 bits */
+    do {
+        h1 = AICA_RTC_SECS_H & 0xffff;
+        l  = AICA_RTC_SECS_L & 0xffff;
+        h2 = AICA_RTC_SECS_H & 0xffff;
+    } while (h1 != h2);
+
+    return ((h1 << 16) | l) - UNIX_TO_AICA_OFFSET;
+}
+
 static void dc_set_rtc(uint32_t unix_timestamp)
 {
     uint32_t aica_time = unix_timestamp + UNIX_TO_AICA_OFFSET;
@@ -301,13 +323,13 @@ static void dc_tmu2_start(void)
     TMU_TSTR &= ~4;                /* Stop TMU2 */
     TMU_TCOR2 = 0xFFFFFFFF;
     TMU_TCNT2 = 0xFFFFFFFF;
-    TMU_TCR2 = 4;                   /* Pclk/1024, no interrupt */
+    TMU_TCR2 = 4;                  /* Pclk/1024, no interrupt */
     TMU_TSTR |= 4;                 /* Start TMU2 */
 }
 
-static uint32_t dc_get_ticks(void)
+static uint64_t dc_get_ticks(void)
 {
-    return 0xFFFFFFFF - TMU_TCNT2;   /* Convert count-down to count-up */
+    return (uint64_t)(0xFFFFFFFF - TMU_TCNT2);   /* Convert count-down to count-up */
 }
 
 static void dc_restart_timer(void)
@@ -396,6 +418,7 @@ const target_ops_t dreamcast_target_ops = {
     .cdfs_redir_disable = dc_cdfs_redir_disable_op,
     .set_console_enabled = dc_set_console_enabled,
     .set_rtc = dc_set_rtc,
+    .get_rtc = dc_get_rtc,
     .get_ticks = dc_get_ticks,
     .ticks_per_second = DC_TMU_TICKS_PER_SEC,
     .fill_rect = dc_fill_rect,

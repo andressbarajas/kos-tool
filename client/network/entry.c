@@ -7,6 +7,14 @@
  * target struct references.
  *
  * DHCP support ported from dcload-ip: dcload-ip/target-src/dcload/dcload.c
+ *
+ * Lease tracking uses two mechanisms:
+ *   1. Absolute RTC expiry (set at DHCP ACK, persists in .data across
+ *      warm reboots) — used only at key moments: DHCP ACK, renewal,
+ *      NAK, and post-reboot resync.
+ *   2. Tick-based ~1Hz countdown for display updates — decrements a
+ *      seconds counter via get_ticks() delta, no RTC reads needed.
+ * After warm reboot the tick counter resyncs from the RTC expiry once.
  */
 
 #include <kosload/target.h>
@@ -15,7 +23,6 @@
 #include <kosload/info.h>
 
 #include "dhcp.h"
-#include "perfctr.h"
 #include "dcload.h"
 
 #include <kosload/screensaver.h>
@@ -23,9 +30,6 @@
 #ifndef KOSLOAD_VERSION_STRING
 #define KOSLOAD_VERSION_STRING "0.1.0"
 #endif
-
-/* Scale up the onscreen refresh interval */
-#define ONSCREEN_REFRESH_SCALED ((unsigned long long int)ONSCREEN_DHCP_LEASE_TIME_REFRESH_INTERVAL * (unsigned long long int)PERFCOUNTER_SCALE)
 
 extern void common_main(const target_ops_t *tgt, const client_transport_ops_t *xport);
 extern const target_ops_t *common_get_target(void);
@@ -63,15 +67,24 @@ volatile unsigned char receiving;
 unsigned int global_bg_color;
 volatile unsigned int installed_adapter;
 
-/* ===== DHCP state ===== */
+/* ===== DHCP lease tracking state ===== */
 
-static volatile unsigned int current_counter_array[2] = {0};
-static volatile unsigned int old_dhcp_lease_updater_array[2] = {0};
+/* Absolute RTC time (Unix seconds) when the current lease expires.
+ * Set at DHCP ACK; persists across warm reboots (.data, not .bss).
+ * Only read at key moments — not in the ~1Hz display loop. */
+static unsigned int lease_expiry_rtc = 0;
+
+/* Tick-decremented countdown (seconds) for display and renewal checks.
+ * Resynced from lease_expiry_rtc via RTC on warm reboot; decremented
+ * via tick deltas otherwise — no RTC reads in the hot path. */
+static unsigned int lease_display_secs = 0;
+
+/* Tick counter snapshot for ~1Hz display throttle */
+static uint64_t last_display_tick = 0;
+
+static void lease_resync_from_rtc(void);
+
 static volatile unsigned char dont_renew = 0;
-
-/* Accumulated PMCR ticks from before program executions.
- * Persists across program return since .data isn't reinitialized. */
-static volatile unsigned int pmcr_saved_array[2] = {0};
 
 static char ip_disp_string[16] = "000.000.000.000";
 static const char *waiting_string = "Waiting For IP...";
@@ -198,9 +211,15 @@ void disp_info(void)
     kosload_info.host_ip = tool_ip;
     kosload_info.host_port = tool_port;
 
-    /* Reset lease display timer so it updates promptly after screen redraw */
-    old_dhcp_lease_updater_array[0] = 0;
-    old_dhcp_lease_updater_array[1] = 0;
+    /* Reset lease display timer so the next ~1Hz update starts from "now"
+     * rather than accumulating a bogus delta from TBR epoch (which could
+     * over-subtract from the lease countdown). */
+    last_display_tick = t->get_ticks();
+
+    /* Resync lease countdown from RTC — accounts for time spent in
+     * loaded programs or between warm reboots. */
+    if (lease_expiry_rtc)
+        lease_resync_from_rtc();
 
     booted = 1;
 }
@@ -230,39 +249,36 @@ void disp_dhcp_next_attempt(unsigned int time_left)
     t->draw_string(258, 426, dhcp_next_counter, STR_COLOR);
 }
 
-/* ===== PMCR elapsed time save/restore ===== */
-
-void save_pmcr_elapsed(void)
+/* Resync the tick-based countdown from the absolute RTC expiry.
+ * Called once after warm reboot and after DHCP events — NOT in the hot path. */
+static void lease_resync_from_rtc(void)
 {
-    volatile unsigned int tmp[2];
-    PMCR_Read(DCLOAD_PMCR, tmp);
-    *(unsigned long long int *)pmcr_saved_array += *(unsigned long long int *)tmp;
+    if (!lease_expiry_rtc) {
+        lease_display_secs = 0;
+        return;
+    }
+    const target_ops_t *t = common_get_target();
+    unsigned int now = t->get_rtc();
+    lease_display_secs = (now < lease_expiry_rtc) ? (lease_expiry_rtc - now) : 0;
+    last_display_tick = t->get_ticks();
 }
 
 /* ===== DHCP management ===== */
-
-void set_ip_dhcp(void)
+void dhcp_poll(void)
 {
+    const target_ops_t *t = common_get_target();
+
     if (__builtin_expect(!booted, 0)) {
         disp_info();
         disp_status("idle...");
     }
 
-    /* Check renewal condition. Only matters if dhcp_lease_time has been set. */
-    unsigned long long int long_dhcp_lease_time = (unsigned long long int)dhcp_lease_time * (unsigned long long int)(PERFCOUNTER_SCALE);
-    PMCR_Read(DCLOAD_PMCR, current_counter_array);
-    /* Add accumulated time from before program executions */
-    *(unsigned long long int *)current_counter_array += *(unsigned long long int *)pmcr_saved_array;
-
-    unsigned long long int *current_counter = (unsigned long long int *)current_counter_array;
-    unsigned long long int *old_dhcp_lease_updater = (unsigned long long int *)old_dhcp_lease_updater_array;
-
-    /* Check if lease is still active, renewal threshold is at 50% lease time */
-    if (__builtin_expect(dhcp_lease_time && (!dont_renew) && ((long_dhcp_lease_time >> 1) < (*current_counter)), 0))
+    /* --- Renewal check (50% of lease elapsed) --- */
+    if (__builtin_expect(dhcp_lease_time && (!dont_renew) &&
+                         (lease_display_secs <= dhcp_lease_time / 2), 0))
     {
+        unsigned int saved_lease_time = dhcp_lease_time;
         dhcp_lease_time = 0;
-        old_dhcp_lease_updater_array[0] = 0;
-        old_dhcp_lease_updater_array[1] = 0;
 
         dhcp_waiting_mode_display();
         disp_status("DHCP renewing...");
@@ -270,68 +286,75 @@ void set_ip_dhcp(void)
 
         if (renew_result == -2)
         {
-            /* NAK: IP no longer valid, wait until 87.5% to do new discover */
+            /* NAK: IP no longer valid, wait until 87.5% to do new discover.
+             * Set expiry so the lease runs out at the 87.5% mark. */
             dont_renew = 1;
+            unsigned int nak_remaining = (saved_lease_time * 3 + 4) / 8;
+            lease_expiry_rtc = t->get_rtc() + nak_remaining;
+            lease_display_secs = nak_remaining;
+            last_display_tick = t->get_ticks();
         }
         else if (renew_result == -1)
         {
             /* Error: ACK was invalid. Disable DHCP entirely. */
             our_ip = 0xffffffff;
+            lease_expiry_rtc = 0;
+            lease_display_secs = 0;
             update_ip_display(our_ip, dhcp_timeout_string);
-            update_lease_time_display(dhcp_lease_time);
-            PMCR_Disable(DCLOAD_PMCR);
+            update_lease_time_display(0);
             return;
         }
         else
         {
-            /* PMCR was restarted in handle_dhcp_reply; clear saved
-             * accumulator so it doesn't double-count after program return */
-            pmcr_saved_array[0] = 0;
-            pmcr_saved_array[1] = 0;
+            /* Success: set new expiry from fresh lease time */
+            lease_expiry_rtc = t->get_rtc() + dhcp_lease_time;
+            lease_display_secs = dhcp_lease_time;
+            last_display_tick = t->get_ticks();
             update_ip_display(our_ip, dhcp_mode_string);
-            update_lease_time_display(dhcp_lease_time);
+            update_lease_time_display(lease_display_secs);
         }
 
         disp_status("idle...");
     }
-    /* Update lease time display at ~1Hz (skip during screensaver) */
-    else if (
-        !screensaver_is_active() &&
-        (long_dhcp_lease_time >= (*current_counter)) && ((*current_counter) > ((*old_dhcp_lease_updater) + ONSCREEN_REFRESH_SCALED - 1ULL)))
+    /* --- ~1Hz lease countdown --- */
+    else if (lease_display_secs > 0)
     {
-        old_dhcp_lease_updater_array[0] = current_counter_array[0];
-        old_dhcp_lease_updater_array[1] = current_counter_array[1];
+        uint64_t now = t->get_ticks();
+        uint64_t delta = now - last_display_tick;
 
-        unsigned long long int difference = long_dhcp_lease_time - (*current_counter);
-        unsigned int remaining_lease = PMCR_TicksToSeconds(difference);
-        update_lease_time_display(remaining_lease);
+        if (delta >= t->ticks_per_second) {
+            last_display_tick = now;
+            lease_display_secs--;
+            if (!screensaver_is_active())
+                update_lease_time_display(lease_display_secs);
+        }
     }
 
-    /* 87.5% threshold for re-discovery after NAK */
-    unsigned long long int eighty_seven_point_five = (long_dhcp_lease_time >> 1) + (long_dhcp_lease_time >> 2) + (long_dhcp_lease_time >> 3);
-
-    /* Check if we need DHCP discovery: IP in 0.0.0.0/8 range, or renewal NAK'd past 87.5% */
-    if (__builtin_expect(((our_ip & 0xff000000) == 0) || (dont_renew && (eighty_seven_point_five < (*current_counter))), 0))
+    /* --- Discovery check (no IP, or NAK'd and lease fully expired) --- */
+    if (__builtin_expect(((our_ip & 0xff000000) == 0) ||
+                         (dont_renew && lease_display_secs == 0), 0))
     {
         dont_renew = 0;
         dhcp_waiting_mode_display();
 
         disp_status("Acquiring new IP address via DHCP...");
         int dhcp_result = dhcp_go((unsigned int *)&our_ip);
-        if ((dhcp_result == -1) || dhcp_nest_counter_maxed)
+        if (dhcp_result == -1 || dhcp_nest_counter_maxed)
         {
             /* Failed: set IP to 255.255.255.255 to disable DHCP */
             our_ip = 0xffffffff;
+            lease_expiry_rtc = 0;
+            lease_display_secs = 0;
             update_ip_display(our_ip, dhcp_timeout_string);
-            PMCR_Disable(DCLOAD_PMCR);
         }
         else
         {
-            /* Got an address from DHCP — clear saved accumulator */
-            pmcr_saved_array[0] = 0;
-            pmcr_saved_array[1] = 0;
+            /* Got an address from DHCP */
+            lease_expiry_rtc = t->get_rtc() + dhcp_lease_time;
+            lease_display_secs = dhcp_lease_time;
+            last_display_tick = t->get_ticks();
             update_ip_display(our_ip, dhcp_mode_string);
-            update_lease_time_display(dhcp_lease_time);
+            update_lease_time_display(lease_display_secs);
         }
 
         disp_status("idle...");

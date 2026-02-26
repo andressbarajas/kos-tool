@@ -7,8 +7,7 @@
 #ifndef __DCLOAD_H__
 #define __DCLOAD_H__
 
-/* Performance counter configuration (maps to TBR on GC) */
-#define ONSCREEN_DHCP_LEASE_TIME_REFRESH_INTERVAL 1
+/* Performance counter configuration (maps to TBR on GC, used by adapter timeout loops) */
 #define DCLOAD_PMCR 1
 
 /* Colors in 0x00RRGGBB format (converted to YUV by gc_color_to_yuy2) */
@@ -45,7 +44,6 @@ extern void disp_status(const char *status);
 extern void disp_dhcp_attempts_count(void);
 extern void disp_dhcp_next_attempt(unsigned int);
 extern void uint_to_string_dec(unsigned int foo, char *bar);
-extern void set_ip_dhcp(void);
-extern void save_pmcr_elapsed(void);
+extern void dhcp_poll(void);
 
 #endif /* __DCLOAD_H__ */

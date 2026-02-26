@@ -209,6 +209,21 @@ static void gc_set_console_enabled(int enabled)
 /* SRAM read command: 0x20000100 + (byte_offset << 6) */
 #define SRAM_COUNTER_BIAS_OFFSET  0x0C
 
+static uint32_t gc_get_rtc(void)
+{
+    /* Read raw RTC counter (seconds since 2000-01-01).
+     * We skip counter_bias (SRAM 0x0C) here — it's only needed for
+     * human-readable display (IPL).  For elapsed-time calculations
+     * (pre/post program exec) the bias cancels out, and reading SRAM
+     * after a loaded program returns can give inconsistent results. */
+    exi_select(0, 1, 3);
+    exi_imm(0, 0x20000000, 4, EXI_IMM_WRITE);
+    uint32_t rtc_val = exi_imm(0, 0, 4, EXI_IMM_READ);
+    exi_deselect(0);
+
+    return rtc_val + UNIX_TO_GC_OFFSET;
+}
+
 static void gc_set_rtc(uint32_t unix_timestamp)
 {
     uint32_t desired_gc_time = unix_timestamp - UNIX_TO_GC_OFFSET;
@@ -231,14 +246,19 @@ static void gc_set_rtc(uint32_t unix_timestamp)
 
 /* ===== Screensaver support: timer, fill_rect, input polling ===== */
 
-/* GC Time Base Register: 40.5 MHz, wraps every ~106s (fine for 30s timeout) */
+/* GC Time Base Register: 40.5 MHz */
 #define GC_TBR_TICKS_PER_SEC  40500000
 
-static uint32_t gc_get_ticks(void)
+static uint64_t gc_get_ticks(void)
 {
-    uint32_t tbl;
-    __asm__ volatile ("mftb %0" : "=r"(tbl));
-    return tbl;
+    uint32_t tbl, tbu0, tbu1;
+    /* Read TBR with rollover protection */
+    do {
+        __asm__ volatile("mftbu %0" : "=r"(tbu0));
+        __asm__ volatile("mftb  %0" : "=r"(tbl));
+        __asm__ volatile("mftbu %0" : "=r"(tbu1));
+    } while (tbu0 != tbu1);
+    return ((uint64_t)tbu0 << 32) | tbl;
 }
 
 /* XFB address and dimensions (must match video.c) */
@@ -339,6 +359,7 @@ const target_ops_t gamecube_target_ops = {
     .cdfs_redir_disable = gc_cdfs_redir_disable,
     .set_console_enabled = gc_set_console_enabled,
     .set_rtc = gc_set_rtc,
+    .get_rtc = gc_get_rtc,
     .get_ticks = gc_get_ticks,
     .ticks_per_second = GC_TBR_TICKS_PER_SEC,
     .fill_rect = gc_fill_rect,

@@ -16,9 +16,6 @@
 #define KOSLOAD_VERSION_STRING "0.1.0"
 #endif
 
-/* CDFS management (from cdfs.c) */
-extern void cdfs_init(void);
-
 static const target_ops_t *target;
 static const client_transport_ops_t *transport;
 
@@ -28,9 +25,6 @@ void common_main(const target_ops_t *tgt, const client_transport_ops_t *xport) {
 
     /* Initialize target hardware (serial port, etc.) */
     target->init();
-
-    /* Save CDFS BIOS vectors and disable redirection */
-    cdfs_init();
 
     /* Install exception handlers */
     exception_init();
@@ -49,8 +43,9 @@ void common_main(const target_ops_t *tgt, const client_transport_ops_t *xport) {
             target->draw_string(30, 78, transport->init_error_msg, 0xffff);
 
         while (transport->init() != 0) {
-            /* Wait a second before trying again */
-            for (volatile int i = 0; i < 2000000; i++)
+            /* Wait ~1 second before trying again */
+            uint64_t start = target->get_ticks();
+            while ((target->get_ticks() - start) < target->ticks_per_second)
                 ;
         }
     }

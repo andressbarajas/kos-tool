@@ -11,7 +11,7 @@
 #include "net.h"
 #include "adapter.h"
 #include "dhcp.h"
-#include "perfctr.h"
+#include <kosload/target.h>
 #include "dcload.h"
 
 #define DHCP_RENEW_TYPE 0
@@ -28,7 +28,6 @@
 #define DHCP_MAX_NAKS 5
 #define DHCP_MIN_OPTIONS_SIZE 64
 
-static unsigned int get_some_time(int which);
 static void build_send_dhcp_packet(unsigned char kind);
 static int kos_net_dhcp_fill_options(unsigned char *bbmac, dhcp_pkt_t *req, uint8 msgtype);
 static int kos_net_dhcp_get_message_type(dhcp_pkt_t *pkt, int len);
@@ -50,18 +49,10 @@ unsigned int dhcp_attempts = 0;
 
 static unsigned char router_mac[6] = {0};
 
-static volatile unsigned int time_array[2] = {0};
-
 #define DHCP_TX_PKT_BUF_SIZE TX_PKT_BUF_SIZE
 #define dhcp_pkt_buf pkt_buf
 
 #define DHCP_TX_PKT_BUF_ZEROING_SIZE 344
-
-static unsigned int get_some_time(int which)
-{
-	PMCR_Read((unsigned char)which, time_array);
-	return (time_array[1] << 16 | time_array[0] >> 16);
-}
 
 static void build_send_dhcp_packet(unsigned char kind)
 {
@@ -121,10 +112,7 @@ int handle_dhcp_reply(unsigned char *routersrcmac, dhcp_pkt_t *pkt_data, unsigne
 			}
 
 			dhcp_lease_time = kos_net_dhcp_get_32bit(pkt_data, DHCP_OPTION_IP_LEASE_TIME, len);
-			/* Reset timing base for lease tracking.
-			 * On GC this is a no-op (TBR can't be reset), but the loop
-			 * function tracks start time independently. */
-			PMCR_Restart(DCLOAD_PMCR, PMCR_ELAPSED_TIME_MODE, PMCR_COUNT_CPU_CYCLES);
+			/* Lease countdown is initialized by entry.c after dhcp_go/dhcp_renew returns */
 			dhcp_acked = 1;
 
 			return 0;
@@ -278,7 +266,7 @@ static int kos_net_dhcp_fill_options(unsigned char *bbmac, dhcp_pkt_t *req, uint
 
 	if (msgtype == DHCP_MSG_DHCPDISCOVER)
 	{
-		req->xid = htonl(get_some_time(DCLOAD_PMCR) ^ 0xDEADBEEF);
+		req->xid = htonl((uint32_t)target_get_ops()->get_ticks() ^ 0xDEADBEEF);
 	}
 	else if (msgtype == DHCP_MSG_DHCPREQUEST)
 	{
@@ -288,7 +276,7 @@ static int kos_net_dhcp_fill_options(unsigned char *bbmac, dhcp_pkt_t *req, uint
 	}
 	else /* Assume renewal (msgtype == 0) */
 	{
-		dhcpoffer_xid = (get_some_time(DCLOAD_PMCR) ^ 0xDEADBEEF) + renewal_increment;
+		dhcpoffer_xid = ((uint32_t)target_get_ops()->get_ticks() ^ 0xDEADBEEF) + renewal_increment;
 		renewal_increment += 0x1000;
 		req->xid = dhcpoffer_xid;
 		req->ciaddr = htonl(our_ip);

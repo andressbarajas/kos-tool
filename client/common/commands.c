@@ -171,27 +171,23 @@ void cmd_execute(ether_header_t *ether, ip_header_t *ip, udp_header_t *udp, comm
 
 		running = 1;
 
-		/* Save PMCR elapsed time so DHCP lease tracking survives program return,
-		 * then restart the counter so it only measures program runtime.
-		 * Without the restart, the counter keeps accumulating and
-		 * save_pmcr_elapsed's value would be double-counted on return. */
-		save_pmcr_elapsed();
-		PMCR_Restart(DCLOAD_PMCR, PMCR_ELAPSED_TIME_MODE, PMCR_DEFAULT_COUNT_TYPE);
-
 		{
 			const target_ops_t *t = target_get_ops();
 			t->execute(ntohl(command->address));
 			t->restart_timer();
 		}
 
-		/* BBA hardware state may have been modified
-		 * by the executed program (e.g. KOS networking).  Do a full
-		 * re-init so receive buffers and registers are back to our
-		 * known-good configuration.  bb->stop() was already called
-		 * by progexit(), and bb->start() in build_send_packet() only
-		 * toggled 2 bits — not enough after heavy BBA use. */
+		/* Adapter hardware state may have been modified by the executed
+		 * program (e.g. KOS networking).  Do a full re-init so receive
+		 * buffers and registers are back to our known-good configuration.
+		 * bb->start() re-enables RX after init (init alone doesn't). */
 		bb->stop();
 		bb->init();
+		bb->start();
+
+		running = 0;
+		disp_info();
+		disp_status("idle...");
 	}
 }
 

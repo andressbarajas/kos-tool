@@ -6,9 +6,9 @@
  *
  * Handles adapter detection/init, delegates main loop to the
  * network adapter's loop function (which calls process_pkt for
- * incoming packets and set_ip_dhcp for DHCP management).
+ * incoming packets and dhcp_poll for DHCP management).
  *
- * Platform-independent: DC-specific features (maple, PMCR) are
+ * Platform-independent: DC-specific features (maple) are
  * accessed via platform stubs in the net/ include path.
  */
 
@@ -19,8 +19,6 @@
 #include "dcload.h"
 #include "net.h"
 #include "packet.h"
-#include "perfctr.h"
-
 #include <kosload/screensaver.h>
 
 /* IP configuration: default 0.0.0.0 means DHCP mode */
@@ -110,9 +108,6 @@ static int network_transport_init(void)
      * patch ip_config.ip in the firmware binary to switch modes. */
     if (our_ip == 0)
         kosload_info.capabilities |= KOSLOAD_CAP_DHCP;
-
-    /* Initialize performance counter for DHCP lease tracking */
-    PMCR_Init(DCLOAD_PMCR, PMCR_ELAPSED_TIME_MODE, PMCR_DEFAULT_COUNT_TYPE);
 
     screensaver_init(network_restore_screen, global_bg_color);
 

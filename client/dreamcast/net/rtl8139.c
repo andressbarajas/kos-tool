@@ -17,7 +17,7 @@
 
 #include "dhcp.h"
 #include "memfuncs.h"
-#include "perfctr.h"
+#include <kosload/target.h>
 #include <kosload/screensaver.h>
 
 
@@ -787,10 +787,10 @@ static int rtl_bb_rx()
 
 void rtl_bb_loop(int is_main_loop)
 {
+	const target_ops_t *t = target_get_ops();
 	unsigned int intr = 0;
-	unsigned int loop_start[2] = {0};
-	unsigned int loop_measure[2] = {0};
-	unsigned int prev_loop_elapsed = 0;
+	uint64_t last_sec_tick = 0;
+	unsigned int loop_secs_elapsed = 0;
 
 	if(is_main_loop)
 	{
@@ -805,7 +805,7 @@ void rtl_bb_loop(int is_main_loop)
 
 	if (timeout_loop > 0)
 	{
-		PMCR_Read(DCLOAD_PMCR, loop_start);
+		last_sec_tick = t->get_ticks();
 	}
 
 	// OMG this is polling the network adapter. Well, ok then.
@@ -900,16 +900,16 @@ void rtl_bb_loop(int is_main_loop)
 		{
 			// Do we need to renew our IP address?
 			// This will override set_ip_from_file() if the ip is in the 0.0.0.0/8 range
-			set_ip_dhcp();
+			dhcp_poll();
 		}
 
 		if(timeout_loop > 0 && !escape_loop)
 		{
-			PMCR_Read(DCLOAD_PMCR, loop_measure);
-			unsigned int loop_secs_elapsed = (unsigned int)((*(unsigned long long int*)loop_measure - *(unsigned long long int*)loop_start)/200000000);
-			if(prev_loop_elapsed != loop_secs_elapsed)
-			{
-				if(dhcp_attempts > 1) // Don't show a counter yet if it's the first attempt
+			uint64_t now = t->get_ticks();
+			if ((now - last_sec_tick) >= t->ticks_per_second) {
+				last_sec_tick = now;
+				loop_secs_elapsed++;
+				if(dhcp_attempts > 1)
 				{
 					disp_dhcp_attempts_count();
 					disp_dhcp_next_attempt(timeout_loop - loop_secs_elapsed + 1);
@@ -919,7 +919,6 @@ void rtl_bb_loop(int is_main_loop)
 					timeout_loop = -1;
 					escape_loop = 1;
 				}
-				prev_loop_elapsed = loop_secs_elapsed;
 			}
 		}
 

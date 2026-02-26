@@ -30,7 +30,7 @@
 #include "net.h"
 #include "adapter.h"
 #include "dhcp.h"
-#include "perfctr.h"
+#include <kosload/target.h>
 #include "memfuncs.h"
 #include "dcload.h"
 
@@ -58,7 +58,6 @@
 // Minimum size in bytes for the DHCP options area
 #define DHCP_MIN_OPTIONS_SIZE 64
 
-static unsigned int get_some_time(int which);
 static void build_send_dhcp_packet(unsigned char kind);
 static int kos_net_dhcp_fill_options(unsigned char *bbmac, dhcp_pkt_t *req, uint8 msgtype);
 static int kos_net_dhcp_get_message_type(dhcp_pkt_t *pkt, int len);
@@ -80,7 +79,7 @@ unsigned int dhcp_attempts = 0;
 
 static unsigned char router_mac[6] = {0}; // BE
 
-static volatile unsigned int time_array[2] = {0};
+
 
 #define DHCP_TX_PKT_BUF_SIZE TX_PKT_BUF_SIZE
 #define dhcp_pkt_buf pkt_buf
@@ -89,30 +88,6 @@ static volatile unsigned int time_array[2] = {0};
 // Small optimization: both TX packets are 342 bytes, round to nearest multiple of 8 bytes for zeroing
 // Don't forget tx buffer is offset by 2, so 344, which is actually exactly a multiple of 8. Perfect!
 #define DHCP_TX_PKT_BUF_ZEROING_SIZE 344
-
-// Used as a kind-of pseudo-RNG
-static unsigned int get_some_time(int which)
-{
-
-	if(which == 1)
-	{
-		PMCR_Read(1, time_array);
-	}
-	else if(which == 2)
-	{
-		PMCR_Read(2, time_array);
-	}
-
-	// Invalid counter selection returns 0
-	// The low 16 bits really don't matter when seconds are the major unit, and
-	// shifting by 16 makes the value fit nicely into a 32-bit unsigned int.
-	//return (unsigned int)(time_var >> 16);
-
-	// Sane thing as above comment discusses.
-	// little endian
-	// GCC should use SH4 'xtrct' for this
-	return (time_array[1] << 16 | time_array[0] >> 16);
-}
 
 // Steps 1 & 3 and part of 5 are handled here, called by dhcp_go() and dhcp_renew()
 static void build_send_dhcp_packet(unsigned char kind)
@@ -202,9 +177,7 @@ int handle_dhcp_reply(unsigned char *routersrcmac, dhcp_pkt_t* pkt_data, unsigne
 			// Get the lease time from ACK
 			// dhcp_lease_time is usable in little endian
 			dhcp_lease_time = kos_net_dhcp_get_32bit(pkt_data, DHCP_OPTION_IP_LEASE_TIME, len);
-			// Set PMCR for calculating renewal
-			// Reset 48-bit perfcounter to 0; renewal is calculated by elapsed time
-			PMCR_Restart(DCLOAD_PMCR, PMCR_ELAPSED_TIME_MODE, PMCR_DEFAULT_COUNT_TYPE);
+			// Lease countdown is initialized by entry.c after dhcp_go/dhcp_renew returns
 			dhcp_acked = 1;
 
 			return 0; // success
@@ -380,7 +353,7 @@ static int kos_net_dhcp_fill_options(unsigned char *bbmac, dhcp_pkt_t *req, uint
 		{
 			/* Fill in the initial DHCPDISCOVER packet */
 	    //req->hops = 0;
-	    req->xid = htonl(get_some_time(DCLOAD_PMCR) ^ 0xDEADBEEF);
+	    req->xid = htonl((uint32_t)target_get_ops()->get_ticks() ^ 0xDEADBEEF);
 	    //req->secs = 0;
 	    //req->flags = 0; // 0x0000 want unicast response, 0x8000 want broadcast response
 	    //req->ciaddr = 0;
@@ -405,7 +378,7 @@ static int kos_net_dhcp_fill_options(unsigned char *bbmac, dhcp_pkt_t *req, uint
 		}
 		else // Assume renewal (msgtype == 0)
 		{
-			dhcpoffer_xid = (get_some_time(DCLOAD_PMCR) ^ 0xDEADBEEF) + renewal_increment; // It's a DHCP Request with a unique transaction ID
+			dhcpoffer_xid = ((uint32_t)target_get_ops()->get_ticks() ^ 0xDEADBEEF) + renewal_increment; // It's a DHCP Request with a unique transaction ID
 			renewal_increment += 0x1000; // This just ensures DHCP renewal transaction IDs can't be the same within the uptime of the machine.
 			/* Fill in the DHCP renewal request */
 			//req->hops = 0;

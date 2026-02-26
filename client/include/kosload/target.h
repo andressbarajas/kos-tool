@@ -22,9 +22,10 @@ typedef struct target_ops {
     void        (*cdfs_redir_disable)(void);
     void        (*set_console_enabled)(int enabled);
     void        (*set_rtc)(uint32_t unix_timestamp);
+    uint32_t    (*get_rtc)(void);       /* Read RTC as Unix timestamp (seconds since 1970) */
 
     /* Screensaver support */
-    uint32_t    (*get_ticks)(void);     /* Monotonic count-up tick counter */
+    uint64_t    (*get_ticks)(void);     /* Monotonic count-up tick counter */
     uint32_t    ticks_per_second;       /* Tick rate for get_ticks */
     void        (*fill_rect)(int x, int y, int w, int h, uint32_t color);
     void        (*draw_bitmap)(int x, int y, int w, int h,

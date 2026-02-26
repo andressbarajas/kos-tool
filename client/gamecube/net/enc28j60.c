@@ -25,7 +25,7 @@
 #include "net.h"
 #include "dcload.h"
 #include "dhcp.h"
-#include "perfctr.h"
+#include <kosload/target.h>
 #include "../exi.h"
 #include "../cache.h"
 #include <kosload/screensaver.h>
@@ -618,9 +618,9 @@ static int enc28j60_rx(void)
 
 void enc28j60_loop(int is_main_loop)
 {
-    unsigned int loop_start[2] = {0};
-    unsigned int loop_measure[2] = {0};
-    unsigned int prev_loop_elapsed = 0;
+    const target_ops_t *t = target_get_ops();
+    uint64_t last_sec_tick = 0;
+    unsigned int loop_secs_elapsed = 0;
 
     if (is_main_loop) {
         if (!(booted || running))
@@ -628,7 +628,7 @@ void enc28j60_loop(int is_main_loop)
     }
 
     if (timeout_loop > 0) {
-        PMCR_Read(DCLOAD_PMCR, loop_start);
+        last_sec_tick = t->get_ticks();
     }
 
     while (!escape_loop) {
@@ -636,19 +636,16 @@ void enc28j60_loop(int is_main_loop)
         enc28j60_rx();
 
         if (is_main_loop) {
-            set_ip_dhcp();
+            dhcp_poll();
             screensaver_poll();
         }
 
         /* Timeout handling for DHCP */
         if (timeout_loop > 0) {
-            PMCR_Read(DCLOAD_PMCR, loop_measure);
-            unsigned long long start_val = ((unsigned long long)loop_start[1] << 32) | loop_start[0];
-            unsigned long long cur_val = ((unsigned long long)loop_measure[1] << 32) | loop_measure[0];
-            unsigned int elapsed_ticks = (unsigned int)(cur_val - start_val);
-            unsigned int loop_secs_elapsed = elapsed_ticks / GC_TBR_FREQUENCY;
-
-            if (prev_loop_elapsed != loop_secs_elapsed) {
+            uint64_t now = t->get_ticks();
+            if ((now - last_sec_tick) >= t->ticks_per_second) {
+                last_sec_tick = now;
+                loop_secs_elapsed++;
                 if (dhcp_attempts > 1) {
                     disp_dhcp_attempts_count();
                     disp_dhcp_next_attempt(timeout_loop - loop_secs_elapsed + 1);
@@ -657,7 +654,6 @@ void enc28j60_loop(int is_main_loop)
                     timeout_loop = -1;
                     escape_loop = 1;
                 }
-                prev_loop_elapsed = loop_secs_elapsed;
             }
         }
     }
