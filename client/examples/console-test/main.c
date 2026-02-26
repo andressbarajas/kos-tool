@@ -25,7 +25,7 @@
 #define SYSCALL_WRITE     1
 #define SYSCALL_OPEN      2
 #define SYSCALL_CLOSE     3
-#define SYSCALL_EXIT     22
+#define SYSCALL_EXIT      15
 
 /*
  * Kosload syscall interface.

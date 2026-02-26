@@ -64,7 +64,7 @@
 #define KOSLOAD_SYSCALL_ADDR (*(volatile unsigned int *)(KOSLOAD_BASE + 8))
 #define KOSLOAD_MAGIC        0xdeadbeef
 
-#define SYSCALL_EXIT  22
+#define SYSCALL_EXIT  15
 
 typedef int (*kosload_syscall_fn)(int syscall, int arg1, int arg2, int arg3);
 

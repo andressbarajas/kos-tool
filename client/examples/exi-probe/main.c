@@ -14,7 +14,7 @@
  */
 
 #define SYSCALL_WRITE     1
-#define SYSCALL_EXIT     22
+#define SYSCALL_EXIT      15
 
 #if defined(__PPC__) || defined(__powerpc__)
 #ifdef GC_KOSLOAD_BASE

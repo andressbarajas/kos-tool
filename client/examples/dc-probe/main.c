@@ -20,7 +20,7 @@
 #endif
 
 #define SYSCALL_WRITE     1
-#define SYSCALL_EXIT     22
+#define SYSCALL_EXIT      15
 
 #define KOSLOAD_BASE        0x8c004000
 #define KOSLOAD_MAGIC_ADDR  (*(volatile unsigned int *)(KOSLOAD_BASE + 4))

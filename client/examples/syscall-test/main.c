@@ -30,15 +30,15 @@
 #define SYSCALL_STAT      12
 #define SYSCALL_UTIME     13
 /* 14 = assign_wrkmem (stub) */
-/* 15 = reserved */
+#define SYSCALL_EXIT      15
 #define SYSCALL_OPENDIR   16
 #define SYSCALL_CLOSEDIR  17
 #define SYSCALL_READDIR   18
 #define SYSCALL_HOSTINFO  19
 /* 20 = gdbpacket */
 #define SYSCALL_REWINDDIR 21
-#define SYSCALL_EXIT      22
-#define SYSCALL_MKDIR     23
+
+#define SYSCALL_MKDIR     22
 
 /* Open flags (KOS-compatible) */
 #define O_RDONLY    0x0000
