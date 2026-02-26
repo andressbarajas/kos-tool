@@ -451,7 +451,7 @@ static int w5500_rx(void)
 
 /* ===== Main Loop ===== */
 
-void w5500_loop(int is_main_loop)
+void w5500_loop(bool is_main_loop)
 {
     const target_ops_t *t = target_get_ops();
     uint64_t last_sec_tick = 0;

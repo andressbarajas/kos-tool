@@ -9,6 +9,8 @@
 #ifndef __DCLOAD_H__
 #define __DCLOAD_H__
 
+#include <stdbool.h>
+
 /* Performance counter configuration (used by adapter timeout loops and cmd_pmcr) */
 #define DCLOAD_PMCR 1
 
@@ -29,9 +31,9 @@
 #define W5500_MODEL 0500
 
 /* Global state */
-extern volatile unsigned char booted;
-extern volatile unsigned char running;
-extern volatile unsigned char receiving;
+extern volatile bool booted;
+extern volatile bool running;
+extern volatile bool receiving;
 extern unsigned int global_bg_color;
 extern volatile unsigned int installed_adapter;
 

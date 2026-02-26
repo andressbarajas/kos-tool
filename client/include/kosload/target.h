@@ -2,6 +2,7 @@
 #ifndef KOSLOAD_TARGET_H
 #define KOSLOAD_TARGET_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
 /* Target platform interface — one implementation per console */
@@ -20,7 +21,7 @@ typedef struct target_ops {
     void        (*cdfs_redir_save)(void);
     void        (*cdfs_redir_enable)(void);
     void        (*cdfs_redir_disable)(void);
-    void        (*set_console_enabled)(int enabled);
+    void        (*set_console_enabled)(bool enabled);
     void        (*set_rtc)(uint32_t unix_timestamp);
     uint32_t    (*get_rtc)(void);       /* Read RTC as Unix timestamp (seconds since 1970) */
 

@@ -279,7 +279,7 @@ int  enc28j60_detect(void);
 int  enc28j60_init(void);
 void enc28j60_start(void);
 void enc28j60_stop(void);
-void enc28j60_loop(int is_main_loop);
+void enc28j60_loop(bool is_main_loop);
 int  enc28j60_tx(unsigned char *pkt, int len);
 
 extern adapter_t adapter_enc28j60;

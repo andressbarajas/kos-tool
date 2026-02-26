@@ -11,6 +11,8 @@
 #ifndef KOSLOAD_SCREENSAVER_H
 #define KOSLOAD_SCREENSAVER_H
 
+#include <stdbool.h>
+
 /* Initialize the screensaver and start the idle timer.
  * restore_cb is called when the screensaver deactivates to restore
  * the normal screen (transport-specific).
@@ -23,11 +25,11 @@ void screensaver_init(void (*restore_cb)(void), unsigned int bg_color);
 void screensaver_poll(void);
 
 /* Wake from screensaver. If active, calls the restore callback and
- * resets the timer. Returns 1 if the screensaver was active. */
-int screensaver_wake(void);
+ * resets the timer. Returns true if the screensaver was active. */
+bool screensaver_wake(void);
 
-/* Returns 1 if the screensaver is currently active. */
-int screensaver_is_active(void);
+/* Returns true if the screensaver is currently active. */
+bool screensaver_is_active(void);
 
 /* Reset the idle timer without restoring the screen.
  * Call after processing a command to restart the 30-second countdown. */

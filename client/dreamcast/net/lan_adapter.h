@@ -30,6 +30,6 @@ int la_bb_init(void);
 void la_bb_start(void);
 void la_bb_stop(void);
 int la_bb_tx(unsigned char *pkt, int len);
-void la_bb_loop(int is_main_loop);
+void la_bb_loop(bool is_main_loop);
 
 #endif

@@ -43,8 +43,8 @@ static const ip_config_block_t ip_config __attribute__((used)) = {
 };
 
 /* From entry.c */
-extern volatile unsigned char booted;
-extern volatile unsigned char running;
+extern volatile bool booted;
+extern volatile bool running;
 extern unsigned int global_bg_color;
 
 /* From commands.c */
@@ -87,7 +87,7 @@ static void network_restore_screen(void)
 static int network_transport_init(void)
 {
     /* Reset boot state so display is redrawn (needed after program return) */
-    booted = 0;
+    booted = false;
 
     kosload_info.capabilities = KOSLOAD_CAP_NETWORK | KOSLOAD_CAP_GDB |
                                 KOSLOAD_CAP_CDFS_REDIR;
@@ -114,7 +114,7 @@ static int network_transport_init(void)
     return 0;
 }
 
-static void network_transport_loop(int is_main_loop)
+static void network_transport_loop(bool is_main_loop)
 {
     /* Display adapter/IP info on first entry */
     if (!booted)

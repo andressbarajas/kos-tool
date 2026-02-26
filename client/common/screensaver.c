@@ -38,7 +38,7 @@ static const uint32_t screensaver_icon[32] = {
 static void (*restore_callback)(void);
 static uint64_t timer_start;
 static uint64_t last_frame;
-static int active;
+static bool active;
 static unsigned int icon_color_saved;
 static int box_x, box_y;
 static int box_dx, box_dy;
@@ -49,11 +49,11 @@ void screensaver_init(void (*restore_cb)(void), unsigned int icon_color)
 
     restore_callback = restore_cb;
     icon_color_saved = icon_color;
-    active = 0;
+    active = false;
     timer_start = t->get_ticks();
 }
 
-int screensaver_is_active(void)
+bool screensaver_is_active(void)
 {
     return active;
 }
@@ -62,24 +62,24 @@ void screensaver_reset(void)
 {
     const target_ops_t *t = common_get_target();
 
-    active = 0;
+    active = false;
     timer_start = t->get_ticks();
 }
 
-int screensaver_wake(void)
+bool screensaver_wake(void)
 {
     const target_ops_t *t = common_get_target();
 
     if (!active)
-        return 0;
+        return false;
 
-    active = 0;
+    active = false;
     timer_start = t->get_ticks();
 
     if (restore_callback)
         restore_callback();
 
-    return 1;
+    return true;
 }
 
 void screensaver_poll(void)
@@ -95,7 +95,7 @@ void screensaver_poll(void)
             return;
 
         /* Activate screensaver */
-        active = 1;
+        active = true;
         t->clear_screen(BLACK_COLOR);
         box_x = 100;
         box_y = 100;

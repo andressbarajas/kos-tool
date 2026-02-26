@@ -43,7 +43,7 @@ extern void maple_init(void);
 extern void cdfs_init(void);
 
 /* Console enabled flag — affects serial transport behavior */
-static volatile int console_enabled = 0;
+static volatile bool console_enabled = false;
 
 /* Forward declaration (defined in screensaver support section below) */
 static void dc_tmu2_start(void);
@@ -104,7 +104,7 @@ static void dc_cdfs_redir_disable_op(void) {
     cdfs_redir_disable();
 }
 
-static void dc_set_console_enabled(int enabled) {
+static void dc_set_console_enabled(bool enabled) {
     console_enabled = enabled;
     /* Write magic value at firmware base+4 for loaded program to detect.
      * Use P1 (cached) address — with write-through cache (CCR=0x090b),

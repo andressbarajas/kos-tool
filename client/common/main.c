@@ -51,7 +51,7 @@ void common_main(const target_ops_t *tgt, const client_transport_ops_t *xport) {
     }
 
     /* Enter main event loop — each transport draws its own boot screen */
-    transport->loop(1);
+    transport->loop(true);
 }
 
 const target_ops_t *common_get_target(void) {

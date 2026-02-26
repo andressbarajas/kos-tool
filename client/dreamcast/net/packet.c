@@ -7,7 +7,7 @@
 #include "memfuncs.h"
 
 // The two checksums here are different because the UDP one needs a "pseudo-header," while the IP one doesn't
-unsigned short checksum(unsigned short *buf, int count, int is_odd)
+unsigned short checksum(unsigned short *buf, int count, bool is_odd)
 {
 	unsigned long sum = 0;
 
@@ -33,7 +33,7 @@ unsigned short checksum(unsigned short *buf, int count, int is_odd)
 }
 
 // Pass odd as length%2 where datacount is length/2.
-unsigned short checksum_udp(unsigned short *buf_pseudo, unsigned short *buf_data, int datacount, int is_odd)
+unsigned short checksum_udp(unsigned short *buf_pseudo, unsigned short *buf_data, int datacount, bool is_odd)
 {
 	unsigned long sum = 0;
 	int pseudocount = PSEUDO_H_LEN/2;

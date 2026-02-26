@@ -611,7 +611,7 @@ static char reg_agg_temp[9] = {0};
 #endif
 
 /* Loop doing something interesting */
-void la_bb_loop(int is_main_loop)
+void la_bb_loop(bool is_main_loop)
 {
 	const target_ops_t *t = target_get_ops();
 	int result;

@@ -10,6 +10,7 @@
  * Based on dcload-ip: dcload-ip/target-src/dcload/commands.c
  */
 
+#include <stdbool.h>
 #include <string.h>
 #include <kosload/target.h>
 #include <kosload/info.h>
@@ -58,8 +59,8 @@ unsigned char tool_mac[6] = {0};
 unsigned short tool_port = 0;
 unsigned int tool_version = 0;
 
-static unsigned int cached_dest = 0;
-static int payload1024 = 0;
+static bool cached_dest = false;
+static bool payload1024 = false;
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
 
@@ -102,8 +103,8 @@ static inline int map_test(int index)
 
 void cmd_reboot(void)
 {
-	booted = 0;
-	running = 0;
+	booted = false;
+	running = false;
 
 	const target_ops_t *t = target_get_ops();
 	t->reboot();
@@ -169,7 +170,7 @@ void cmd_execute(ether_header_t *ether, ip_header_t *ip, udp_header_t *udp, comm
 		if (cmd_size >> 1)
 			cdfs_redir_enable();
 
-		running = 1;
+		running = true;
 
 		{
 			const target_ops_t *t = target_get_ops();
@@ -185,7 +186,7 @@ void cmd_execute(ether_header_t *ether, ip_header_t *ip, udp_header_t *udp, comm
 		bb->init();
 		bb->start();
 
-		running = 0;
+		running = false;
 		disp_info();
 		disp_status("idle...");
 	}
@@ -239,18 +240,18 @@ void cmd_loadbin(ip_header_t *ip, udp_header_t *udp, command_t *command)
 	unsigned int cacheable_check = bin_info.load_address >> 29;
 	if ((cacheable_check != 0x5) && (cacheable_check != 0x7))
 	{
-		cached_dest = 1;
+		cached_dest = true;
 	}
 	else
 	{
-		cached_dest = 0;
+		cached_dest = false;
 	}
 
 	/* Set up partbin payload size based on tool version */
 	if (DCTOOL_MAJOR < 2)
-		payload1024 = 1;
+		payload1024 = true;
 	else
-		payload1024 = 0;
+		payload1024 = false;
 
 	make_ip(ntohl(ip->src), our_ip, UDP_H_LEN + COMMAND_LEN, IP_UDP_PROTOCOL, (ip_header_t *)(pkt_buf + ETHER_H_LEN), ip->packet_id);
 	make_udp(ntohs(udp->src), ntohs(udp->dest), COMMAND_LEN, (ip_header_t *)(pkt_buf + ETHER_H_LEN), (udp_header_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN));

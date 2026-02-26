@@ -8,6 +8,8 @@
 #ifndef __ADAPTER_H__
 #define __ADAPTER_H__
 
+#include <stdbool.h>
+
 /* Raw receive buffer size: 1536 = nearest multiple of 32 >= 1514 */
 #define RAW_RX_PKT_BUF_SIZE 1536
 
@@ -23,7 +25,7 @@ typedef struct {
 	int  (*init)(void);
 	void (*start)(void);
 	void (*stop)(void);
-	void (*loop)(int is_main_loop);
+	void (*loop)(bool is_main_loop);
 	int  (*tx)(unsigned char *pkt, int len);
 } adapter_t;
 

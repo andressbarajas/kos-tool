@@ -569,7 +569,7 @@ static int serial_transport_init(void)
     return 0;
 }
 
-static void serial_transport_loop(int is_main_loop)
+static void serial_transport_loop(bool is_main_loop)
 {
     unsigned char cmd;
     unsigned int addr;

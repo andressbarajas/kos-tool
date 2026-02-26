@@ -10,18 +10,19 @@
  * platform-specific cdfs_syscalls.c.
  */
 
+#include <stdbool.h>
 #include <kosload/target.h>
 
 extern const target_ops_t *common_get_target(void);
 
-static int cdfs_saved = 0;
+static bool cdfs_saved = false;
 
 void cdfs_init(void)
 {
     const target_ops_t *target = common_get_target();
     if (!cdfs_saved) {
         target->cdfs_redir_save();
-        cdfs_saved = 1;
+        cdfs_saved = true;
     }
     target->cdfs_redir_disable();
 }

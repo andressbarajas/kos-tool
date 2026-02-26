@@ -49,8 +49,8 @@ adapter_t adapter_bba = {
 };
 
 static rtl_status_t rtl = {0};
-static volatile unsigned char rtl_link_up = 0;
-static volatile unsigned char rtl_is_copying = 0;
+static volatile bool rtl_link_up = false;
+static volatile bool rtl_is_copying = false;
 
 static void rtl_reset(void);
 static void rtl_init(void);
@@ -680,10 +680,10 @@ static int rtl_bb_rx()
 		/* apparently this means the rtl8139 is still copying */
 		if (rx_size == 0xfff0U)
 		{
-			rtl_is_copying = 1; // Really don't want to run a DHCP renewal while data is in flight...
+			rtl_is_copying = true; // Really don't want to run a DHCP renewal while data is in flight...
 			break;
 		}
-		rtl_is_copying = 0;
+		rtl_is_copying = false;
 
 		pkt_size = rx_size - 4;
 
@@ -785,7 +785,7 @@ static int rtl_bb_rx()
 	return processed;
 }
 
-void rtl_bb_loop(int is_main_loop)
+void rtl_bb_loop(bool is_main_loop)
 {
 	const target_ops_t *t = target_get_ops();
 	unsigned int intr = 0;
@@ -800,7 +800,7 @@ void rtl_bb_loop(int is_main_loop)
 		}
 
 		// Need to wait for a link change before it's OK to do anything
-		rtl_link_up = 0;
+		rtl_link_up = false;
 	}
 
 	if (timeout_loop > 0)
@@ -859,7 +859,7 @@ void rtl_bb_loop(int is_main_loop)
 				escape_loop = 1;
 			}
 
-			rtl_link_up = 1; // Good to go!
+			rtl_link_up = true; // Good to go!
 		}
 
 		/* Rx FIFO overflow */

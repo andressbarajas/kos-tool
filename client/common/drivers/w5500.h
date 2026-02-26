@@ -18,6 +18,8 @@
 #ifndef __W5500_H__
 #define __W5500_H__
 
+#include <stdbool.h>
+
 /* Forward declaration — actual definition in platform's net/adapter.h */
 struct adapter_s;
 
@@ -122,7 +124,7 @@ int  w5500_detect(void);
 int  w5500_init(void);
 void w5500_start(void);
 void w5500_stop(void);
-void w5500_loop(int is_main_loop);
+void w5500_loop(bool is_main_loop);
 int  w5500_tx(unsigned char *pkt, int len);
 
 /* Defined in w5500.c — use after including platform adapter.h */

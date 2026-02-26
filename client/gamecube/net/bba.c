@@ -305,7 +305,7 @@ static int bba_rx(void)
 
 /* ===== Main loop ===== */
 
-void bba_loop(int is_main_loop)
+void bba_loop(bool is_main_loop)
 {
     const target_ops_t *t = target_get_ops();
     uint64_t last_sec_tick = 0;

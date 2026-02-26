@@ -22,7 +22,7 @@ extern void go(unsigned int addr);
 extern void exception_common(void);
 
 /* Console enabled flag */
-static volatile int console_enabled = 0;
+static volatile bool console_enabled = false;
 
 /* ===== Exception vector installation ===== */
 
@@ -186,7 +186,7 @@ static void gc_cdfs_redir_disable(void)
     /* No-op on GameCube */
 }
 
-static void gc_set_console_enabled(int enabled)
+static void gc_set_console_enabled(bool enabled)
 {
     console_enabled = enabled;
     /* Write magic value at loader base+4 for loaded program to detect */

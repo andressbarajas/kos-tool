@@ -54,16 +54,16 @@ typedef struct {
     int (*init)(void);
     void (*start)(void);
     void (*stop)(void);
-    void (*loop)(int is_main_loop);
+    void (*loop)(bool is_main_loop);
     int (*tx)(unsigned char *pkt, int len);
 } adapter_t;
 extern adapter_t *bb;
 
 /* ===== Global state ===== */
 
-volatile unsigned char booted;
-volatile unsigned char running;
-volatile unsigned char receiving;
+volatile bool booted;
+volatile bool running;
+volatile bool receiving;
 unsigned int global_bg_color;
 volatile unsigned int installed_adapter;
 
@@ -84,7 +84,7 @@ static uint64_t last_display_tick = 0;
 
 static void lease_resync_from_rtc(void);
 
-static volatile unsigned char dont_renew = 0;
+static volatile bool dont_renew = false;
 
 static char ip_disp_string[16] = "000.000.000.000";
 static const char *waiting_string = "Waiting For IP...";
@@ -221,7 +221,7 @@ void disp_info(void)
     if (lease_expiry_rtc)
         lease_resync_from_rtc();
 
-    booted = 1;
+    booted = true;
 }
 
 void disp_status(const char *status)
@@ -288,7 +288,7 @@ void dhcp_poll(void)
         {
             /* NAK: IP no longer valid, wait until 87.5% to do new discover.
              * Set expiry so the lease runs out at the 87.5% mark. */
-            dont_renew = 1;
+            dont_renew = true;
             unsigned int nak_remaining = (saved_lease_time * 3 + 4) / 8;
             lease_expiry_rtc = t->get_rtc() + nak_remaining;
             lease_display_secs = nak_remaining;
@@ -334,7 +334,7 @@ void dhcp_poll(void)
     if (__builtin_expect(((our_ip & 0xff000000) == 0) ||
                          (dont_renew && lease_display_secs == 0), 0))
     {
-        dont_renew = 0;
+        dont_renew = false;
         dhcp_waiting_mode_display();
 
         disp_status("Acquiring new IP address via DHCP...");

@@ -616,7 +616,7 @@ static int enc28j60_rx(void)
 
 /* ===== Main loop ===== */
 
-void enc28j60_loop(int is_main_loop)
+void enc28j60_loop(bool is_main_loop)
 {
     const target_ops_t *t = target_get_ops();
     uint64_t last_sec_tick = 0;

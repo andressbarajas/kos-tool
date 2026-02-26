@@ -4,6 +4,7 @@
 
 /* Based on dcload-ip: dcload-ip/target-src/dcload/commands.h */
 
+#include <stdbool.h>
 #include "bswap.h"
 #include <kosload/protocol.h>
 
@@ -32,8 +33,8 @@ typedef struct __attribute__ ((packed, aligned(4))) {
 #define PSEUDO_H_LEN 20
 
 // For is_odd, pass length%2 where datacount is length/2 (remember: integer divides)
-unsigned short checksum(unsigned short *buf, int count, int is_odd);
-unsigned short checksum_udp(unsigned short *buf_pseudo, unsigned short *buf_data, int datacount, int is_odd);
+unsigned short checksum(unsigned short *buf, int count, bool is_odd);
+unsigned short checksum_udp(unsigned short *buf_pseudo, unsigned short *buf_data, int datacount, bool is_odd);
 
 void make_ether(unsigned char *dest, unsigned char *src, ether_header_t *ether);
 void make_ip(int dest, int src, int length, char protocol, ip_header_t *ip, unsigned short pkt_id);

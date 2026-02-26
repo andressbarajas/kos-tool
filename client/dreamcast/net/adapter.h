@@ -2,6 +2,8 @@
 #ifndef __ADAPTER_H__
 #define __ADAPTER_H__
 
+#include <stdbool.h>
+
 /* Copied from dcload-ip: dcload-ip/target-src/dcload/adapter.h */
 
 // Raw receive buffer array size
@@ -56,7 +58,7 @@ typedef struct {
 	void	(*stop)();
 
 	// Poll for I/O
-	void	(*loop)(int is_main_loop);
+	void	(*loop)(bool is_main_loop);
 
 	// Transmit a packet on the adapter
 	int	(*tx)(unsigned char * pkt, int len);

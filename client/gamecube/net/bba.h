@@ -119,7 +119,7 @@ int  bba_detect(void);
 int  bba_init(void);
 void bba_start(void);
 void bba_stop(void);
-void bba_loop(int is_main_loop);
+void bba_loop(bool is_main_loop);
 int  bba_tx(unsigned char *pkt, int len);
 
 #endif /* __BBA_H__ */
