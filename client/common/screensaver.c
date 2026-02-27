@@ -10,6 +10,7 @@
 
 #include <kosload/screensaver.h>
 #include <kosload/target.h>
+#include <kosload/divutil.h>
 
 extern const target_ops_t *common_get_target(void);
 
@@ -42,6 +43,7 @@ static bool active;
 static unsigned int icon_color_saved;
 static int box_x, box_y;
 static int box_dx, box_dy;
+static unsigned int frame_interval;
 
 void screensaver_init(void (*restore_cb)(void), unsigned int icon_color)
 {
@@ -51,6 +53,7 @@ void screensaver_init(void (*restore_cb)(void), unsigned int icon_color)
     icon_color_saved = icon_color;
     active = false;
     timer_start = t->get_ticks();
+    frame_interval = UDIV_CONST(t->ticks_per_second, TARGET_FPS);
 }
 
 bool screensaver_is_active(void)
@@ -108,7 +111,6 @@ void screensaver_poll(void)
     }
 
     /* Time-based frame pacing: skip until one frame interval has elapsed */
-    unsigned int frame_interval = t->ticks_per_second / TARGET_FPS;
     if (now - last_frame < frame_interval)
         return;
     last_frame = now;

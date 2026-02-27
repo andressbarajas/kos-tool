@@ -184,7 +184,9 @@ typedef struct {
 
 /* Memory layout constants */
 #define DC_RAM_TOP          0x8d000000
+#ifndef GC_LOADER_BASE
 #define GC_LOADER_BASE      0x817EC000  /* keep in sync with mk/memory.mk */
+#endif
 #define LZO_WRKMEM_SIZE     0x10000     /* 64 KB — LZO1X_1_MEM_COMPRESS */
 
 /* LZO work memory addresses for serial downloads.

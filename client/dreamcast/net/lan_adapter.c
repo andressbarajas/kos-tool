@@ -156,7 +156,8 @@ static void net_sleep_ms(int ms)
 	int i, cnt;
 	vuint32 *a05f688c = (vuint32*)0xa05f688c;
 
-	cnt = 0x1800 * 0x58e * ms / 1000;
+	/* Precomputed: 0x1800 * 0x58e / 1000 = 8737 (avoids runtime / 1000) */
+	cnt = 8737 * ms;
 	for (i=0; i<cnt; i++)
 		(void)*a05f688c;
 }

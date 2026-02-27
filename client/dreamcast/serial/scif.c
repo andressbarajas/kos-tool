@@ -25,8 +25,15 @@ void scif_init(int bps) {
     *SCFCR2 = 0x6;     /* Set TFRST and RFRST bits */
     *SCSMR2 = 0x0;     /* 8N1 data format */
 
-    if (bps)
-        *SCBRR2 = (50 * 1000000) / (32 * bps) - 1;
+    if (bps) {
+        /* Quotient is small (e.g. 27 for 57600 baud), so a subtraction
+         * loop is cheaper than pulling in __udivsi3 from libgcc. */
+        unsigned int n = 50000000u / 32u;  /* 1562500, compile-time */
+        unsigned int d = (unsigned int)bps;
+        unsigned int q = 0;
+        while (n >= d) { n -= d; q++; }
+        *SCBRR2 = q - 1;
+    }
 
     for (i = 0; i < 100000; i++)    /* Delay at least 1 bit interval */
         ;

@@ -21,6 +21,7 @@
 #include "maple.h"
 #include "perfctr.h"
 #include <kosload/memfuncs.h>
+#include <kosload/divutil.h>
 #include "scif.h"
 
 extern kosload_info_t kosload_info;
@@ -306,7 +307,7 @@ void cmd_partbin(command_t *command)
 	if (__builtin_expect(payload1024, 0))
 		index = (cmd_addr - bin_info.load_address) / 1024;
 	else
-		index = (cmd_addr - bin_info.load_address) / 1440;
+		index = UDIV_CONST(cmd_addr - bin_info.load_address, 1440);
 
 	if (index >= 0 && index < BIN_INFO_MAP_ENTRIES)
 		map_set(index);
@@ -334,7 +335,7 @@ void cmd_donebin(ip_header_t *ip, udp_header_t *udp, command_t *command)
 	}
 	else
 	{
-		map_index_verify = (bin_info.load_size + 1439) / 1440;
+		map_index_verify = UDIV_CONST(bin_info.load_size + 1439, 1440);
 		payload_size = 1440;
 	}
 
@@ -388,7 +389,7 @@ void cmd_sendbinq(ip_header_t *ip, udp_header_t *udp, command_t *command)
 	else
 	{
 		payload_size = 1440;
-		numpackets = (bytes_left + 1439) / 1440;
+		numpackets = UDIV_CONST(bytes_left + 1439, 1440);
 	}
 
 	unsigned int ip_src = ntohl(ip->src);

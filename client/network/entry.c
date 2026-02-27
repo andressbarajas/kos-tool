@@ -26,6 +26,7 @@
 #include "dcload.h"
 
 #include <kosload/screensaver.h>
+#include <kosload/divutil.h>
 
 #ifndef KOSLOAD_VERSION_STRING
 #define KOSLOAD_VERSION_STRING "0.1.0"
@@ -108,13 +109,13 @@ static void ip_to_string(unsigned int ip, char *buf)
     for (i = 3; i >= 0; i--) {
         unsigned char val = (ip >> (i * 8)) & 0xFF;
         if (val >= 100) {
-            buf[pos++] = '0' + val / 100;
-            val %= 100;
-            buf[pos++] = '0' + val / 10;
-            buf[pos++] = '0' + val % 10;
+            buf[pos++] = '0' + UDIV_CONST(val, 100);
+            val = UMOD_CONST(val, 100);
+            buf[pos++] = '0' + UDIV_CONST(val, 10);
+            buf[pos++] = '0' + UMOD_CONST(val, 10);
         } else if (val >= 10) {
-            buf[pos++] = '0' + val / 10;
-            buf[pos++] = '0' + val % 10;
+            buf[pos++] = '0' + UDIV_CONST(val, 10);
+            buf[pos++] = '0' + UMOD_CONST(val, 10);
         } else {
             buf[pos++] = '0' + val;
         }
@@ -147,8 +148,9 @@ void uint_to_string_dec(unsigned int foo, char *bar)
     }
 
     while (foo > 0) {
-        tmp[i++] = '0' + (foo % 10);
-        foo /= 10;
+        unsigned int q = UDIV_CONST(foo, 10);
+        tmp[i++] = '0' + (foo - q * 10);
+        foo = q;
     }
 
     int j;
