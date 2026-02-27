@@ -7,6 +7,7 @@
  */
 
 #include <stdint.h>
+#include <string.h>
 #include <kosload/target.h>
 #include <kosload/protocol.h>
 
@@ -60,25 +61,27 @@ static void install_exception_stub(uint32_t vector)
 
 /*
  * C exception handler called from exception.S.
- * Displays exception type and PC on screen, then returns to
- * the asm handler which reboots the loader.
+ * Packs an EXPT frame (4-byte header + 428-byte save_area) and sends it
+ * to the host via write syscall. All formatting is done host-side.
  */
+extern int write(int fd, const void *buf, unsigned int count);
+extern void progexit(int status);
+
 void exception_handler_c(uint32_t type, uint32_t srr0, uint32_t *save_area)
 {
-    unsigned char type_str[9], pc_str[9];
+    (void)type;
+    (void)srr0;
 
-    (void)save_area;
+    /* 4-byte "EXPT" header + 428-byte save area = 432 bytes */
+    uint8_t buf[432];
+    buf[0] = 'E'; buf[1] = 'X'; buf[2] = 'P'; buf[3] = 'T';
+    memcpy(buf + 4, save_area, 428);
 
-    gc_video_clear(0);
-    gc_video_draw_string(0, 0, gc_exception_code_to_string(type), 0x00FFFFFF);
+    write(1, buf, 432);
 
-    gc_video_draw_string(0, 24, "Type:", 0x00FFFFFF);
-    uint_to_string(type, type_str);
-    gc_video_draw_string(72, 24, (const char *)type_str, 0x00FFFFFF);
-
-    gc_video_draw_string(0, 48, "PC:  ", 0x00FFFFFF);
-    uint_to_string(srr0, pc_str);
-    gc_video_draw_string(72, 48, (const char *)pc_str, 0x00FFFFFF);
+    /* KOS installs its own exception vectors and calls progexit itself,
+     * so this only fires for bare-metal programs (e.g. exception-test). */
+    progexit(0);
 }
 
 /* ===== Exception initialization ===== */
@@ -152,11 +155,6 @@ static void gc_reboot(void)
     cache_disable();
     void (*entry)(void) = (void (*)(void))GC_LOADER_BASE;
     entry();
-}
-
-static const char *gc_exception_to_string(uint32_t code)
-{
-    return gc_exception_code_to_string(code);
 }
 
 /* Global wrappers for commands.c which calls these by name (not via vtable).
@@ -333,7 +331,6 @@ const target_ops_t gamecube_target_ops = {
     .execute = gc_execute,
     .disable_cache = gc_disable_cache,
     .reboot = gc_reboot,
-    .exception_to_string = gc_exception_to_string,
     .set_console_enabled = gc_set_console_enabled,
     .set_rtc = gc_set_rtc,
     .get_rtc = gc_get_rtc,

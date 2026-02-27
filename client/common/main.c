@@ -7,8 +7,10 @@
 #include <stdint.h>
 #include <kosload/target.h>
 #include <kosload/transport.h>
-#include <kosload/exception.h>
 #include <kosload/protocol.h>
+
+/* From target-specific target.c */
+extern void exception_init(void);
 #include <kosload/video.h>
 
 /* Version string - configured by CMake, fallback for direct builds */

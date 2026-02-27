@@ -9,6 +9,7 @@
  */
 
 #include <stdint.h>
+#include <string.h>
 #include <kosload/target.h>
 #include <kosload/protocol.h>
 
@@ -21,7 +22,6 @@ extern int  check_cable(void);
 extern void init_video(int cabletype, int pixelmode);
 
 /* From video.c */
-extern char *exception_code_to_string(unsigned int expevt);
 extern void setup_video(uint32_t mode, uint32_t bg_color);
 
 /* From disable.S */
@@ -88,10 +88,6 @@ static void dc_reboot(void) {
     disable_cache();
     void (*entry)(void) = (void (*)(void))DC_LOADER_BASE;
     entry();
-}
-
-static const char *dc_exception_to_string(uint32_t code) {
-    return exception_code_to_string(code);
 }
 
 static void dc_cdfs_redir_save_op(void) {
@@ -394,6 +390,32 @@ static uint32_t dc_detect_ram_size(void)
 }
 
 /*
+ * C exception handler called from exception.S.
+ * Packs an EXPT frame (4-byte header + 4-byte expt_code + 264-byte
+ * register save_area) and sends it to the host via write syscall.
+ * All formatting is done host-side.
+ */
+extern int write(int fd, const void *buf, unsigned int count);
+extern void progexit(int status);
+
+void exception_handler_c(uint32_t expt_code, uint32_t spc, uint32_t *save_area)
+{
+    (void)spc;
+
+    /* 4-byte "EXPT" header + 4-byte expt_code + 264-byte registers = 272 bytes */
+    uint8_t buf[272];
+    buf[0] = 'E'; buf[1] = 'X'; buf[2] = 'P'; buf[3] = 'T';
+    memcpy(buf + 4, &expt_code, 4);
+    memcpy(buf + 8, save_area, 264);
+
+    write(1, buf, 272);
+
+    /* KOS installs its own exception vectors and calls progexit itself,
+     * so this only fires for bare-metal programs (e.g. exception-test). */
+    progexit(0);
+}
+
+/*
  * Exception handler initialization.
  *
  * The full exception handler (exception.bin) is copied to 0x8c00f400 by
@@ -414,7 +436,6 @@ const target_ops_t dreamcast_target_ops = {
     .execute = dc_execute,
     .disable_cache = dc_disable_cache_op,
     .reboot = dc_reboot,
-    .exception_to_string = dc_exception_to_string,
     .cdfs_redir_save = dc_cdfs_redir_save_op,
     .cdfs_redir_enable = dc_cdfs_redir_enable_op,
     .cdfs_redir_disable = dc_cdfs_redir_disable_op,

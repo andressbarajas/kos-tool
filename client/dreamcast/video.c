@@ -54,25 +54,10 @@ void clear_lines(unsigned int y, unsigned int n, unsigned int c) {
         *vmem++ = c;
 }
 
-/* Exception code to string, used by exception.S via address table */
+/* Exception code to string — stub, formatting moved to host (kos-tool) */
 char *exception_code_to_string(unsigned int expevt) {
-    switch (expevt) {
-    case 0x1e0: return "User break";
-    case 0x0e0: return "Address error (read)";
-    case 0x040: return "TLB miss exception (read)";
-    case 0x0a0: return "TLB protection violation (read)";
-    case 0x180: return "General illegal instruction";
-    case 0x1a0: return "Slot illegal instruction";
-    case 0x800: return "General FPU disable";
-    case 0x820: return "Slot FPU disable";
-    case 0x100: return "Address error (write)";
-    case 0x060: return "TLB miss exception (write)";
-    case 0x0c0: return "TLB protection violation (write)";
-    case 0x120: return "FPU exception";
-    case 0x080: return "Initial page write exception";
-    case 0x160: return "Unconditional trap (TRAPA)";
-    default:    return "Unknown exception";
-    }
+    (void)expevt;
+    return "";
 }
 
 /* uint_to_string: hex conversion, used by exception.S via address table */

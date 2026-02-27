@@ -37,9 +37,6 @@ void gc_video_draw_char(int x, int y, char c, uint32_t color);
 /* Draw a string at pixel position (x, y) with the given color */
 void gc_video_draw_string(int x, int y, const char *str, uint32_t color);
 
-/* Convert a GC exception code to a human-readable string */
-const char *gc_exception_code_to_string(uint32_t code);
-
 /* Convert a 32-bit RGB color (0x00RRGGBB) to a YUY2 pixel pair (Y Cb Y Cr).
  * Returns a 32-bit value suitable for writing directly to the XFB. */
 uint32_t gc_color_to_yuy2(uint32_t rgb);

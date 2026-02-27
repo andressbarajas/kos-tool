@@ -4,10 +4,6 @@
 
 #include <kostool/syscalls.h>
 
-/* Stub implementations for all 23 syscalls.
- * These will be fully implemented in Phase 6.
- */
-
 int syscall_fstat(kostool_context_t *ctx) { (void)ctx; return -1; }
 int syscall_write(kostool_context_t *ctx) { (void)ctx; return -1; }
 int syscall_read(kostool_context_t *ctx) { (void)ctx; return -1; }

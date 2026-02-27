@@ -93,10 +93,47 @@ exception_common:
     addi    r1, r1, exc_stack_top@l
     stwu    r1, -16(r1)
 
-    # Enable FPU in MSR for C code
+    # Enable FPU in MSR so we can save FPRs and call C code
     li      r0, 0x2000
     mtmsr   r0
     isync
+
+    # Save FPU state: FPSCR + f0-f31 (264 bytes at offset 164)
+    # Must save f0 first since mffs clobbers it
+    stfd    f0,  172(r3)
+    mffs    f0
+    stfd    f0,  164(r3)       # FPSCR (8 bytes, low word = FPSCR bits)
+    stfd    f1,  180(r3)
+    stfd    f2,  188(r3)
+    stfd    f3,  196(r3)
+    stfd    f4,  204(r3)
+    stfd    f5,  212(r3)
+    stfd    f6,  220(r3)
+    stfd    f7,  228(r3)
+    stfd    f8,  236(r3)
+    stfd    f9,  244(r3)
+    stfd    f10, 252(r3)
+    stfd    f11, 260(r3)
+    stfd    f12, 268(r3)
+    stfd    f13, 276(r3)
+    stfd    f14, 284(r3)
+    stfd    f15, 292(r3)
+    stfd    f16, 300(r3)
+    stfd    f17, 308(r3)
+    stfd    f18, 316(r3)
+    stfd    f19, 324(r3)
+    stfd    f20, 332(r3)
+    stfd    f21, 340(r3)
+    stfd    f22, 348(r3)
+    stfd    f23, 356(r3)
+    stfd    f24, 364(r3)
+    stfd    f25, 372(r3)
+    stfd    f26, 380(r3)
+    stfd    f27, 388(r3)
+    stfd    f28, 396(r3)
+    stfd    f29, 404(r3)
+    stfd    f30, 412(r3)
+    stfd    f31, 420(r3)
 
     # Call C exception handler: exception_handler_c(type, srr0, save_area)
     lwz     r3, 0(r3)          # r3 = exception type
@@ -120,9 +157,9 @@ exception_common:
     .section .bss
     .align 4
 
-# Register save area: 164 bytes (41 words)
+# Register save area: 428 bytes (GPRs + SPRs + FPRs)
 exc_save_area:
-    .space  164
+    .space  428
 
 # Exception handler stack (1KB)
     .space  1024

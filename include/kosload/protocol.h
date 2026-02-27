@@ -97,7 +97,9 @@
 #define NET_SYSCALL_REWINDDIR "DC21"
 #define NET_SYSCALL_PROGEXIT  "DC22"
 #define NET_SYSCALL_MKDIR     "DC23"
-#define NET_SYSCALL_EXCEPTION "EXPT"
+/* ===== Shared Protocol Tags ===== */
+
+#define KOSLOAD_EXCEPTION_TAG "EXPT"    /* Exception frame marker (both serial and network) */
 
 /* ===== Network Packet Structures ===== */
 
@@ -183,7 +185,8 @@ typedef struct {
 #define GC_DEFAULT_LOAD_ADDR    0x80003100
 
 /* Memory layout constants */
-#define DC_RAM_TOP          0x8d000000
+#define DC_RAM_TOP          0x8d000000  /* 16 MB SH4 RAM */
+#define GC_RAM_TOP          0x81800000  /* 24 MB MEM1 */
 #ifndef GC_LOADER_BASE
 #define GC_LOADER_BASE      0x817EC000  /* keep in sync with mk/memory.mk */
 #endif

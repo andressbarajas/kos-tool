@@ -330,27 +330,6 @@ void gc_video_draw_string(int x, int y, const char *str, uint32_t color)
                    GC_CHAR_HEIGHT * GC_SCREEN_WIDTH * 2);
 }
 
-const char *gc_exception_code_to_string(uint32_t code)
-{
-    switch (code) {
-    case 0x0100: return "System Reset";
-    case 0x0200: return "Machine Check";
-    case 0x0300: return "DSI (Data Storage)";
-    case 0x0400: return "ISI (Instruction Storage)";
-    case 0x0500: return "External Interrupt";
-    case 0x0600: return "Alignment";
-    case 0x0700: return "Program";
-    case 0x0800: return "FP Unavailable";
-    case 0x0900: return "Decrementer";
-    case 0x0C00: return "System Call";
-    case 0x0D00: return "Trace";
-    case 0x0F00: return "Performance Monitor";
-    case 0x1300: return "IABR";
-    case 0x1700: return "Thermal";
-    default:     return "Unknown Exception";
-    }
-}
-
 /* ===== Functions expected by crt0.S header and common code ===== */
 
 void setup_video(uint32_t mode, uint32_t bg_color)
@@ -382,9 +361,12 @@ void uint_to_string(unsigned int val, unsigned char *buf)
     buf[8] = '\0';
 }
 
+/* Exception code to string — stub, formatting moved to host (kos-tool).
+ * Must exist for crt0.S linkage (fixed offset in entry header). */
 const char *exception_code_to_string(uint32_t code)
 {
-    return gc_exception_code_to_string(code);
+    (void)code;
+    return "";
 }
 
 void clear_lines(int y, int height, uint32_t color)

@@ -17,7 +17,6 @@ typedef struct target_ops {
     void        (*execute)(uint32_t address);
     void        (*disable_cache)(void);
     void        (*reboot)(void);
-    const char *(*exception_to_string)(uint32_t code);
     void        (*cdfs_redir_save)(void);
     void        (*cdfs_redir_enable)(void);
     void        (*cdfs_redir_disable)(void);

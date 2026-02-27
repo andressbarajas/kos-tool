@@ -38,7 +38,6 @@ extern unsigned int global_bg_color;
 extern volatile unsigned int installed_adapter;
 
 /* Functions provided by video.c */
-extern char *exception_code_to_string(unsigned int expevt);
 extern void uint_to_string(unsigned int foo, unsigned char *bar);
 extern void setup_video(unsigned int mode, unsigned int color);
 extern void clear_lines(int y, int height, unsigned int color);
