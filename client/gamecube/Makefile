@@ -124,7 +124,9 @@ COMMON_C_OBJS := \
     $(COMMONDIR)/cache.o \
     $(COMMONDIR)/memfuncs.o \
     $(COMMONDIR)/usbgecko.o \
-    $(COMMONDIR)/serial_io.o
+    $(COMMONDIR)/serial_io.o \
+    $(COMMONDIR)/gfx_gx.o \
+    $(COMMONDIR)/gfx_font.o
 
 COMMON_S_OBJS := \
     $(COMMONDIR)/crt0.o \
@@ -165,6 +167,12 @@ $(COMMONDIR)/usbgecko.o: serial/usbgecko.c $(VERSION_H) | $(COMMONDIR)
 $(COMMONDIR)/serial_io.o: serial/serial_io.c $(VERSION_H) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
+$(COMMONDIR)/gfx_gx.o: gfx_gx.c $(VERSION_H) | $(COMMONDIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(COMMONDIR)/gfx_font.o: $(CLIENTDIR)/common/gfx_font.c $(VERSION_H) | $(COMMONDIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
 # Common ASM object rules
 $(COMMONDIR)/crt0.o: crt0.S | $(COMMONDIR)
 	$(CC) $(ASFLAGS) -c $< -o $@
@@ -187,7 +195,8 @@ SERIAL_DEFS := -DKOSLOAD_SERIAL_TRANSPORT -DLOADER_NAME=\"gc-load-serial\"
 SERIAL_OBJS := \
     $(SERIALDIR)/main.o \
     $(SERIALDIR)/entry.o \
-    $(SERIALDIR)/serial_transport.o
+    $(SERIALDIR)/serial_transport.o \
+    $(SERIALDIR)/serial_syscalls.o
 
 SERIAL_ELF := $(SERIALDIR)/gc-load-ser.elf
 SERIAL_BIN := $(SERIALDIR)/gc-load-ser.bin
@@ -202,6 +211,9 @@ $(SERIALDIR)/entry.o: $(CLIENTDIR)/serial/entry.c $(VERSION_H) | $(SERIALDIR)
 	$(CC) $(CFLAGS) $(SERIAL_DEFS) -c $< -o $@
 
 $(SERIALDIR)/serial_transport.o: $(CLIENTDIR)/serial/serial_transport.c $(VERSION_H) | $(SERIALDIR)
+	$(CC) $(CFLAGS) $(SERIAL_DEFS) -c $< -o $@
+
+$(SERIALDIR)/serial_syscalls.o: $(CLIENTDIR)/serial/serial_syscalls.c $(VERSION_H) | $(SERIALDIR)
 	$(CC) $(CFLAGS) $(SERIAL_DEFS) -c $< -o $@
 
 $(SERIAL_ELF): $(SERIAL_OBJS) $(COMMON_A) $(MINILZO_A) $(SERIAL_LD)
@@ -319,7 +331,18 @@ $(EXBUILD)/%.elf: $(EXDIR)/%/main.c $(EXDIR)/gc-example.ld | $(EXBUILD)
 	    -DGC_KOSLOAD_BASE=$(GC_LOADER_BASE) \
 	    -T $(EXDIR)/gc-example.ld $< -o $@
 
-examples: $(GC_EXAMPLE_ELFS)
+# gfx-test links against gfx backend + font + support objects
+GFX_TEST_ELF := $(EXBUILD)/gfx-test.elf
+GFX_TEST_DEPS := $(COMMONDIR)/gfx_gx.o $(COMMONDIR)/gfx_font.o \
+                 $(COMMONDIR)/cache.o $(COMMONDIR)/memfuncs.o
+
+$(GFX_TEST_ELF): $(EXDIR)/gfx-test/main.c $(EXDIR)/gc-example.ld $(GFX_TEST_DEPS) | $(EXBUILD)
+	@echo "  CC+LD   $@"
+	@$(CC) $(ARCH_CFLAGS) -O2 -ffreestanding -fno-zero-initialized-in-bss -nostdlib \
+	    $(INCLUDES) -DGC_KOSLOAD_BASE=$(GC_LOADER_BASE) \
+	    -T $(EXDIR)/gc-example.ld $< $(GFX_TEST_DEPS) -o $@
+
+examples: $(GC_EXAMPLE_ELFS) $(GFX_TEST_ELF)
 
 # ============================================================
 # Phony targets

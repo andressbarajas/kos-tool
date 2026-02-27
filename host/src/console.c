@@ -342,7 +342,7 @@ static int net_recv_resp(kostool_context_t *ctx, uint8_t *buffer,
 
 /* ===== Serial console syscall handlers ===== */
 
-static void ser_dc_fstat(kostool_context_t *ctx) {
+static void ser_syscall_fstat(kostool_context_t *ctx) {
     int fd = ser_recv_uint(ctx);
     struct stat st = {0};
     int ret = fstat(fd, &st);
@@ -367,7 +367,7 @@ static void ser_dc_fstat(kostool_context_t *ctx) {
     ser_send_uint(ctx, ret);
 }
 
-static void ser_dc_write(kostool_context_t *ctx) {
+static void ser_syscall_write(kostool_context_t *ctx) {
     int fd = ser_recv_uint(ctx);
     uint32_t count = ser_recv_uint(ctx);
     if (!count || count > MAX_SYSCALL_SIZE) { ser_send_uint(ctx, -1); return; }
@@ -381,7 +381,7 @@ static void ser_dc_write(kostool_context_t *ctx) {
     free(data);
 }
 
-static void ser_dc_read(kostool_context_t *ctx) {
+static void ser_syscall_read(kostool_context_t *ctx) {
     int fd = ser_recv_uint(ctx);
     uint32_t count = ser_recv_uint(ctx);
     if (!count || count > MAX_SYSCALL_SIZE) { ser_send_uint(ctx, -1); return; }
@@ -393,7 +393,7 @@ static void ser_dc_read(kostool_context_t *ctx) {
     free(data);
 }
 
-static void ser_dc_open(kostool_context_t *ctx) {
+static void ser_syscall_open(kostool_context_t *ctx) {
     uint32_t namelen = ser_recv_uint(ctx);
     if (!namelen || namelen > MAX_PATH_LEN) { ser_send_uint(ctx, -1); return; }
     char *pathname = malloc(namelen);
@@ -410,13 +410,13 @@ static void ser_dc_open(kostool_context_t *ctx) {
     free(pathname);
 }
 
-static void ser_dc_close(kostool_context_t *ctx) {
+static void ser_syscall_close(kostool_context_t *ctx) {
     int fd = ser_recv_uint(ctx);
     int ret = close(fd);
     ser_send_uint(ctx, ret);
 }
 
-static void ser_dc_creat(kostool_context_t *ctx) {
+static void ser_syscall_creat(kostool_context_t *ctx) {
     uint32_t namelen = ser_recv_uint(ctx);
     if (!namelen || namelen > MAX_PATH_LEN) { ser_send_uint(ctx, -1); return; }
     char *pathname = malloc(namelen);
@@ -428,7 +428,7 @@ static void ser_dc_creat(kostool_context_t *ctx) {
     free(pathname);
 }
 
-static void ser_dc_link(kostool_context_t *ctx) {
+static void ser_syscall_link(kostool_context_t *ctx) {
     uint32_t len1 = ser_recv_uint(ctx);
     if (!len1 || len1 > MAX_PATH_LEN) { ser_send_uint(ctx, -1); return; }
     char *path1 = malloc(len1);
@@ -444,7 +444,7 @@ static void ser_dc_link(kostool_context_t *ctx) {
     free(path1); free(path2);
 }
 
-static void ser_dc_unlink(kostool_context_t *ctx) {
+static void ser_syscall_unlink(kostool_context_t *ctx) {
     uint32_t namelen = ser_recv_uint(ctx);
     if (!namelen || namelen > MAX_PATH_LEN) { ser_send_uint(ctx, -1); return; }
     char *pathname = malloc(namelen);
@@ -455,7 +455,7 @@ static void ser_dc_unlink(kostool_context_t *ctx) {
     free(pathname);
 }
 
-static void ser_dc_chdir(kostool_context_t *ctx) {
+static void ser_syscall_chdir(kostool_context_t *ctx) {
     uint32_t namelen = ser_recv_uint(ctx);
     if (!namelen || namelen > MAX_PATH_LEN) { ser_send_uint(ctx, -1); return; }
     char *pathname = malloc(namelen);
@@ -468,7 +468,7 @@ static void ser_dc_chdir(kostool_context_t *ctx) {
     free(pathname);
 }
 
-static void ser_dc_chmod(kostool_context_t *ctx) {
+static void ser_syscall_chmod(kostool_context_t *ctx) {
     uint32_t namelen = ser_recv_uint(ctx);
     if (!namelen || namelen > MAX_PATH_LEN) { ser_send_uint(ctx, -1); return; }
     char *pathname = malloc(namelen);
@@ -480,7 +480,7 @@ static void ser_dc_chmod(kostool_context_t *ctx) {
     free(pathname);
 }
 
-static void ser_dc_mkdir(kostool_context_t *ctx) {
+static void ser_syscall_mkdir(kostool_context_t *ctx) {
     uint32_t namelen = ser_recv_uint(ctx);
     if (!namelen || namelen > MAX_PATH_LEN) { ser_send_uint(ctx, -1); return; }
     char *pathname = malloc(namelen);
@@ -494,7 +494,7 @@ static void ser_dc_mkdir(kostool_context_t *ctx) {
     free(pathname);
 }
 
-static void ser_dc_lseek(kostool_context_t *ctx) {
+static void ser_syscall_lseek(kostool_context_t *ctx) {
     int fd = ser_recv_uint(ctx);
     int offset = ser_recv_uint(ctx);
     int whence = ser_recv_uint(ctx);
@@ -502,13 +502,13 @@ static void ser_dc_lseek(kostool_context_t *ctx) {
     ser_send_uint(ctx, ret);
 }
 
-static void ser_dc_time(kostool_context_t *ctx) {
+static void ser_syscall_time(kostool_context_t *ctx) {
     time_t t;
     time(&t);
     ser_send_uint(ctx, (uint32_t)t);
 }
 
-static void ser_dc_stat(kostool_context_t *ctx) {
+static void ser_syscall_stat(kostool_context_t *ctx) {
     uint32_t namelen = ser_recv_uint(ctx);
     if (!namelen || namelen > MAX_PATH_LEN) { ser_send_uint(ctx, -1); return; }
     char *filename = malloc(namelen);
@@ -540,7 +540,7 @@ static void ser_dc_stat(kostool_context_t *ctx) {
     free(filename);
 }
 
-static void ser_dc_utime(kostool_context_t *ctx) {
+static void ser_syscall_utime(kostool_context_t *ctx) {
     uint32_t namelen = ser_recv_uint(ctx);
     if (!namelen || namelen > MAX_PATH_LEN) { ser_send_uint(ctx, -1); return; }
     char *pathname = malloc(namelen);
@@ -560,7 +560,7 @@ static void ser_dc_utime(kostool_context_t *ctx) {
     free(pathname);
 }
 
-static void ser_dc_opendir(kostool_context_t *ctx) {
+static void ser_syscall_opendir(kostool_context_t *ctx) {
     uint32_t namelen = ser_recv_uint(ctx);
     if (!namelen || namelen > MAX_PATH_LEN) { ser_send_uint(ctx, 0); return; }
     char *dirname_str = malloc(namelen);
@@ -585,7 +585,7 @@ static void ser_dc_opendir(kostool_context_t *ctx) {
     free(dirname_str);
 }
 
-static void ser_dc_closedir(kostool_context_t *ctx) {
+static void ser_syscall_closedir(kostool_context_t *ctx) {
     uint32_t i = ser_recv_uint(ctx);
     int ret;
     if (i >= DIRENT_OFFSET && i < MAX_OPEN_DIRS + DIRENT_OFFSET) {
@@ -597,7 +597,7 @@ static void ser_dc_closedir(kostool_context_t *ctx) {
     ser_send_uint(ctx, ret);
 }
 
-static void ser_dc_readdir(kostool_context_t *ctx) {
+static void ser_syscall_readdir(kostool_context_t *ctx) {
     uint32_t i = ser_recv_uint(ctx);
     struct dirent *de = NULL;
     if (i >= DIRENT_OFFSET && i < MAX_OPEN_DIRS + DIRENT_OFFSET)
@@ -626,7 +626,7 @@ static void ser_dc_readdir(kostool_context_t *ctx) {
     ser_send_data(ctx, (const uint8_t *)de->d_name, namelen);
 }
 
-static void ser_dc_rewinddir(kostool_context_t *ctx) {
+static void ser_syscall_rewinddir(kostool_context_t *ctx) {
     uint32_t i = ser_recv_uint(ctx);
     if (i >= DIRENT_OFFSET && i < MAX_OPEN_DIRS + DIRENT_OFFSET) {
         rewinddir(opendirs[i - DIRENT_OFFSET]);
@@ -634,7 +634,7 @@ static void ser_dc_rewinddir(kostool_context_t *ctx) {
     ser_send_uint(ctx, 0);
 }
 
-static void ser_dc_cdfs_read(kostool_context_t *ctx) {
+static void ser_syscall_cdfs_read(kostool_context_t *ctx) {
     int start = ser_recv_uint(ctx);
     uint32_t num = ser_recv_uint(ctx);
     start -= 150;
@@ -657,7 +657,7 @@ static void ser_dc_cdfs_read(kostool_context_t *ctx) {
     free(buf);
 }
 
-static void ser_dc_gdbpacket(kostool_context_t *ctx) {
+static void ser_syscall_gdbpacket(kostool_context_t *ctx) {
     uint32_t in_size = ser_recv_uint(ctx);
     uint32_t out_size = ser_recv_uint(ctx);
     static char gdb_buf[1024];
@@ -703,13 +703,13 @@ static void ser_dc_gdbpacket(kostool_context_t *ctx) {
         ser_send_data(ctx, (const uint8_t *)gdb_buf, retval);
 }
 
-static int ser_dc_exit(kostool_context_t *ctx) {
+static int ser_syscall_exit(kostool_context_t *ctx) {
     return (int32_t)ser_recv_uint(ctx);
 }
 
 /* ===== Network console syscall handlers ===== */
 
-static void net_dc_fstat(kostool_context_t *ctx, uint8_t *pkt) {
+static void net_syscall_fstat(kostool_context_t *ctx, uint8_t *pkt) {
     net_command_3int_t *cmd = (net_command_3int_t *)pkt;
     int fd = ntohl(cmd->value0);
     uint32_t addr = ntohl(cmd->value1);
@@ -736,7 +736,7 @@ static void net_dc_fstat(kostool_context_t *ctx, uint8_t *pkt) {
     net_send_cmd(ctx, NET_CMD_RETVAL, ret, ret, NULL, 0);
 }
 
-static void net_dc_write(kostool_context_t *ctx, uint8_t *pkt) {
+static void net_syscall_write(kostool_context_t *ctx, uint8_t *pkt) {
     net_command_3int_t *cmd = (net_command_3int_t *)pkt;
     int fd = ntohl(cmd->value0);
     uint32_t addr = ntohl(cmd->value1);
@@ -758,7 +758,7 @@ static void net_dc_write(kostool_context_t *ctx, uint8_t *pkt) {
     free(data);
 }
 
-static void net_dc_read(kostool_context_t *ctx, uint8_t *pkt) {
+static void net_syscall_read(kostool_context_t *ctx, uint8_t *pkt) {
     net_command_3int_t *cmd = (net_command_3int_t *)pkt;
     int fd = ntohl(cmd->value0);
     uint32_t addr = ntohl(cmd->value1);
@@ -778,7 +778,7 @@ static void net_dc_read(kostool_context_t *ctx, uint8_t *pkt) {
     free(data);
 }
 
-static void net_dc_open(kostool_context_t *ctx, uint8_t *pkt) {
+static void net_syscall_open(kostool_context_t *ctx, uint8_t *pkt) {
     net_command_2int_string_t *cmd = (net_command_2int_string_t *)pkt;
     int flags = ntohl(cmd->value0);
     int mode = ntohl(cmd->value1);
@@ -789,13 +789,13 @@ static void net_dc_open(kostool_context_t *ctx, uint8_t *pkt) {
     net_send_cmd(ctx, NET_CMD_RETVAL, ret, ret, NULL, 0);
 }
 
-static void net_dc_close(kostool_context_t *ctx, uint8_t *pkt) {
+static void net_syscall_close(kostool_context_t *ctx, uint8_t *pkt) {
     net_command_int_t *cmd = (net_command_int_t *)pkt;
     int ret = close(ntohl(cmd->value0));
     net_send_cmd(ctx, NET_CMD_RETVAL, ret, ret, NULL, 0);
 }
 
-static void net_dc_creat(kostool_context_t *ctx, uint8_t *pkt) {
+static void net_syscall_creat(kostool_context_t *ctx, uint8_t *pkt) {
     net_command_int_string_t *cmd = (net_command_int_string_t *)pkt;
     char buf[MAX_PATH_LEN];
     const char *resolved = resolve_path(ctx, cmd->string, buf, sizeof(buf));
@@ -803,7 +803,7 @@ static void net_dc_creat(kostool_context_t *ctx, uint8_t *pkt) {
     net_send_cmd(ctx, NET_CMD_RETVAL, ret, ret, NULL, 0);
 }
 
-static void net_dc_link(kostool_context_t *ctx, uint8_t *pkt) {
+static void net_syscall_link(kostool_context_t *ctx, uint8_t *pkt) {
     net_command_string_t *cmd = (net_command_string_t *)pkt;
     const char *path1 = cmd->string;
     const char *path2 = path1 + strlen(path1) + 1;
@@ -811,13 +811,13 @@ static void net_dc_link(kostool_context_t *ctx, uint8_t *pkt) {
     net_send_cmd(ctx, NET_CMD_RETVAL, ret, ret, NULL, 0);
 }
 
-static void net_dc_unlink(kostool_context_t *ctx, uint8_t *pkt) {
+static void net_syscall_unlink(kostool_context_t *ctx, uint8_t *pkt) {
     net_command_string_t *cmd = (net_command_string_t *)pkt;
     int ret = unlink(cmd->string);
     net_send_cmd(ctx, NET_CMD_RETVAL, ret, ret, NULL, 0);
 }
 
-static void net_dc_chdir(kostool_context_t *ctx, uint8_t *pkt) {
+static void net_syscall_chdir(kostool_context_t *ctx, uint8_t *pkt) {
     net_command_string_t *cmd = (net_command_string_t *)pkt;
     char buf[MAX_PATH_LEN];
     const char *resolved = resolve_path(ctx, cmd->string, buf, sizeof(buf));
@@ -825,7 +825,7 @@ static void net_dc_chdir(kostool_context_t *ctx, uint8_t *pkt) {
     net_send_cmd(ctx, NET_CMD_RETVAL, ret, ret, NULL, 0);
 }
 
-static void net_dc_chmod(kostool_context_t *ctx, uint8_t *pkt) {
+static void net_syscall_chmod(kostool_context_t *ctx, uint8_t *pkt) {
     net_command_int_string_t *cmd = (net_command_int_string_t *)pkt;
     char buf[MAX_PATH_LEN];
     const char *resolved = resolve_path(ctx, cmd->string, buf, sizeof(buf));
@@ -833,7 +833,7 @@ static void net_dc_chmod(kostool_context_t *ctx, uint8_t *pkt) {
     net_send_cmd(ctx, NET_CMD_RETVAL, ret, ret, NULL, 0);
 }
 
-static void net_dc_mkdir(kostool_context_t *ctx, uint8_t *pkt) {
+static void net_syscall_mkdir(kostool_context_t *ctx, uint8_t *pkt) {
     net_command_int_string_t *cmd = (net_command_int_string_t *)pkt;
     char buf[MAX_PATH_LEN];
     const char *resolved = resolve_path(ctx, cmd->string, buf, sizeof(buf));
@@ -841,19 +841,19 @@ static void net_dc_mkdir(kostool_context_t *ctx, uint8_t *pkt) {
     net_send_cmd(ctx, NET_CMD_RETVAL, ret, ret, NULL, 0);
 }
 
-static void net_dc_lseek(kostool_context_t *ctx, uint8_t *pkt) {
+static void net_syscall_lseek(kostool_context_t *ctx, uint8_t *pkt) {
     net_command_3int_t *cmd = (net_command_3int_t *)pkt;
     int ret = lseek(ntohl(cmd->value0), ntohl(cmd->value1), ntohl(cmd->value2));
     net_send_cmd(ctx, NET_CMD_RETVAL, ret, ret, NULL, 0);
 }
 
-static void net_dc_time(kostool_context_t *ctx, uint8_t *pkt) {
+static void net_syscall_time(kostool_context_t *ctx, uint8_t *pkt) {
     (void)pkt;
     time_t t = time(NULL);
     net_send_cmd(ctx, NET_CMD_RETVAL, (uint32_t)t, (uint32_t)t, NULL, 0);
 }
 
-static void net_dc_stat(kostool_context_t *ctx, uint8_t *pkt) {
+static void net_syscall_stat(kostool_context_t *ctx, uint8_t *pkt) {
     net_command_2int_string_t *cmd = (net_command_2int_string_t *)pkt;
     uint32_t addr = ntohl(cmd->value0);
     uint32_t sz = ntohl(cmd->value1);
@@ -881,7 +881,7 @@ static void net_dc_stat(kostool_context_t *ctx, uint8_t *pkt) {
     net_send_cmd(ctx, NET_CMD_RETVAL, ret, ret, NULL, 0);
 }
 
-static void net_dc_utime(kostool_context_t *ctx, uint8_t *pkt) {
+static void net_syscall_utime(kostool_context_t *ctx, uint8_t *pkt) {
     net_command_3int_string_t *cmd = (net_command_3int_string_t *)pkt;
     int ret;
     if (ntohl(cmd->value0)) {
@@ -895,7 +895,7 @@ static void net_dc_utime(kostool_context_t *ctx, uint8_t *pkt) {
     net_send_cmd(ctx, NET_CMD_RETVAL, ret, ret, NULL, 0);
 }
 
-static void net_dc_opendir(kostool_context_t *ctx, uint8_t *pkt) {
+static void net_syscall_opendir(kostool_context_t *ctx, uint8_t *pkt) {
     net_command_string_t *cmd = (net_command_string_t *)pkt;
     uint32_t i;
     for (i = 0; i < MAX_OPEN_DIRS; i++)
@@ -913,7 +913,7 @@ static void net_dc_opendir(kostool_context_t *ctx, uint8_t *pkt) {
     net_send_cmd(ctx, NET_CMD_RETVAL, i, i, NULL, 0);
 }
 
-static void net_dc_closedir(kostool_context_t *ctx, uint8_t *pkt) {
+static void net_syscall_closedir(kostool_context_t *ctx, uint8_t *pkt) {
     net_command_int_t *cmd = (net_command_int_t *)pkt;
     uint32_t i = ntohl(cmd->value0);
     int ret;
@@ -926,7 +926,7 @@ static void net_dc_closedir(kostool_context_t *ctx, uint8_t *pkt) {
     net_send_cmd(ctx, NET_CMD_RETVAL, ret, ret, NULL, 0);
 }
 
-static void net_dc_readdir(kostool_context_t *ctx, uint8_t *pkt) {
+static void net_syscall_readdir(kostool_context_t *ctx, uint8_t *pkt) {
     net_command_3int_t *cmd = (net_command_3int_t *)pkt;
     uint32_t i = ntohl(cmd->value0);
     uint32_t addr = ntohl(cmd->value1);
@@ -958,7 +958,7 @@ static void net_dc_readdir(kostool_context_t *ctx, uint8_t *pkt) {
     }
 }
 
-static void net_dc_rewinddir(kostool_context_t *ctx, uint8_t *pkt) {
+static void net_syscall_rewinddir(kostool_context_t *ctx, uint8_t *pkt) {
     net_command_int_t *cmd = (net_command_int_t *)pkt;
     uint32_t i = ntohl(cmd->value0);
     int ret;
@@ -971,7 +971,7 @@ static void net_dc_rewinddir(kostool_context_t *ctx, uint8_t *pkt) {
     net_send_cmd(ctx, NET_CMD_RETVAL, ret, ret, NULL, 0);
 }
 
-static void net_dc_cdfs_read(kostool_context_t *ctx, uint8_t *pkt) {
+static void net_syscall_cdfs_read(kostool_context_t *ctx, uint8_t *pkt) {
     net_command_3int_t *cmd = (net_command_3int_t *)pkt;
     int start = ntohl(cmd->value0) - 150;
     uint32_t addr = ntohl(cmd->value1);
@@ -1000,7 +1000,7 @@ static void net_dc_cdfs_read(kostool_context_t *ctx, uint8_t *pkt) {
     free(buf);
 }
 
-static void net_dc_gdbpacket(kostool_context_t *ctx, uint8_t *pkt) {
+static void net_syscall_gdbpacket(kostool_context_t *ctx, uint8_t *pkt) {
     net_command_2int_string_t *cmd = (net_command_2int_string_t *)pkt;
     uint32_t in_size = ntohl(cmd->value0);
     uint32_t out_size = ntohl(cmd->value1);
@@ -1077,32 +1077,32 @@ static int do_serial_console(kostool_context_t *ctx) {
              * a serial line glitch (break condition, SCIF reinitialization
              * by the loaded program, or baud rate mismatch). Ignore it. */
             break;
-        case SERIAL_SYSCALL_FSTAT:     ser_dc_fstat(ctx); break;
-        case SERIAL_SYSCALL_WRITE:     ser_dc_write(ctx); break;
-        case SERIAL_SYSCALL_READ:      ser_dc_read(ctx); break;
-        case SERIAL_SYSCALL_OPEN:      ser_dc_open(ctx); break;
-        case SERIAL_SYSCALL_CLOSE:     ser_dc_close(ctx); break;
-        case SERIAL_SYSCALL_CREAT:     ser_dc_creat(ctx); break;
-        case SERIAL_SYSCALL_LINK:      ser_dc_link(ctx); break;
-        case SERIAL_SYSCALL_UNLINK:    ser_dc_unlink(ctx); break;
-        case SERIAL_SYSCALL_CHDIR:     ser_dc_chdir(ctx); break;
-        case SERIAL_SYSCALL_CHMOD:     ser_dc_chmod(ctx); break;
-        case SERIAL_SYSCALL_LSEEK:     ser_dc_lseek(ctx); break;
-        case SERIAL_SYSCALL_TIME:      ser_dc_time(ctx); break;
-        case SERIAL_SYSCALL_STAT:      ser_dc_stat(ctx); break;
-        case SERIAL_SYSCALL_UTIME:     ser_dc_utime(ctx); break;
+        case SERIAL_SYSCALL_FSTAT:     ser_syscall_fstat(ctx); break;
+        case SERIAL_SYSCALL_WRITE:     ser_syscall_write(ctx); break;
+        case SERIAL_SYSCALL_READ:      ser_syscall_read(ctx); break;
+        case SERIAL_SYSCALL_OPEN:      ser_syscall_open(ctx); break;
+        case SERIAL_SYSCALL_CLOSE:     ser_syscall_close(ctx); break;
+        case SERIAL_SYSCALL_CREAT:     ser_syscall_creat(ctx); break;
+        case SERIAL_SYSCALL_LINK:      ser_syscall_link(ctx); break;
+        case SERIAL_SYSCALL_UNLINK:    ser_syscall_unlink(ctx); break;
+        case SERIAL_SYSCALL_CHDIR:     ser_syscall_chdir(ctx); break;
+        case SERIAL_SYSCALL_CHMOD:     ser_syscall_chmod(ctx); break;
+        case SERIAL_SYSCALL_LSEEK:     ser_syscall_lseek(ctx); break;
+        case SERIAL_SYSCALL_TIME:      ser_syscall_time(ctx); break;
+        case SERIAL_SYSCALL_STAT:      ser_syscall_stat(ctx); break;
+        case SERIAL_SYSCALL_UTIME:     ser_syscall_utime(ctx); break;
         case SERIAL_SYSCALL_BAD:
             printf("command 15 should not happen... (but it did)\n");
             break;
-        case SERIAL_SYSCALL_OPENDIR:   ser_dc_opendir(ctx); break;
-        case SERIAL_SYSCALL_CLOSEDIR:  ser_dc_closedir(ctx); break;
-        case SERIAL_SYSCALL_READDIR:   ser_dc_readdir(ctx); break;
-        case SERIAL_SYSCALL_CDFSREAD:  ser_dc_cdfs_read(ctx); break;
-        case SERIAL_SYSCALL_GDBPACKET: ser_dc_gdbpacket(ctx); break;
-        case SERIAL_SYSCALL_REWINDDIR: ser_dc_rewinddir(ctx); break;
-        case SERIAL_SYSCALL_MKDIR:     ser_dc_mkdir(ctx); break;
+        case SERIAL_SYSCALL_OPENDIR:   ser_syscall_opendir(ctx); break;
+        case SERIAL_SYSCALL_CLOSEDIR:  ser_syscall_closedir(ctx); break;
+        case SERIAL_SYSCALL_READDIR:   ser_syscall_readdir(ctx); break;
+        case SERIAL_SYSCALL_CDFSREAD:  ser_syscall_cdfs_read(ctx); break;
+        case SERIAL_SYSCALL_GDBPACKET: ser_syscall_gdbpacket(ctx); break;
+        case SERIAL_SYSCALL_REWINDDIR: ser_syscall_rewinddir(ctx); break;
+        case SERIAL_SYSCALL_MKDIR:     ser_syscall_mkdir(ctx); break;
         case SERIAL_SYSCALL_PROGEXIT:
-            printf("Program returned %d\n", ser_dc_exit(ctx));
+            printf("Program returned %d\n", ser_syscall_exit(ctx));
             exit(0);
         default:
             printf("Unimplemented command (%d)\n", command);
@@ -1136,36 +1136,36 @@ static int do_network_console(kostool_context_t *ctx) {
          * can never walk past the buffer. */
         buffer[sizeof(buffer) - 1] = '\0';
 
-        if (!memcmp(buffer, NET_CMD_EXIT, 4) || !memcmp(buffer, NET_CMD_PROGEXIT, 4)) {
+        if (!memcmp(buffer, NET_SYSCALL_EXIT, 4) || !memcmp(buffer, NET_SYSCALL_PROGEXIT, 4)) {
             net_command_t *exit_cmd = (net_command_t *)buffer;
             int32_t ret_code = (int32_t)ntohl(exit_cmd->address);
             printf("Program returned %d\n", ret_code);
             return 0;
         }
-        if (!memcmp(buffer, NET_CMD_FSTAT, 4))      net_dc_fstat(ctx, buffer);
-        else if (!memcmp(buffer, NET_CMD_WRITE, 4))  net_dc_write(ctx, buffer);
-        else if (!memcmp(buffer, "DD02", 4))         net_dc_write(ctx, buffer); /* legacy */
-        else if (!memcmp(buffer, NET_CMD_READ, 4))   net_dc_read(ctx, buffer);
-        else if (!memcmp(buffer, NET_CMD_OPEN, 4))   net_dc_open(ctx, buffer);
-        else if (!memcmp(buffer, NET_CMD_CLOSE, 4))  net_dc_close(ctx, buffer);
-        else if (!memcmp(buffer, NET_CMD_CREAT, 4))  net_dc_creat(ctx, buffer);
-        else if (!memcmp(buffer, NET_CMD_LINK, 4))   net_dc_link(ctx, buffer);
-        else if (!memcmp(buffer, NET_CMD_UNLINK, 4)) net_dc_unlink(ctx, buffer);
-        else if (!memcmp(buffer, NET_CMD_CHDIR, 4))  net_dc_chdir(ctx, buffer);
-        else if (!memcmp(buffer, NET_CMD_CHMOD, 4))  net_dc_chmod(ctx, buffer);
-        else if (!memcmp(buffer, NET_CMD_LSEEK, 4))  net_dc_lseek(ctx, buffer);
-        else if (!memcmp(buffer, NET_CMD_TIME, 4))   net_dc_time(ctx, buffer);
-        else if (!memcmp(buffer, NET_CMD_STAT, 4))   net_dc_stat(ctx, buffer);
-        else if (!memcmp(buffer, NET_CMD_UTIME, 4))  net_dc_utime(ctx, buffer);
-        else if (!memcmp(buffer, NET_CMD_BAD, 4))
+        if (!memcmp(buffer, NET_SYSCALL_FSTAT, 4))      net_syscall_fstat(ctx, buffer);
+        else if (!memcmp(buffer, NET_SYSCALL_WRITE, 4))  net_syscall_write(ctx, buffer);
+        else if (!memcmp(buffer, "DD02", 4))         net_syscall_write(ctx, buffer); /* legacy */
+        else if (!memcmp(buffer, NET_SYSCALL_READ, 4))   net_syscall_read(ctx, buffer);
+        else if (!memcmp(buffer, NET_SYSCALL_OPEN, 4))   net_syscall_open(ctx, buffer);
+        else if (!memcmp(buffer, NET_SYSCALL_CLOSE, 4))  net_syscall_close(ctx, buffer);
+        else if (!memcmp(buffer, NET_SYSCALL_CREAT, 4))  net_syscall_creat(ctx, buffer);
+        else if (!memcmp(buffer, NET_SYSCALL_LINK, 4))   net_syscall_link(ctx, buffer);
+        else if (!memcmp(buffer, NET_SYSCALL_UNLINK, 4)) net_syscall_unlink(ctx, buffer);
+        else if (!memcmp(buffer, NET_SYSCALL_CHDIR, 4))  net_syscall_chdir(ctx, buffer);
+        else if (!memcmp(buffer, NET_SYSCALL_CHMOD, 4))  net_syscall_chmod(ctx, buffer);
+        else if (!memcmp(buffer, NET_SYSCALL_LSEEK, 4))  net_syscall_lseek(ctx, buffer);
+        else if (!memcmp(buffer, NET_SYSCALL_TIME, 4))   net_syscall_time(ctx, buffer);
+        else if (!memcmp(buffer, NET_SYSCALL_STAT, 4))   net_syscall_stat(ctx, buffer);
+        else if (!memcmp(buffer, NET_SYSCALL_UTIME, 4))  net_syscall_utime(ctx, buffer);
+        else if (!memcmp(buffer, NET_SYSCALL_BAD, 4))
             fprintf(stderr, "command 15 should not happen... (but it did)\n");
-        else if (!memcmp(buffer, NET_CMD_OPENDIR, 4))   net_dc_opendir(ctx, buffer);
-        else if (!memcmp(buffer, NET_CMD_CLOSEDIR, 4))  net_dc_closedir(ctx, buffer);
-        else if (!memcmp(buffer, NET_CMD_READDIR, 4))   net_dc_readdir(ctx, buffer);
-        else if (!memcmp(buffer, NET_CMD_CDFSREAD, 4))  net_dc_cdfs_read(ctx, buffer);
-        else if (!memcmp(buffer, NET_CMD_GDBPACKET, 4)) net_dc_gdbpacket(ctx, buffer);
-        else if (!memcmp(buffer, NET_CMD_REWINDDIR, 4)) net_dc_rewinddir(ctx, buffer);
-        else if (!memcmp(buffer, NET_CMD_MKDIR, 4))     net_dc_mkdir(ctx, buffer);
+        else if (!memcmp(buffer, NET_SYSCALL_OPENDIR, 4))   net_syscall_opendir(ctx, buffer);
+        else if (!memcmp(buffer, NET_SYSCALL_CLOSEDIR, 4))  net_syscall_closedir(ctx, buffer);
+        else if (!memcmp(buffer, NET_SYSCALL_READDIR, 4))   net_syscall_readdir(ctx, buffer);
+        else if (!memcmp(buffer, NET_SYSCALL_CDFSREAD, 4))  net_syscall_cdfs_read(ctx, buffer);
+        else if (!memcmp(buffer, NET_SYSCALL_GDBPACKET, 4)) net_syscall_gdbpacket(ctx, buffer);
+        else if (!memcmp(buffer, NET_SYSCALL_REWINDDIR, 4)) net_syscall_rewinddir(ctx, buffer);
+        else if (!memcmp(buffer, NET_SYSCALL_MKDIR, 4))     net_syscall_mkdir(ctx, buffer);
     }
 
     return 0;

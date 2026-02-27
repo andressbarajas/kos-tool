@@ -175,6 +175,7 @@ SERIAL_OBJS := \
     $(SERIALDIR)/main.o \
     $(SERIALDIR)/entry.o \
     $(SERIALDIR)/serial_transport.o \
+    $(SERIALDIR)/serial_syscalls.o \
     $(SERIALDIR)/cdfs_syscalls.o \
     $(SERIALDIR)/crt0.o \
     $(SERIALDIR)/go.o
@@ -192,6 +193,9 @@ $(SERIALDIR)/entry.o: $(CLIENTDIR)/serial/entry.c $(VERSION_H) | $(SERIALDIR)
 	$(CC) $(CFLAGS) $(SERIAL_DEFS) -c $< -o $@
 
 $(SERIALDIR)/serial_transport.o: $(CLIENTDIR)/serial/serial_transport.c $(VERSION_H) | $(SERIALDIR)
+	$(CC) $(CFLAGS) $(SERIAL_DEFS) -c $< -o $@
+
+$(SERIALDIR)/serial_syscalls.o: $(CLIENTDIR)/serial/serial_syscalls.c $(VERSION_H) | $(SERIALDIR)
 	$(CC) $(CFLAGS) $(SERIAL_DEFS) -c $< -o $@
 
 $(SERIALDIR)/cdfs_syscalls.o: $(CLIENTDIR)/serial/cdfs_syscalls.c $(VERSION_H) | $(SERIALDIR)

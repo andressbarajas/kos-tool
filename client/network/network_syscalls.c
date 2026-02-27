@@ -76,7 +76,7 @@ void progexit(int ret_code)
 
     net_command_t *command = (net_command_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
 
-    memcpy(command->id, NET_CMD_PROGEXIT, 4);
+    memcpy(command->id, NET_SYSCALL_PROGEXIT, 4);
     command->address = htonl((unsigned int)ret_code);
     command->size = 0;
     build_send_packet(COMMAND_LEN);
@@ -86,7 +86,7 @@ int read(int fd, void *buf, unsigned int count)
 {
     net_command_3int_t *command = (net_command_3int_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
 
-    memcpy(command->id, NET_CMD_READ, 4);
+    memcpy(command->id, NET_SYSCALL_READ, 4);
     command->value0 = htonl(fd);
     command->value1 = htonl((unsigned int)buf);
     command->value2 = htonl(count);
@@ -101,9 +101,9 @@ int write(int fd, const void *buf, unsigned int count)
     net_command_3int_t *command = (net_command_3int_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
 
     if (DCTOOL_MAJOR < 2)
-        memcpy(command->id, NET_CMD_WRITE_OLD, 4);
+        memcpy(command->id, NET_SYSCALL_WRITE_OLD, 4);
     else
-        memcpy(command->id, NET_CMD_WRITE, 4);
+        memcpy(command->id, NET_SYSCALL_WRITE, 4);
 
     command->value0 = htonl(fd);
     command->value1 = htonl((unsigned int)buf);
@@ -119,7 +119,7 @@ int open(const char *pathname, int flags, int mode)
     net_command_2int_string_t *command = (net_command_2int_string_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
     int namelen = my_strlen(pathname);
 
-    memcpy(command->id, NET_CMD_OPEN, 4);
+    memcpy(command->id, NET_SYSCALL_OPEN, 4);
     command->value0 = htonl(flags);
     command->value1 = htonl(mode);
     memcpy(command->string, pathname, namelen + 1);
@@ -134,7 +134,7 @@ int close(int fd)
 {
     net_command_int_t *command = (net_command_int_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
 
-    memcpy(command->id, NET_CMD_CLOSE, 4);
+    memcpy(command->id, NET_SYSCALL_CLOSE, 4);
     command->value0 = htonl(fd);
 
     build_send_packet(sizeof(net_command_int_t));
@@ -148,7 +148,7 @@ int creat(const char *pathname, int mode)
     net_command_int_string_t *command = (net_command_int_string_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
     int namelen = my_strlen(pathname);
 
-    memcpy(command->id, NET_CMD_CREAT, 4);
+    memcpy(command->id, NET_SYSCALL_CREAT, 4);
     command->value0 = htonl(mode);
     memcpy(command->string, pathname, namelen + 1);
 
@@ -164,7 +164,7 @@ int link(const char *oldpath, const char *newpath)
     int namelen1 = my_strlen(oldpath);
     int namelen2 = my_strlen(newpath);
 
-    memcpy(command->id, NET_CMD_LINK, 4);
+    memcpy(command->id, NET_SYSCALL_LINK, 4);
     memcpy(command->string, oldpath, namelen1 + 1);
     memcpy(command->string + namelen1 + 1, newpath, namelen2 + 1);
 
@@ -179,7 +179,7 @@ int unlink(const char *pathname)
     net_command_string_t *command = (net_command_string_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
     int namelen = my_strlen(pathname);
 
-    memcpy(command->id, NET_CMD_UNLINK, 4);
+    memcpy(command->id, NET_SYSCALL_UNLINK, 4);
     memcpy(command->string, pathname, namelen + 1);
 
     build_send_packet(sizeof(net_command_string_t) + namelen + 1);
@@ -193,7 +193,7 @@ int chdir(const char *path)
     net_command_string_t *command = (net_command_string_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
     int namelen = my_strlen(path);
 
-    memcpy(command->id, NET_CMD_CHDIR, 4);
+    memcpy(command->id, NET_SYSCALL_CHDIR, 4);
     memcpy(command->string, path, namelen + 1);
 
     build_send_packet(sizeof(net_command_string_t) + namelen + 1);
@@ -207,7 +207,7 @@ int chmod(const char *path, int mode)
     net_command_int_string_t *command = (net_command_int_string_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
     int namelen = my_strlen(path);
 
-    memcpy(command->id, NET_CMD_CHMOD, 4);
+    memcpy(command->id, NET_SYSCALL_CHMOD, 4);
     command->value0 = htonl(mode);
     memcpy(command->string, path, namelen + 1);
 
@@ -222,7 +222,7 @@ int mkdir(const char *path, int mode)
     net_command_int_string_t *command = (net_command_int_string_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
     int namelen = my_strlen(path);
 
-    memcpy(command->id, NET_CMD_MKDIR, 4);
+    memcpy(command->id, NET_SYSCALL_MKDIR, 4);
     command->value0 = htonl(mode);
     memcpy(command->string, path, namelen + 1);
 
@@ -236,7 +236,7 @@ int lseek(int fd, int offset, int whence)
 {
     net_command_3int_t *command = (net_command_3int_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
 
-    memcpy(command->id, NET_CMD_LSEEK, 4);
+    memcpy(command->id, NET_SYSCALL_LSEEK, 4);
     command->value0 = htonl(fd);
     command->value1 = htonl(offset);
     command->value2 = htonl(whence);
@@ -251,7 +251,7 @@ int fstat(int fd, void *buf)
 {
     net_command_3int_t *command = (net_command_3int_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
 
-    memcpy(command->id, NET_CMD_FSTAT, 4);
+    memcpy(command->id, NET_SYSCALL_FSTAT, 4);
     command->value0 = htonl(fd);
     command->value1 = htonl((unsigned int)buf);
     command->value2 = htonl(sizeof(dcload_stat_t));
@@ -266,7 +266,7 @@ int time(unsigned int *t)
 {
     net_command_int_t *command = (net_command_int_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
 
-    memcpy(command->id, NET_CMD_TIME, 4);
+    memcpy(command->id, NET_SYSCALL_TIME, 4);
     command->value0 = htonl((unsigned int)t);
 
     build_send_packet(sizeof(net_command_int_t));
@@ -283,7 +283,7 @@ int stat(const char *pathname, void *buf)
     net_command_2int_string_t *command = (net_command_2int_string_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
     int namelen = my_strlen(pathname);
 
-    memcpy(command->id, NET_CMD_STAT, 4);
+    memcpy(command->id, NET_SYSCALL_STAT, 4);
     memcpy(command->string, pathname, namelen + 1);
     command->value0 = htonl((unsigned int)buf);
     command->value1 = htonl(sizeof(dcload_stat_t));
@@ -300,7 +300,7 @@ int utime(const char *filename, void *buf)
     int namelen = my_strlen(filename);
     unsigned int *times = (unsigned int *)buf;
 
-    memcpy(command->id, NET_CMD_UTIME, 4);
+    memcpy(command->id, NET_SYSCALL_UTIME, 4);
     memcpy(command->string, filename, namelen + 1);
     command->value0 = htonl((unsigned int)buf);
 
@@ -320,7 +320,7 @@ unsigned int opendir(const char *name)
     net_command_string_t *command = (net_command_string_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
     int namelen = my_strlen(name);
 
-    memcpy(command->id, NET_CMD_OPENDIR, 4);
+    memcpy(command->id, NET_SYSCALL_OPENDIR, 4);
     memcpy(command->string, name, namelen + 1);
 
     build_send_packet(sizeof(net_command_string_t) + namelen + 1);
@@ -333,7 +333,7 @@ int closedir(unsigned int dir)
 {
     net_command_int_t *command = (net_command_int_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
 
-    memcpy(command->id, NET_CMD_CLOSEDIR, 4);
+    memcpy(command->id, NET_SYSCALL_CLOSEDIR, 4);
     command->value0 = htonl(dir);
 
     build_send_packet(sizeof(net_command_int_t));
@@ -346,7 +346,7 @@ void *readdir(unsigned int dir)
 {
     net_command_3int_t *command = (net_command_3int_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
 
-    memcpy(command->id, NET_CMD_READDIR, 4);
+    memcpy(command->id, NET_SYSCALL_READDIR, 4);
     command->value0 = htonl(dir);
     command->value1 = htonl((unsigned int)&our_dir);
     command->value2 = htonl(sizeof(dc_dirent_t));
@@ -366,7 +366,7 @@ unsigned int gdbpacket(const char *in_buf, unsigned int size_pack, char *out_buf
     unsigned int out_size = size_pack & 0xffff;
     net_command_2int_string_t *command = (net_command_2int_string_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
 
-    memcpy(command->id, NET_CMD_GDBPACKET, 4);
+    memcpy(command->id, NET_SYSCALL_GDBPACKET, 4);
     command->value0 = htonl(in_size);
     command->value1 = htonl(out_size);
     memcpy(command->string, in_buf, in_size);
@@ -383,7 +383,7 @@ int rewinddir(unsigned int dir)
 {
     net_command_int_t *command = (net_command_int_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
 
-    memcpy(command->id, NET_CMD_REWINDDIR, 4);
+    memcpy(command->id, NET_SYSCALL_REWINDDIR, 4);
     command->value0 = htonl(dir);
 
     build_send_packet(sizeof(net_command_int_t));

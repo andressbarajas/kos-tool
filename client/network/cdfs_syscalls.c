@@ -33,7 +33,7 @@ int gdGdcReqCmd(int cmd, int *param)
 
     switch (cmd) {
     case 16: /* read sectors */
-        memcpy(command->id, NET_CMD_CDFSREAD, 4);
+        memcpy(command->id, NET_SYSCALL_CDFSREAD, 4);
         command->value0 = htonl(param[0]);
         command->value1 = htonl(param[2]);
         command->value2 = htonl(param[1] * 2048);
