@@ -324,8 +324,8 @@ EXBUILD := $(BUILDDIR)/examples
 # All examples with a main.c that compile for DC
 DC_EXAMPLES := \
     cdfs-test console-test dc-probe download-test exception-test \
-    exit-test file-test gdb-test maple-test rainbow-test \
-    syscall-test
+    exception-frame-test exit-test file-test gdb-test maple-test \
+    rainbow-test syscall-test
 
 DC_EXAMPLE_ELFS := $(addprefix $(EXBUILD)/,$(addsuffix .elf,$(DC_EXAMPLES)))
 

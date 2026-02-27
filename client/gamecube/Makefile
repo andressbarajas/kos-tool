@@ -320,7 +320,7 @@ EXBUILD := $(BUILDDIR)/examples
 
 # All examples with a main.c that compile for GC (maple-test is DC-only)
 GC_EXAMPLES := \
-    console-test download-test exception-test \
+    console-test download-test exception-test exception-frame-test \
     exit-test exi-probe file-test gdb-test rainbow-test syscall-test
 
 GC_EXAMPLE_ELFS := $(addprefix $(EXBUILD)/,$(addsuffix .elf,$(GC_EXAMPLES)))
