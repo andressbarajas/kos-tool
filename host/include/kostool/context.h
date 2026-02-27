@@ -72,10 +72,10 @@ typedef struct kostool_context {
     /* RTC sync */
     int rtc_sync;
 
-    /* addr2line */
-    int addr2line_enabled;
+    /* addr2line (configured via kos-tool.cfg) */
     const char *loaded_binary_path;
-    const char *addr2line_prefix;
+    char sh4_addr2line[512];        /* Full path to SH4 addr2line (from config) */
+    char ppc_addr2line[512];        /* Full path to PPC addr2line (from config) */
 
     /* Remote loader info (populated during transport init/handshake) */
     char     remote_version_string[128];

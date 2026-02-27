@@ -51,6 +51,20 @@ static inline int link(const char *oldpath, const char *newpath) {
 #define MAX_PATH_LEN 4096
 #define MAX_SYSCALL_SIZE (32 * 1024 * 1024)  /* 32MB sanity cap for remote malloc */
 
+/* Check if a file starts with ELF magic (\x7fELF).
+ * addr2line only works on ELF files, so skip it for .bin/.dol/etc. */
+static int is_elf_file(const char *path) {
+    FILE *f = fopen(path, "rb");
+    if (!f)
+        return 0;
+    unsigned char magic[4];
+    int ok = fread(magic, 1, 4, f) == 4 &&
+             magic[0] == 0x7f && magic[1] == 'E' &&
+             magic[2] == 'L' && magic[3] == 'F';
+    fclose(f);
+    return ok;
+}
+
 /* ===== addr2line address decoding ===== */
 
 #define ADDR2LINE_CACHE_SIZE 64
@@ -61,23 +75,8 @@ static struct {
 } addr_cache[ADDR2LINE_CACHE_SIZE];
 static int addr_cache_count = 0;
 
-static int is_hex_char(int c) {
-    return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
-}
-
-static uint32_t hex_to_uint(const char *s, int len) {
-    uint32_t val = 0;
-    int i;
-    for (i = 0; i < len; i++) {
-        val <<= 4;
-        if (s[i] >= '0' && s[i] <= '9') val |= s[i] - '0';
-        else if (s[i] >= 'a' && s[i] <= 'f') val |= s[i] - 'a' + 10;
-        else if (s[i] >= 'A' && s[i] <= 'F') val |= s[i] - 'A' + 10;
-    }
-    return val;
-}
-
-static void decode_address(kostool_context_t *ctx, uint32_t addr, char *out, size_t out_size) {
+static void decode_address(const char *addr2line_cmd, const char *elf_path,
+                           uint32_t addr, char *out, size_t out_size) {
     int i;
 
     /* Check cache */
@@ -91,9 +90,8 @@ static void decode_address(kostool_context_t *ctx, uint32_t addr, char *out, siz
 
     /* Run addr2line */
     char cmd[512];
-    snprintf(cmd, sizeof(cmd), "%saddr2line -Cfpe %s 0x%08x",
-             ctx->addr2line_prefix ? ctx->addr2line_prefix : "",
-             ctx->loaded_binary_path, addr);
+    snprintf(cmd, sizeof(cmd), "%s -Cifpe %s 0x%08x",
+             addr2line_cmd, elf_path, addr);
 
     out[0] = '\0';
     FILE *fp = popen(cmd, "r");
@@ -118,53 +116,283 @@ static void decode_address(kostool_context_t *ctx, uint32_t addr, char *out, siz
     }
 }
 
-/*
- * Scan data written to stdout for hex addresses in the program range.
- * For each match, print addr2line-decoded function:line annotation.
- */
-static void scan_for_addresses(kostool_context_t *ctx, const uint8_t *data, int count) {
-    if (!ctx->addr2line_enabled || !ctx->loaded_binary_path)
-        return;
+/* ===== Exception handling ===== */
 
-    /* Determine valid address range based on load address */
-    uint32_t range_lo, range_hi;
-    if (ctx->load_address >= 0x80000000 && ctx->load_address < 0x90000000) {
-        /* GC: 0x80100000 - 0x81800000 */
-        range_lo = 0x80100000;
-        range_hi = 0x81800000;
-    } else {
-        /* DC: 0x8c010000 - 0x8d000000 */
-        range_lo = 0x8c010000;
-        range_hi = 0x8d000000;
+/* SH4 EXPEVT code to string */
+static const char *dc_exception_code_to_string(uint32_t code) {
+    switch (code) {
+    case 0x1e0: return "User break";
+    case 0x0e0: return "Address error (read)";
+    case 0x040: return "TLB miss exception (read)";
+    case 0x0a0: return "TLB protection violation (read)";
+    case 0x180: return "General illegal instruction";
+    case 0x1a0: return "Slot illegal instruction";
+    case 0x800: return "General FPU disable";
+    case 0x820: return "Slot FPU disable";
+    case 0x100: return "Address error (write)";
+    case 0x060: return "TLB miss exception (write)";
+    case 0x0c0: return "TLB protection violation (write)";
+    case 0x120: return "FPU exception";
+    case 0x080: return "Initial page write exception";
+    case 0x160: return "Unconditional trap (TRAPA)";
+    default:    return "Unknown exception";
+    }
+}
+
+/* PPC 750 exception vector to string */
+static const char *gc_exception_code_to_string(uint32_t code) {
+    switch (code) {
+    case 0x0100: return "System Reset";
+    case 0x0200: return "Machine Check";
+    case 0x0300: return "DSI (Data Storage)";
+    case 0x0400: return "ISI (Instruction Storage)";
+    case 0x0500: return "External Interrupt";
+    case 0x0600: return "Alignment";
+    case 0x0700: return "Program";
+    case 0x0800: return "FP Unavailable";
+    case 0x0900: return "Decrementer";
+    case 0x0C00: return "System Call";
+    case 0x0D00: return "Trace";
+    case 0x0F00: return "Performance Monitor";
+    case 0x1300: return "IABR";
+    case 0x1700: return "Thermal";
+    default:     return "Unknown Exception";
+    }
+}
+
+static const char *dc_register_names[66] = {
+    "PC", "PR", "SR", "GBR", "VBR", "DBR", "MACH", "MACL",
+    "R0B0", "R1B0", "R2B0", "R3B0", "R4B0", "R5B0", "R6B0", "R7B0",
+    "R0B1", "R1B1", "R2B1", "R3B1", "R4B1", "R5B1", "R6B1", "R7B1",
+    "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15",
+    "FPSCR",
+    "FR0", "FR1", "FR2", "FR3", "FR4", "FR5", "FR6", "FR7",
+    "FR8", "FR9", "FR10", "FR11", "FR12", "FR13", "FR14", "FR15",
+    "FPUL",
+    "XF0", "XF1", "XF2", "XF3", "XF4", "XF5", "XF6", "XF7",
+    "XF8", "XF9", "XF10", "XF11", "XF12", "XF13", "XF14", "XF15",
+};
+
+static const char *gc_register_names[40] = {
+    "SRR0", "SRR1",
+    "R0", "R1", "R2", "R3", "R4", "R5", "R6", "R7",
+    "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15",
+    "R16", "R17", "R18", "R19", "R20", "R21", "R22", "R23",
+    "R24", "R25", "R26", "R27", "R28", "R29", "R30", "R31",
+    "LR", "CTR", "XER", "CR", "DSISR", "DAR",
+};
+
+static const char *gc_fpr_names[32] = {
+    "F0",  "F1",  "F2",  "F3",  "F4",  "F5",  "F6",  "F7",
+    "F8",  "F9",  "F10", "F11", "F12", "F13", "F14", "F15",
+    "F16", "F17", "F18", "F19", "F20", "F21", "F22", "F23",
+    "F24", "F25", "F26", "F27", "F28", "F29", "F30", "F31",
+};
+
+/* Swap bytes of a uint32 from little-endian to host order */
+static uint32_t le32_to_host(uint32_t x) {
+    /* If host is LE, no-op; if host is BE, swap */
+    if (htonl(1) == 1)
+        return (x << 24) | ((x << 8) & 0xff0000) |
+               ((x >> 8) & 0xff00) | ((x >> 24) & 0xff);
+    return x;
+}
+
+/* Swap bytes of a uint32 from big-endian to host order */
+static uint32_t be32_to_host(uint32_t x) {
+    return ntohl(x);
+}
+
+/* Generate timestamped exception dump filename */
+static void make_dump_filename(const char *prefix, char *out, size_t out_size) {
+    time_t now = time(NULL);
+    struct tm *tm = localtime(&now);
+    snprintf(out, out_size, "%s_exception_%04d%02d%02d_%02d%02d%02d.txt",
+             prefix,
+             tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
+             tm->tm_hour, tm->tm_min, tm->tm_sec);
+}
+
+/* Print all registers to a FILE (stderr or dump file) */
+static void print_dc_registers(FILE *fp, const uint32_t *regs) {
+    for (int i = 0; i < 66; i++)
+        fprintf(fp, "  %-6s 0x%08x\n", dc_register_names[i], regs[i]);
+}
+
+static void print_gc_registers(FILE *fp, const uint32_t *regs,
+                                const uint8_t *data) {
+    for (int i = 0; i < 40; i++)
+        fprintf(fp, "  %-6s 0x%08x\n", gc_register_names[i], regs[i]);
+
+    const int fpu_offset = 8 + 40 * sizeof(uint32_t);
+
+    uint32_t fpscr_lo;
+    memcpy(&fpscr_lo, data + fpu_offset + 4, sizeof(uint32_t));
+    fpscr_lo = be32_to_host(fpscr_lo);
+    fprintf(fp, "  FPSCR  0x%08x\n", fpscr_lo);
+
+    for (int i = 0; i < 32; i++) {
+        uint32_t hi, lo;
+        memcpy(&hi, data + fpu_offset + 8 + i * 8, sizeof(uint32_t));
+        memcpy(&lo, data + fpu_offset + 8 + i * 8 + 4, sizeof(uint32_t));
+        hi = be32_to_host(hi);
+        lo = be32_to_host(lo);
+        fprintf(fp, "  %-6s 0x%08x%08x\n", gc_fpr_names[i], hi, lo);
+    }
+}
+
+static void handle_dc_exception(kostool_context_t *ctx, const uint8_t *data,
+                                uint32_t count) {
+    if (count < sizeof(sh4_exception_frame_t)) {
+        fprintf(stderr, "\nIncomplete DC exception frame (%u bytes)\n", count);
+        return;
     }
 
-    const char *s = (const char *)data;
-    int i;
+    /* Byte-swap from SH4 (little-endian) to host order.
+     * 66 registers start at offset 8 in the frame (after id + expt_code). */
+    uint32_t regs[66];
+    memcpy(regs, data + 8, 66 * sizeof(uint32_t));
+    for (int i = 0; i < 66; i++)
+        regs[i] = le32_to_host(regs[i]);
 
-    for (i = 0; i < count - 7; i++) {
-        int hex_start = i;
-        int hex_len = 0;
+    uint32_t expt_code;
+    memcpy(&expt_code, data + 4, sizeof(uint32_t));
+    expt_code = le32_to_host(expt_code);
 
-        /* Skip "0x" prefix if present */
-        if (i < count - 9 && s[i] == '0' && (s[i + 1] == 'x' || s[i + 1] == 'X')) {
-            hex_start = i + 2;
-        }
+    const char *expt_str = dc_exception_code_to_string(expt_code);
 
-        /* Count consecutive hex digits */
-        while (hex_start + hex_len < count && is_hex_char(s[hex_start + hex_len]))
-            hex_len++;
+    fprintf(stderr, "\n=== Dreamcast Exception: %s (0x%03x) ===\n",
+            expt_str, expt_code);
 
-        if (hex_len == 8) {
-            uint32_t addr = hex_to_uint(s + hex_start, 8);
-            if (addr >= range_lo && addr < range_hi) {
+    /* Always print key registers */
+    fprintf(stderr, "  %-6s 0x%08x\n", "PC", regs[0]);
+    fprintf(stderr, "  %-6s 0x%08x\n", "PR", regs[1]);
+    fprintf(stderr, "  %-6s 0x%08x\n", "SR", regs[2]);
+    fprintf(stderr, "  %-6s 0x%08x\n", "R15", regs[31]);
+
+    /* addr2line on valid addresses, or fall back to full register dump */
+    int have_addr2line = ctx->loaded_binary_path && ctx->sh4_addr2line[0] &&
+                         access(ctx->sh4_addr2line, X_OK) == 0 &&
+                         is_elf_file(ctx->loaded_binary_path);
+
+    if (have_addr2line) {
+        for (int i = 0; i < 66; i++) {
+            if (regs[i] >= DC_DEFAULT_LOAD_ADDR && regs[i] < DC_RAM_TOP) {
                 char decoded[128];
-                decode_address(ctx, addr, decoded, sizeof(decoded));
-                if (decoded[0] && decoded[0] != '?') {
-                    fprintf(stderr, "  -> %s\n", decoded);
+                decode_address(ctx->sh4_addr2line, ctx->loaded_binary_path,
+                               regs[i], decoded, sizeof(decoded));
+                if (decoded[0] && decoded[0] != '?')
+                    fprintf(stderr, "  %-6s -> %s\n", dc_register_names[i], decoded);
+            }
+        }
+    } else {
+        print_dc_registers(stderr, regs);
+    }
+
+    /* Save full register dump to text file */
+    char filename[128];
+    make_dump_filename("dc", filename, sizeof(filename));
+    FILE *dump = fopen(filename, "w");
+    if (dump) {
+        fprintf(dump, "=== Dreamcast Exception: %s (0x%03x) ===\n\n",
+                expt_str, expt_code);
+        fprintf(dump, "Registers:\n");
+        print_dc_registers(dump, regs);
+        if (have_addr2line) {
+            fprintf(dump, "\nSymbols:\n");
+            for (int i = 0; i < 66; i++) {
+                if (regs[i] >= DC_DEFAULT_LOAD_ADDR && regs[i] < DC_RAM_TOP) {
+                    char decoded[128];
+                    decode_address(ctx->sh4_addr2line, ctx->loaded_binary_path,
+                                   regs[i], decoded, sizeof(decoded));
+                    if (decoded[0] && decoded[0] != '?')
+                        fprintf(dump, "  %-6s -> %s\n", dc_register_names[i], decoded);
                 }
             }
-            i = hex_start + hex_len - 1;
         }
+        fclose(dump);
+        fprintf(stderr, "  Saved to %s\n", filename);
+    }
+}
+
+static void handle_gc_exception(kostool_context_t *ctx, const uint8_t *data,
+                                uint32_t count) {
+    if (count < sizeof(gc_exception_frame_t)) {
+        fprintf(stderr, "\nIncomplete GC exception frame (%u bytes)\n", count);
+        return;
+    }
+
+    /* Byte-swap from PPC (big-endian) to host order.
+     * 40 GPR/SPR registers start at offset 8 (after id + expt_code):
+     * SRR0, SRR1, R0-R31, LR, CTR, XER, CR, DSISR, DAR. */
+    uint32_t regs[40];
+    memcpy(regs, data + 8, 40 * sizeof(uint32_t));
+    for (int i = 0; i < 40; i++)
+        regs[i] = be32_to_host(regs[i]);
+
+    uint32_t expt_code;
+    memcpy(&expt_code, data + 4, sizeof(uint32_t));
+    expt_code = be32_to_host(expt_code);
+
+    const char *expt_str = gc_exception_code_to_string(expt_code);
+
+    fprintf(stderr, "\n=== GameCube Exception: %s (0x%04x) ===\n",
+            expt_str, expt_code);
+
+    /* Always print key registers */
+    fprintf(stderr, "  %-6s 0x%08x\n", "SRR0", regs[0]);
+    fprintf(stderr, "  %-6s 0x%08x\n", "SRR1", regs[1]);
+    fprintf(stderr, "  %-6s 0x%08x\n", "R1", regs[4]);
+    fprintf(stderr, "  %-6s 0x%08x\n", "LR", regs[34]);
+
+    /* For DSI/ISI exceptions, show the faulting address */
+    if (expt_code == 0x0300 || expt_code == 0x0400) {
+        fprintf(stderr, "  %-6s 0x%08x\n", "DAR", regs[39]);
+        fprintf(stderr, "  %-6s 0x%08x\n", "DSISR", regs[38]);
+    }
+
+    /* addr2line on valid addresses, or fall back to full register dump */
+    int have_addr2line = ctx->loaded_binary_path && ctx->ppc_addr2line[0] &&
+                         access(ctx->ppc_addr2line, X_OK) == 0 &&
+                         is_elf_file(ctx->loaded_binary_path);
+
+    if (have_addr2line) {
+        for (int i = 0; i < 40; i++) {
+            if (regs[i] >= GC_DEFAULT_LOAD_ADDR && regs[i] < GC_RAM_TOP) {
+                char decoded[128];
+                decode_address(ctx->ppc_addr2line, ctx->loaded_binary_path,
+                               regs[i], decoded, sizeof(decoded));
+                if (decoded[0] && decoded[0] != '?')
+                    fprintf(stderr, "  %-6s -> %s\n", gc_register_names[i], decoded);
+            }
+        }
+    } else {
+        print_gc_registers(stderr, regs, data);
+    }
+
+    /* Save full register dump to text file */
+    char filename[128];
+    make_dump_filename("gc", filename, sizeof(filename));
+    FILE *dump = fopen(filename, "w");
+    if (dump) {
+        fprintf(dump, "=== GameCube Exception: %s (0x%04x) ===\n\n",
+                expt_str, expt_code);
+        fprintf(dump, "Registers:\n");
+        print_gc_registers(dump, regs, data);
+        if (have_addr2line) {
+            fprintf(dump, "\nSymbols:\n");
+            for (int i = 0; i < 40; i++) {
+                if (regs[i] >= GC_DEFAULT_LOAD_ADDR && regs[i] < GC_RAM_TOP) {
+                    char decoded[128];
+                    decode_address(ctx->ppc_addr2line, ctx->loaded_binary_path,
+                                   regs[i], decoded, sizeof(decoded));
+                    if (decoded[0] && decoded[0] != '?')
+                        fprintf(dump, "  %-6s -> %s\n", gc_register_names[i], decoded);
+                }
+            }
+        }
+        fclose(dump);
+        fprintf(stderr, "  Saved to %s\n", filename);
     }
 }
 
@@ -374,9 +602,18 @@ static void ser_syscall_write(kostool_context_t *ctx) {
     uint8_t *data = malloc(count);
     if (!data) { ser_send_uint(ctx, -1); return; }
     ser_recv_data(ctx, data, count);
-    int ret = write(fd, data, count);
-    if (fd == 1)
-        scan_for_addresses(ctx, data, count);
+
+    int ret;
+    if (count >= 8 && !memcmp(data, KOSLOAD_EXCEPTION_TAG, 4)) {
+        if (ctx->target_big_endian)
+            handle_gc_exception(ctx, data, count);
+        else
+            handle_dc_exception(ctx, data, count);
+        ret = (int)count;
+    } else {
+        ret = write(fd, data, count);
+    }
+
     ser_send_uint(ctx, ret);
     free(data);
 }
@@ -751,9 +988,18 @@ static void net_syscall_write(kostool_context_t *ctx, uint8_t *pkt) {
         return;
     }
     ctx->transport->recv_data(ctx, data, addr, count, 1);
-    int ret = write(fd, data, count);
-    if (fd == 1)
-        scan_for_addresses(ctx, data, count);
+
+    int ret;
+    if (count >= 8 && !memcmp(data, KOSLOAD_EXCEPTION_TAG, 4)) {
+        if (ctx->target_big_endian)
+            handle_gc_exception(ctx, data, count);
+        else
+            handle_dc_exception(ctx, data, count);
+        ret = (int)count;
+    } else {
+        ret = write(fd, data, count);
+    }
+
     net_send_cmd(ctx, NET_CMD_RETVAL, ret, ret, NULL, 0);
     free(data);
 }

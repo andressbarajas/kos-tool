@@ -91,6 +91,7 @@ CORE_SRCS := \
     src/download.c \
     src/execute.c \
     src/console.c \
+    src/config.c \
     src/gdb.c \
     src/cdfs.c \
     src/syscalls.c \

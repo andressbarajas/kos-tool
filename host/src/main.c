@@ -13,6 +13,7 @@
 #include <kostool/binary.h>
 #include <kostool/discover.h>
 #include <kostool/firmware.h>
+#include <kostool/config.h>
 
 /* Forward declarations */
 uint32_t upload(kostool_context_t *ctx, const char *filename, uint32_t address);
@@ -63,7 +64,6 @@ static void usage(void) {
     printf("  -w           Sync console RTC to host time\n");
     printf("  -U <file>    Update firmware from external file\n");
     printf("  -N           Skip automatic firmware update\n");
-    printf("  -A [prefix]  Decode addresses via addr2line\n");
     printf("  -h           Show this help\n\n");
 }
 
@@ -81,6 +81,9 @@ int main(int argc, char *argv[]) {
     ctx.socket_ops = platform_get_socket_ops();
     ctx.fs_ops = platform_get_fs_ops();
     ctx.time_ops = platform_get_time_ops();
+
+    /* Load config file (sets addr2line defaults) */
+    config_load(&ctx);
 
     const char *transport_name = NULL;
     char command = 0;
@@ -183,12 +186,6 @@ int main(int argc, char *argv[]) {
             break;
         case 'N':
             ctx.skip_update = 1;
-            break;
-        case 'A':
-            ctx.addr2line_enabled = 1;
-            if (i + 1 < argc && argv[i + 1][0] != '-') {
-                ctx.addr2line_prefix = argv[++i];
-            }
             break;
         case 'h':
             usage();
