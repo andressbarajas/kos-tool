@@ -71,9 +71,67 @@ static int is_elf_file(const char *path) {
 
 static struct {
     uint32_t addr;
-    char decoded[128];
+    char decoded[256];
 } addr_cache[ADDR2LINE_CACHE_SIZE];
 static int addr_cache_count = 0;
+
+/* Persistent addr2line process — avoids fork/exec per address.
+ * Started lazily on first use, stays alive for the session. */
+static FILE *a2l_in = NULL;     /* parent writes addresses here */
+static FILE *a2l_out = NULL;    /* parent reads results here */
+
+#ifndef _WIN32
+#include <signal.h>
+
+static void start_addr2line_process(const char *cmd, const char *elf) {
+    int to_child[2], from_child[2];
+
+    if (pipe(to_child) < 0)
+        return;
+    if (pipe(from_child) < 0) {
+        close(to_child[0]); close(to_child[1]);
+        return;
+    }
+
+    pid_t pid = fork();
+    if (pid < 0) {
+        close(to_child[0]); close(to_child[1]);
+        close(from_child[0]); close(from_child[1]);
+        return;
+    }
+
+    if (pid == 0) {
+        /* Child: wire pipes and exec addr2line in interactive mode */
+        close(to_child[1]);
+        close(from_child[0]);
+        dup2(to_child[0], STDIN_FILENO);
+        dup2(from_child[1], STDOUT_FILENO);
+        close(to_child[0]);
+        close(from_child[1]);
+        execlp(cmd, cmd, "-Cfpe", elf, NULL);
+        _exit(1);
+    }
+
+    /* Parent */
+    close(to_child[0]);
+    close(from_child[1]);
+    a2l_in = fdopen(to_child[1], "w");
+    a2l_out = fdopen(from_child[0], "r");
+
+    if (!a2l_in || !a2l_out) {
+        if (a2l_in) fclose(a2l_in);
+        if (a2l_out) fclose(a2l_out);
+        a2l_in = a2l_out = NULL;
+        return;
+    }
+
+    /* Unbuffered write so addresses are sent immediately */
+    setbuf(a2l_in, NULL);
+
+    /* Auto-reap child on exit */
+    signal(SIGCHLD, SIG_IGN);
+}
+#endif /* !_WIN32 */
 
 static void decode_address(const char *addr2line_cmd, const char *elf_path,
                            uint32_t addr, char *out, size_t out_size) {
@@ -88,20 +146,29 @@ static void decode_address(const char *addr2line_cmd, const char *elf_path,
         }
     }
 
-    /* Run addr2line */
-    char cmd[512];
-    snprintf(cmd, sizeof(cmd), "%s -Cifpe %s 0x%08x",
-             addr2line_cmd, elf_path, addr);
-
     out[0] = '\0';
-    FILE *fp = popen(cmd, "r");
-    if (fp) {
-        if (fgets(out, (int)out_size, fp) == NULL)
+
+    if (a2l_in && a2l_out) {
+        /* Persistent process: write address, read one line */
+        fprintf(a2l_in, "0x%08x\n", addr);
+        if (fgets(out, (int)out_size, a2l_out) == NULL)
             out[0] = '\0';
-        size_t len = strlen(out);
-        if (len > 0 && out[len - 1] == '\n') out[len - 1] = '\0';
-        pclose(fp);
+    } else {
+        /* Fallback: spawn per-address */
+        char cmd[512];
+        snprintf(cmd, sizeof(cmd), "%s -Cifpe %s 0x%08x",
+                 addr2line_cmd, elf_path, addr);
+        FILE *fp = popen(cmd, "r");
+        if (fp) {
+            if (fgets(out, (int)out_size, fp) == NULL)
+                out[0] = '\0';
+            pclose(fp);
+        }
     }
+
+    /* Strip trailing newline */
+    size_t len = strlen(out);
+    if (len > 0 && out[len - 1] == '\n') out[len - 1] = '\0';
 
     /* Don't cache useless results like "?? ??:0" */
     if (out[0] == '?' || out[0] == '\0')
@@ -110,10 +177,174 @@ static void decode_address(const char *addr2line_cmd, const char *elf_path,
     /* Cache result */
     if (addr_cache_count < ADDR2LINE_CACHE_SIZE) {
         addr_cache[addr_cache_count].addr = addr;
-        strncpy(addr_cache[addr_cache_count].decoded, out, 128);
-        addr_cache[addr_cache_count].decoded[127] = '\0';
+        strncpy(addr_cache[addr_cache_count].decoded, out, 256);
+        addr_cache[addr_cache_count].decoded[255] = '\0';
         addr_cache_count++;
     }
+}
+
+/* ===== Stack trace annotation ===== */
+
+static int in_stack_trace = 0;
+static char stk_line_buf[256];
+static int stk_line_buf_len = 0;
+static int addr2line_available = -1; /* -1 = unchecked, 0 = no, 1 = yes */
+
+/* Parse 8-digit hex address from "   XXXXXXXX" format.
+ * Returns 1 on success, 0 on failure. */
+static int parse_trace_addr(const char *line, size_t len, uint32_t *addr) {
+    int i;
+    uint32_t val = 0;
+
+    if (len < 12 || line[0] != ' ' || line[1] != ' ' || line[2] != ' ')
+        return 0;
+
+    for (i = 3; i < 11 && i < (int)len; i++) {
+        char c = line[i];
+        if (c >= '0' && c <= '9')      val = (val << 4) | (uint32_t)(c - '0');
+        else if (c >= 'a' && c <= 'f') val = (val << 4) | (uint32_t)(c - 'a' + 10);
+        else if (c >= 'A' && c <= 'F') val = (val << 4) | (uint32_t)(c - 'A' + 10);
+        else return 0;
+    }
+
+    if (i != 11) return 0;
+    *addr = val;
+    return 1;
+}
+
+#define STK_BANNER_PREFIX "-------- "
+#define STK_BANNER_PREFIX_LEN 9
+
+/* Process a single complete line, annotating stack trace addresses
+ * with addr2line results when available. */
+static void console_write_line(const char *addr2line_cmd, const char *elf_path,
+                               int fd, const char *line, size_t len) {
+    /* Detect stack trace banners via fixed prefix */
+    if (len > STK_BANNER_PREFIX_LEN &&
+        memcmp(line, STK_BANNER_PREFIX, STK_BANNER_PREFIX_LEN) == 0) {
+        if (len > 20 && line[STK_BANNER_PREFIX_LEN] == 'S') {
+            in_stack_trace = 1;
+        } else if (line[STK_BANNER_PREFIX_LEN] == 'E') {
+            in_stack_trace = 0;
+        }
+        write(fd, line, len);
+        return;
+    }
+
+    /* Inside a trace: try to parse address lines */
+    if (in_stack_trace) {
+        uint32_t addr;
+
+        if (parse_trace_addr(line, len, &addr)) {
+            char decoded[256];
+
+            decode_address(addr2line_cmd, elf_path, addr, decoded,
+                           sizeof(decoded));
+
+            if (decoded[0] && decoded[0] != '?') {
+                /* Build annotated line in one buffer, one write */
+                char outbuf[512];
+                size_t trim = len;
+
+                while (trim > 0 && (line[trim - 1] == '\n' ||
+                       line[trim - 1] == '\r'))
+                    trim--;
+
+                int n = snprintf(outbuf, sizeof(outbuf), "%.*s   %s\n",
+                                 (int)trim, line, decoded);
+                if (n > (int)sizeof(outbuf))
+                    n = (int)sizeof(outbuf);
+                write(fd, outbuf, n);
+                return;
+            }
+        }
+    }
+
+    /* Default: pass through unchanged */
+    write(fd, line, len);
+}
+
+/* Write console output, annotating stack trace addresses with addr2line.
+ * Handles line buffering for data that doesn't end on a line boundary. */
+static int console_write(kostool_context_t *ctx, int fd,
+                         const uint8_t *data, uint32_t count) {
+    const char *addr2line_cmd = ctx->target_big_endian ?
+                                ctx->ppc_addr2line : ctx->sh4_addr2line;
+
+    /* Check addr2line availability once, then cache the result */
+    if (addr2line_available < 0) {
+        addr2line_available = ctx->loaded_binary_path &&
+                              addr2line_cmd[0] &&
+                              access(addr2line_cmd, X_OK) == 0 &&
+                              is_elf_file(ctx->loaded_binary_path);
+#ifndef _WIN32
+        if (addr2line_available)
+            start_addr2line_process(addr2line_cmd, ctx->loaded_binary_path);
+#endif
+    }
+
+    if (!addr2line_available)
+        return write(fd, data, count);
+
+    /* Fast path: not in a trace, no buffered partial line, and the
+     * data doesn't start with the banner dash prefix.  KOS sends each
+     * dbgio_printf() as a complete write, so the banner always appears
+     * at the start of a chunk.  Checking data[0] is O(1) vs scanning
+     * the whole buffer for any hyphen. */
+    if (!in_stack_trace && stk_line_buf_len == 0 &&
+        (count == 0 || data[0] != '-')) {
+        return write(fd, data, count);
+    }
+
+    const char *p = (const char *)data;
+    const char *end = p + count;
+
+    while (p < end) {
+        const char *nl = memchr(p, '\n', end - p);
+
+        if (!nl) {
+            /* No newline — buffer the remainder for next call */
+            size_t rem = end - p;
+
+            if (stk_line_buf_len + (int)rem < (int)sizeof(stk_line_buf)) {
+                memcpy(stk_line_buf + stk_line_buf_len, p, rem);
+                stk_line_buf_len += (int)rem;
+            } else {
+                /* Buffer overflow — flush raw */
+                if (stk_line_buf_len > 0) {
+                    write(fd, stk_line_buf, stk_line_buf_len);
+                    stk_line_buf_len = 0;
+                }
+                write(fd, p, rem);
+            }
+            break;
+        }
+
+        /* Complete line (including the \n) */
+        size_t line_len = nl - p + 1;
+
+        if (stk_line_buf_len > 0) {
+            /* Prepend buffered partial line */
+            size_t total = stk_line_buf_len + line_len;
+
+            if (total < sizeof(stk_line_buf)) {
+                memcpy(stk_line_buf + stk_line_buf_len, p, line_len);
+                console_write_line(addr2line_cmd, ctx->loaded_binary_path,
+                                   fd, stk_line_buf, total);
+            } else {
+                write(fd, stk_line_buf, stk_line_buf_len);
+                write(fd, p, line_len);
+            }
+            stk_line_buf_len = 0;
+        } else {
+            console_write_line(addr2line_cmd, ctx->loaded_binary_path,
+                               fd, p, line_len);
+        }
+
+        p = nl + 1;
+    }
+
+    return (int)count;
 }
 
 /* ===== Exception handling ===== */
@@ -271,14 +502,21 @@ static void handle_dc_exception(kostool_context_t *ctx, const uint8_t *data,
     fprintf(stderr, "  %-6s 0x%08x\n", "R15", regs[31]);
 
     /* addr2line on valid addresses, or fall back to full register dump */
-    int have_addr2line = ctx->loaded_binary_path && ctx->sh4_addr2line[0] &&
-                         access(ctx->sh4_addr2line, X_OK) == 0 &&
-                         is_elf_file(ctx->loaded_binary_path);
+    if (addr2line_available < 0) {
+        addr2line_available = ctx->loaded_binary_path &&
+                              ctx->sh4_addr2line[0] &&
+                              access(ctx->sh4_addr2line, X_OK) == 0 &&
+                              is_elf_file(ctx->loaded_binary_path);
+#ifndef _WIN32
+        if (addr2line_available)
+            start_addr2line_process(ctx->sh4_addr2line, ctx->loaded_binary_path);
+#endif
+    }
 
-    if (have_addr2line) {
+    if (addr2line_available) {
         for (int i = 0; i < 66; i++) {
             if (regs[i] >= DC_DEFAULT_LOAD_ADDR && regs[i] < DC_RAM_TOP) {
-                char decoded[128];
+                char decoded[256];
                 decode_address(ctx->sh4_addr2line, ctx->loaded_binary_path,
                                regs[i], decoded, sizeof(decoded));
                 if (decoded[0] && decoded[0] != '?')
@@ -298,11 +536,11 @@ static void handle_dc_exception(kostool_context_t *ctx, const uint8_t *data,
                 expt_str, expt_code);
         fprintf(dump, "Registers:\n");
         print_dc_registers(dump, regs);
-        if (have_addr2line) {
+        if (addr2line_available) {
             fprintf(dump, "\nSymbols:\n");
             for (int i = 0; i < 66; i++) {
                 if (regs[i] >= DC_DEFAULT_LOAD_ADDR && regs[i] < DC_RAM_TOP) {
-                    char decoded[128];
+                    char decoded[256];
                     decode_address(ctx->sh4_addr2line, ctx->loaded_binary_path,
                                    regs[i], decoded, sizeof(decoded));
                     if (decoded[0] && decoded[0] != '?')
@@ -352,14 +590,21 @@ static void handle_gc_exception(kostool_context_t *ctx, const uint8_t *data,
     }
 
     /* addr2line on valid addresses, or fall back to full register dump */
-    int have_addr2line = ctx->loaded_binary_path && ctx->ppc_addr2line[0] &&
-                         access(ctx->ppc_addr2line, X_OK) == 0 &&
-                         is_elf_file(ctx->loaded_binary_path);
+    if (addr2line_available < 0) {
+        addr2line_available = ctx->loaded_binary_path &&
+                              ctx->ppc_addr2line[0] &&
+                              access(ctx->ppc_addr2line, X_OK) == 0 &&
+                              is_elf_file(ctx->loaded_binary_path);
+#ifndef _WIN32
+        if (addr2line_available)
+            start_addr2line_process(ctx->ppc_addr2line, ctx->loaded_binary_path);
+#endif
+    }
 
-    if (have_addr2line) {
+    if (addr2line_available) {
         for (int i = 0; i < 40; i++) {
             if (regs[i] >= GC_DEFAULT_LOAD_ADDR && regs[i] < GC_RAM_TOP) {
-                char decoded[128];
+                char decoded[256];
                 decode_address(ctx->ppc_addr2line, ctx->loaded_binary_path,
                                regs[i], decoded, sizeof(decoded));
                 if (decoded[0] && decoded[0] != '?')
@@ -379,11 +624,11 @@ static void handle_gc_exception(kostool_context_t *ctx, const uint8_t *data,
                 expt_str, expt_code);
         fprintf(dump, "Registers:\n");
         print_gc_registers(dump, regs, data);
-        if (have_addr2line) {
+        if (addr2line_available) {
             fprintf(dump, "\nSymbols:\n");
             for (int i = 0; i < 40; i++) {
                 if (regs[i] >= GC_DEFAULT_LOAD_ADDR && regs[i] < GC_RAM_TOP) {
-                    char decoded[128];
+                    char decoded[256];
                     decode_address(ctx->ppc_addr2line, ctx->loaded_binary_path,
                                    regs[i], decoded, sizeof(decoded));
                     if (decoded[0] && decoded[0] != '?')
@@ -611,7 +856,7 @@ static void ser_syscall_write(kostool_context_t *ctx) {
             handle_dc_exception(ctx, data, count);
         ret = (int)count;
     } else {
-        ret = write(fd, data, count);
+        ret = console_write(ctx, fd, data, count);
     }
 
     ser_send_uint(ctx, ret);
@@ -997,7 +1242,7 @@ static void net_syscall_write(kostool_context_t *ctx, uint8_t *pkt) {
             handle_dc_exception(ctx, data, count);
         ret = (int)count;
     } else {
-        ret = write(fd, data, count);
+        ret = console_write(ctx, fd, data, count);
     }
 
     net_send_cmd(ctx, NET_CMD_RETVAL, ret, ret, NULL, 0);
