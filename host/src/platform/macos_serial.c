@@ -71,6 +71,16 @@ static int macos_serial_write(void *handle, const void *buffer, size_t count) {
     return (int)write(s->fd, buffer, count);
 }
 
+static int macos_serial_bytes_available(void *handle) {
+    macos_serial_t *s = handle;
+    int bytes = 0;
+
+    if (ioctl(s->fd, FIONREAD, &bytes) < 0)
+        return -1;
+
+    return bytes;
+}
+
 static int macos_serial_set_speed(void *handle, uint32_t baud) {
     macos_serial_t *s = handle;
     speed_t speed = baud;
@@ -92,6 +102,7 @@ const platform_serial_ops_t macos_serial_ops = {
     .close = macos_serial_close,
     .read = macos_serial_read,
     .write = macos_serial_write,
+    .bytes_available = macos_serial_bytes_available,
     .set_speed = macos_serial_set_speed,
     .flush = macos_serial_flush,
     .drain = macos_serial_drain,

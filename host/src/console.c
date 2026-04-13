@@ -50,6 +50,7 @@ static inline int link(const char *oldpath, const char *newpath) {
 
 #define MAX_PATH_LEN 4096
 #define MAX_SYSCALL_SIZE (32 * 1024 * 1024)  /* 32MB sanity cap for remote malloc */
+#define SERIAL_EXIT_CODE_PROBE_USEC 100000
 
 /* Check if a file starts with ELF magic (\x7fELF).
  * addr2line only works on ELF files, so skip it for .bin/.dol/etc. */
@@ -1303,6 +1304,34 @@ static int ser_syscall_exit(kostool_context_t *ctx) {
     return (int32_t)ser_recv_uint(ctx);
 }
 
+static int ser_try_recv_uint(kostool_context_t *ctx, uint32_t *value,
+                             uint32_t timeout_usec) {
+    uint64_t deadline = 0;
+
+    if (!ctx->serial_ops->bytes_available || !value)
+        return 0;
+
+    if (ctx->time_ops)
+        deadline = ctx->time_ops->time_usec() + timeout_usec;
+
+    while (1) {
+        int available = ctx->serial_ops->bytes_available(ctx->serial_handle);
+
+        if (available >= 4) {
+            *value = ser_recv_uint(ctx);
+            return 1;
+        }
+
+        if (available < 0)
+            return 0;
+
+        if (!ctx->time_ops || ctx->time_ops->time_usec() >= deadline)
+            return 0;
+
+        ctx->time_ops->sleep_usec(1000);
+    }
+}
+
 /* ===== Network console syscall handlers ===== */
 
 static void net_syscall_fstat(kostool_context_t *ctx, uint8_t *pkt) {
@@ -1701,11 +1730,16 @@ static int do_serial_console(kostool_context_t *ctx) {
         ser_blread(ctx, &command, 1);
 
         switch (command) {
-        case SERIAL_SYSCALL_EXIT:
-            /* Byte 0 is not sent by any firmware function — it indicates
-             * a serial line glitch (break condition, SCIF reinitialization
-             * by the loaded program, or baud rate mismatch). Ignore it. */
+        case SERIAL_SYSCALL_EXIT: {
+            uint32_t ret_code = 0;
+
+            if (ser_try_recv_uint(ctx, &ret_code, SERIAL_EXIT_CODE_PROBE_USEC))
+                printf("Program returned %d\n", (int32_t)ret_code);
+
+            gdb_report_program_exit(ctx, (int32_t)ret_code);
+            exit(0);
             break;
+        }
         case SERIAL_SYSCALL_FSTAT:     ser_syscall_fstat(ctx); break;
         case SERIAL_SYSCALL_WRITE:     ser_syscall_write(ctx); break;
         case SERIAL_SYSCALL_READ:      ser_syscall_read(ctx); break;

@@ -88,6 +88,17 @@ static int win_serial_write(void *handle, const void *buffer, size_t count) {
     return (int)bytesWritten;
 }
 
+static int win_serial_bytes_available(void *handle) {
+    win_serial_t *s = handle;
+    COMSTAT stat;
+    DWORD errors = 0;
+
+    if (!ClearCommError(s->hComm, &errors, &stat))
+        return -1;
+
+    return (int)stat.cbInQue;
+}
+
 static int win_serial_set_speed(void *handle, uint32_t baud) {
     win_serial_t *s = handle;
     DCB dcb;
@@ -113,6 +124,7 @@ const platform_serial_ops_t windows_serial_ops = {
     .close = win_serial_close,
     .read = win_serial_read,
     .write = win_serial_write,
+    .bytes_available = win_serial_bytes_available,
     .set_speed = win_serial_set_speed,
     .flush = win_serial_flush,
     .drain = win_serial_drain,

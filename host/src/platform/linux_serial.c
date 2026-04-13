@@ -81,6 +81,16 @@ static int linux_serial_write(void *handle, const void *buffer, size_t count) {
     return (int)write(s->fd, buffer, count);
 }
 
+static int linux_serial_bytes_available(void *handle) {
+    linux_serial_t *s = handle;
+    int bytes = 0;
+
+    if (ioctl(s->fd, FIONREAD, &bytes) < 0)
+        return -1;
+
+    return bytes;
+}
+
 static int linux_serial_set_speed(void *handle, uint32_t baud) {
 #ifdef __linux__
     linux_serial_t *s = handle;
@@ -128,6 +138,7 @@ const platform_serial_ops_t linux_serial_ops = {
     .close = linux_serial_close,
     .read = linux_serial_read,
     .write = linux_serial_write,
+    .bytes_available = linux_serial_bytes_available,
     .set_speed = linux_serial_set_speed,
     .flush = linux_serial_flush,
     .drain = linux_serial_drain,

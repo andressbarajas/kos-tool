@@ -11,6 +11,7 @@ typedef struct platform_serial_ops {
     void  (*close)(void *handle);
     int   (*read)(void *handle, void *buffer, size_t count);
     int   (*write)(void *handle, const void *buffer, size_t count);
+    int   (*bytes_available)(void *handle);
     int   (*set_speed)(void *handle, uint32_t baud);
     void  (*flush)(void *handle);
     void  (*drain)(void *handle);
