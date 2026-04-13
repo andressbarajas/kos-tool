@@ -13,6 +13,7 @@
 #include <stdint.h>
 
 #include <kosload/protocol.h>
+#include <kostool/gdb.h>
 #include <kostool/transport.h>
 #include <kostool/platform.h>
 #include "minilzo.h"
@@ -290,23 +291,16 @@ static void serial_shutdown(kostool_context_t *ctx) {
     }
 
     /* Close GDB socket if started */
-    if (ctx->gdb_enabled && ctx->gdb_client_socket >= 0) {
-        char gdb_buf[] = "+$X0f#ee";
-        ctx->socket_ops->send(ctx->gdb_client_socket, gdb_buf, strlen(gdb_buf));
-        ctx->time_ops->sleep_usec(1000000);
-        ctx->socket_ops->close(ctx->gdb_client_socket);
-        ctx->gdb_client_socket = -1;
-    }
-    if (ctx->gdb_enabled && ctx->gdb_server_socket >= 0) {
-        ctx->socket_ops->close(ctx->gdb_server_socket);
-        ctx->gdb_server_socket = -1;
-    }
+    if (ctx->gdb_enabled)
+        gdb_shutdown(ctx);
 
     if (ctx->serial_handle) {
         ctx->serial_ops->flush(ctx->serial_handle);
         ctx->serial_ops->close(ctx->serial_handle);
         ctx->serial_handle = NULL;
     }
+
+    gdb_socket_runtime_cleanup(ctx);
 }
 
 /*

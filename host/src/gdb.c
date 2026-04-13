@@ -8,17 +8,62 @@
  */
 
 #include <stdio.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 
 #include <kostool/gdb.h>
 #include <kostool/platform.h>
 
-int gdb_init(kostool_context_t *ctx, uint16_t port) {
+int gdb_socket_runtime_init(kostool_context_t *ctx) {
     if (!ctx->socket_ops) {
         fprintf(stderr, "GDB server requires socket operations\n");
         return -1;
     }
+
+    if (!ctx->sockets_initialized) {
+        if (ctx->socket_ops->init && ctx->socket_ops->init() != 0) {
+            fprintf(stderr, "Socket initialization failed\n");
+            return -1;
+        }
+        ctx->sockets_initialized = 1;
+    }
+
+    return 0;
+}
+
+void gdb_socket_runtime_cleanup(kostool_context_t *ctx) {
+    if (ctx->sockets_initialized) {
+        if (ctx->socket_ops && ctx->socket_ops->cleanup)
+            ctx->socket_ops->cleanup();
+        ctx->sockets_initialized = 0;
+    }
+}
+
+int gdb_send_all(kostool_context_t *ctx, int64_t sock, const void *data, size_t len) {
+    const uint8_t *buf = (const uint8_t *)data;
+    size_t sent = 0;
+
+    while (sent < len) {
+        int rv = ctx->socket_ops->send(sock, buf + sent, len - sent);
+        if (rv <= 0)
+            return -1;
+        sent += (size_t)rv;
+    }
+
+    return 0;
+}
+
+void gdb_close_client(kostool_context_t *ctx) {
+    if (ctx->gdb_client_socket >= 0) {
+        ctx->socket_ops->close(ctx->gdb_client_socket);
+        ctx->gdb_client_socket = -1;
+    }
+}
+
+int gdb_init(kostool_context_t *ctx, uint16_t port) {
+    if (gdb_socket_runtime_init(ctx) != 0)
+        return -1;
 
     int64_t sock = ctx->socket_ops->tcp_socket();
     if (sock < 0) {
@@ -26,9 +71,13 @@ int gdb_init(kostool_context_t *ctx, uint16_t port) {
         return -1;
     }
 
+    if (ctx->socket_ops->setsockopt_reuse)
+        ctx->socket_ops->setsockopt_reuse(sock);
+
     if (ctx->socket_ops->bind_listen(sock, port) < 0) {
         fprintf(stderr, "Failed to bind GDB server to port %u\n", port);
         ctx->socket_ops->close(sock);
+        ctx->gdb_server_socket = -1;
         return -1;
     }
 
@@ -40,15 +89,7 @@ int gdb_init(kostool_context_t *ctx, uint16_t port) {
 }
 
 void gdb_shutdown(kostool_context_t *ctx) {
-    if (ctx->gdb_client_socket >= 0) {
-        /* Send SIGTERM to GDB client: +$X0f#ee */
-        const char sigterm[] = "+$X0f#ee";
-        ctx->socket_ops->send(ctx->gdb_client_socket, sigterm, strlen(sigterm));
-        if (ctx->time_ops)
-            ctx->time_ops->sleep_usec(500000);
-        ctx->socket_ops->close(ctx->gdb_client_socket);
-        ctx->gdb_client_socket = -1;
-    }
+    gdb_close_client(ctx);
 
     if (ctx->gdb_server_socket >= 0) {
         ctx->socket_ops->close(ctx->gdb_server_socket);

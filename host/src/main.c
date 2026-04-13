@@ -76,6 +76,11 @@ int main(int argc, char *argv[]) {
     ctx.load_address = DC_DEFAULT_LOAD_ADDR;
     ctx.initial_speed = SERIAL_DEFAULT_SPEED;
     ctx.console_enabled = 1;
+    ctx.socket_fd = -1;
+    ctx.socket_legacy = -1;
+    ctx.global_socket = -1;
+    ctx.gdb_server_socket = -1;
+    ctx.gdb_client_socket = -1;
     ctx.skip_update = 1;
 
     /* Set up platform ops */

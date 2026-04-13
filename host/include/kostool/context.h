@@ -34,6 +34,7 @@ typedef struct kostool_context {
     int64_t socket_fd;
     int64_t socket_legacy;
     int64_t global_socket;
+    int sockets_initialized;
     const char *hostname;
     uint16_t port;
     uint32_t installed_adapter;

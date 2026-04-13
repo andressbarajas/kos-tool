@@ -1667,7 +1667,12 @@ static int do_network_console(kostool_context_t *ctx) {
 int do_console(kostool_context_t *ctx) {
     /* Set up GDB server if requested */
     if (ctx->gdb_enabled) {
-        gdb_init(ctx, NET_GDB_PORT);
+        if (gdb_init(ctx, NET_GDB_PORT) != 0) {
+            fprintf(stderr, "Disabling GDB relay\n");
+            ctx->gdb_enabled = 0;
+            ctx->gdb_server_socket = -1;
+            gdb_close_client(ctx);
+        }
     }
 
     if (ctx->dumb_terminal) {

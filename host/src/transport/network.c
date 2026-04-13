@@ -19,6 +19,7 @@
 #endif
 
 #include <kosload/protocol.h>
+#include <kostool/gdb.h>
 #include <kostool/transport.h>
 #include <kostool/platform.h>
 
@@ -270,9 +271,12 @@ static int network_init(kostool_context_t *ctx) {
     }
 
     /* Initialize socket subsystem (WinSock on Windows, no-op on POSIX) */
-    if (ctx->socket_ops->init && ctx->socket_ops->init() != 0) {
-        fprintf(stderr, "Socket initialization failed\n");
-        return -1;
+    if (!ctx->sockets_initialized) {
+        if (ctx->socket_ops->init && ctx->socket_ops->init() != 0) {
+            fprintf(stderr, "Socket initialization failed\n");
+            return -1;
+        }
+        ctx->sockets_initialized = 1;
     }
 
     /* Parse hostname:port if present */
@@ -330,17 +334,8 @@ static int network_init(kostool_context_t *ctx) {
 
 static void network_shutdown(kostool_context_t *ctx) {
     /* Close GDB sockets */
-    if (ctx->gdb_enabled && ctx->gdb_client_socket >= 0) {
-        char gdb_buf[] = "+$X0f#ee";
-        ctx->socket_ops->send(ctx->gdb_client_socket, gdb_buf, strlen(gdb_buf));
-        ctx->time_ops->sleep_usec(1000000);
-        ctx->socket_ops->close(ctx->gdb_client_socket);
-        ctx->gdb_client_socket = -1;
-    }
-    if (ctx->gdb_enabled && ctx->gdb_server_socket >= 0) {
-        ctx->socket_ops->close(ctx->gdb_server_socket);
-        ctx->gdb_server_socket = -1;
-    }
+    if (ctx->gdb_enabled)
+        gdb_shutdown(ctx);
 
     /* Close main sockets.
      * global_socket aliases either socket_fd or socket_legacy after
@@ -362,8 +357,7 @@ static void network_shutdown(kostool_context_t *ctx) {
         ctx->socket_legacy = -1;
     }
 
-    if (ctx->socket_ops->cleanup)
-        ctx->socket_ops->cleanup();
+    gdb_socket_runtime_cleanup(ctx);
 }
 
 /*
