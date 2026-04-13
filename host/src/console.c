@@ -1139,11 +1139,104 @@ static void ser_syscall_cdfs_read(kostool_context_t *ctx) {
     free(buf);
 }
 
+static void gdb_probe_stream(int *in_packet, int *checksum_bytes,
+                             size_t *payload_len, char *payload,
+                             size_t payload_cap, const char *data, size_t len,
+                             int *saw_detach, int *saw_ok) {
+    size_t i;
+
+    for (i = 0; i < len; ++i) {
+        unsigned char ch = (unsigned char)data[i];
+
+        if (!*in_packet) {
+            if (ch == '$') {
+                *in_packet = 1;
+                *checksum_bytes = 0;
+                *payload_len = 0;
+            }
+            continue;
+        }
+
+        if (ch == '$') {
+            *checksum_bytes = 0;
+            *payload_len = 0;
+            continue;
+        }
+
+        if (*checksum_bytes) {
+            if (++(*checksum_bytes) == 3) {
+                payload[*payload_len] = '\0';
+
+                if (saw_detach &&
+                    payload[0] == 'D' &&
+                    (payload[1] == '\0' || payload[1] == ';')) {
+                    *saw_detach = 1;
+                }
+
+                if (saw_ok && payload[0] == 'O' && payload[1] == 'K' &&
+                    payload[2] == '\0') {
+                    *saw_ok = 1;
+                }
+
+                *in_packet = 0;
+                *checksum_bytes = 0;
+                *payload_len = 0;
+            }
+            continue;
+        }
+
+        if (ch == '#') {
+            *checksum_bytes = 1;
+            continue;
+        }
+
+        if (*payload_len + 1 < payload_cap)
+            payload[(*payload_len)++] = (char)ch;
+    }
+}
+
+static void gdb_note_client_bytes(kostool_context_t *ctx, const char *data, size_t len) {
+    int saw_detach = 0;
+
+    gdb_probe_stream(&ctx->gdb_client_probe.in_packet,
+                     &ctx->gdb_client_probe.checksum_bytes,
+                     &ctx->gdb_client_probe.payload_len,
+                     ctx->gdb_client_probe.payload,
+                     sizeof(ctx->gdb_client_probe.payload),
+                     data, len, &saw_detach, NULL);
+
+    if (saw_detach)
+        ctx->gdb_detach_pending = 1;
+}
+
+static int gdb_note_target_bytes(kostool_context_t *ctx, const char *data, size_t len) {
+    int saw_ok = 0;
+
+    if (!ctx->gdb_detach_pending)
+        return 0;
+
+    gdb_probe_stream(&ctx->gdb_target_probe.in_packet,
+                     &ctx->gdb_target_probe.checksum_bytes,
+                     &ctx->gdb_target_probe.payload_len,
+                     ctx->gdb_target_probe.payload,
+                     sizeof(ctx->gdb_target_probe.payload),
+                     data, len, NULL, &saw_ok);
+
+    return saw_ok;
+}
+
+static void gdb_clear_detach_state(kostool_context_t *ctx) {
+    ctx->gdb_detach_pending = 0;
+    memset(&ctx->gdb_client_probe, 0, sizeof(ctx->gdb_client_probe));
+    memset(&ctx->gdb_target_probe, 0, sizeof(ctx->gdb_target_probe));
+}
+
 static void ser_syscall_gdbpacket(kostool_context_t *ctx) {
     uint32_t in_size = ser_recv_uint(ctx);
     uint32_t out_size = ser_recv_uint(ctx);
     static char gdb_buf[1024];
     int retval = 0;
+    int close_after_reply = 0;
 
     if (in_size)
         ser_recv_data(ctx, gdb_buf, in_size > 1024 ? 1024 : in_size);
@@ -1153,10 +1246,10 @@ static void ser_syscall_gdbpacket(kostool_context_t *ctx) {
         return;
     }
 
-    if (ctx->gdb_client_socket <= 0) {
+    if (ctx->gdb_client_socket < 0) {
         printf("waiting for gdb client connection...\n");
         ctx->gdb_client_socket = ctx->socket_ops->accept(ctx->gdb_server_socket);
-        if (ctx->gdb_client_socket <= 0) {
+        if (ctx->gdb_client_socket < 0) {
             fprintf(stderr, "error accepting gdb connection\n");
             ser_send_uint(ctx, (uint32_t)-1);
             return;
@@ -1164,22 +1257,43 @@ static void ser_syscall_gdbpacket(kostool_context_t *ctx) {
         printf("GDB client connected\n");
     }
 
-    if (in_size)
-        ctx->socket_ops->send(ctx->gdb_client_socket, gdb_buf, in_size);
+    if (in_size) {
+        close_after_reply = gdb_note_target_bytes(ctx, gdb_buf, in_size);
+
+        if (gdb_send_all(ctx, ctx->gdb_client_socket, gdb_buf, in_size) < 0) {
+            fprintf(stderr, "GDB socket error\n");
+            gdb_close_client(ctx);
+            gdb_clear_detach_state(ctx);
+            retval = 0;
+            ser_send_uint(ctx, (uint32_t)retval);
+            return;
+        }
+    }
 
     if (out_size) {
         retval = ctx->socket_ops->recv(ctx->gdb_client_socket,
                                        gdb_buf, out_size > 1024 ? 1024 : out_size);
         if (retval == 0) {
             printf("GDB client disconnected\n");
-            ctx->socket_ops->close(ctx->gdb_client_socket);
-            ctx->gdb_client_socket = -1;
+            gdb_close_client(ctx);
+            gdb_clear_detach_state(ctx);
         }
+        else if (retval > 0)
+            gdb_note_client_bytes(ctx, gdb_buf, (size_t)retval);
     }
     if (retval < 0) {
         fprintf(stderr, "GDB socket error\n");
-        return;
+        gdb_close_client(ctx);
+        gdb_clear_detach_state(ctx);
+        retval = 0;
     }
+
+    if (close_after_reply) {
+        printf("GDB client detached\n");
+        gdb_close_client(ctx);
+        gdb_clear_detach_state(ctx);
+    }
+
     ser_send_uint(ctx, retval);
     if (retval > 0)
         ser_send_data(ctx, (const uint8_t *)gdb_buf, retval);
@@ -1497,16 +1611,17 @@ static void net_syscall_gdbpacket(kostool_context_t *ctx, uint8_t *pkt) {
     uint32_t out_size = ntohl(cmd->value1);
     static char gdb_buf[1024];
     int retval = 0;
+    int close_after_reply = 0;
 
     if (ctx->gdb_server_socket < 0) {
         net_send_cmd(ctx, NET_CMD_RETVAL, (uint32_t)-1, (uint32_t)-1, NULL, 0);
         return;
     }
 
-    if (ctx->gdb_client_socket <= 0) {
+    if (ctx->gdb_client_socket < 0) {
         printf("waiting for gdb client connection...\n");
         ctx->gdb_client_socket = ctx->socket_ops->accept(ctx->gdb_server_socket);
-        if (ctx->gdb_client_socket <= 0) {
+        if (ctx->gdb_client_socket < 0) {
             fprintf(stderr, "error accepting gdb connection\n");
             net_send_cmd(ctx, NET_CMD_RETVAL, (uint32_t)-1, (uint32_t)-1, NULL, 0);
             return;
@@ -1514,19 +1629,42 @@ static void net_syscall_gdbpacket(kostool_context_t *ctx, uint8_t *pkt) {
         printf("GDB client connected\n");
     }
 
-    if (in_size)
-        ctx->socket_ops->send(ctx->gdb_client_socket, cmd->string, in_size);
+    if (in_size) {
+        close_after_reply = gdb_note_target_bytes(ctx, cmd->string, in_size);
+
+        if (gdb_send_all(ctx, ctx->gdb_client_socket, cmd->string, in_size) < 0) {
+            fprintf(stderr, "GDB socket error\n");
+            gdb_close_client(ctx);
+            gdb_clear_detach_state(ctx);
+            net_send_cmd(ctx, NET_CMD_RETVAL, 0, 0, NULL, 0);
+            return;
+        }
+    }
 
     if (out_size) {
         retval = ctx->socket_ops->recv(ctx->gdb_client_socket,
                                        gdb_buf, out_size > 1024 ? 1024 : out_size);
         if (retval == 0) {
             printf("GDB client disconnected\n");
-            ctx->socket_ops->close(ctx->gdb_client_socket);
-            ctx->gdb_client_socket = -1;
+            gdb_close_client(ctx);
+            gdb_clear_detach_state(ctx);
         }
+        else if (retval > 0)
+            gdb_note_client_bytes(ctx, gdb_buf, (size_t)retval);
     }
-    if (retval < 0) retval = 0;
+    if (retval < 0) {
+        fprintf(stderr, "GDB socket error\n");
+        gdb_close_client(ctx);
+        gdb_clear_detach_state(ctx);
+        retval = 0;
+    }
+
+    if (close_after_reply) {
+        printf("GDB client detached\n");
+        gdb_close_client(ctx);
+        gdb_clear_detach_state(ctx);
+    }
+
     net_send_cmd(ctx, NET_CMD_RETVAL, retval, retval,
                  (const uint8_t *)gdb_buf, retval);
 }

@@ -2,6 +2,7 @@
 #ifndef KOSTOOL_CONTEXT_H
 #define KOSTOOL_CONTEXT_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 /* Forward declarations — full definitions in their respective headers */
@@ -48,6 +49,19 @@ typedef struct kostool_context {
     int gdb_enabled;
     int64_t gdb_server_socket;
     int64_t gdb_client_socket;
+    int gdb_detach_pending;
+    struct {
+        int in_packet;
+        int checksum_bytes;
+        size_t payload_len;
+        char payload[32];
+    } gdb_client_probe;
+    struct {
+        int in_packet;
+        int checksum_bytes;
+        size_t payload_len;
+        char payload[32];
+    } gdb_target_probe;
 
     /* CDFS state */
     int cdfs_enabled;
