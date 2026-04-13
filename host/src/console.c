@@ -1730,13 +1730,16 @@ static int do_serial_console(kostool_context_t *ctx) {
         case SERIAL_SYSCALL_GDBPACKET: ser_syscall_gdbpacket(ctx); break;
         case SERIAL_SYSCALL_REWINDDIR: ser_syscall_rewinddir(ctx); break;
         case SERIAL_SYSCALL_MKDIR:     ser_syscall_mkdir(ctx); break;
-        case SERIAL_SYSCALL_PROGEXIT:
-            printf("Program returned %d\n", ser_syscall_exit(ctx));
+        case SERIAL_SYSCALL_PROGEXIT: {
+            int32_t ret_code = ser_syscall_exit(ctx);
+            printf("Program returned %d\n", ret_code);
+            gdb_report_program_exit(ctx, ret_code);
             exit(0);
+        }
         default:
             printf("Unimplemented command (%d)\n", command);
             printf("Assuming program has exited\n");
-            exit(0);
+            exit(-1);
         }
     }
 }
@@ -1769,6 +1772,7 @@ static int do_network_console(kostool_context_t *ctx) {
             net_command_t *exit_cmd = (net_command_t *)buffer;
             int32_t ret_code = (int32_t)ntohl(exit_cmd->address);
             printf("Program returned %d\n", ret_code);
+            gdb_report_program_exit(ctx, ret_code);
             return 0;
         }
         if (!memcmp(buffer, NET_SYSCALL_FSTAT, 4))      net_syscall_fstat(ctx, buffer);

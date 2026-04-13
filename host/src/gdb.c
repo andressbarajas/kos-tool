@@ -61,6 +61,23 @@ void gdb_close_client(kostool_context_t *ctx) {
     }
 }
 
+void gdb_report_program_exit(kostool_context_t *ctx, int exit_code) {
+    if (ctx->gdb_client_socket >= 0) {
+        char payload[4];
+        char packet[8];
+        unsigned char checksum = 0;
+
+        snprintf(payload, sizeof(payload), "W%02x", exit_code & 0xff);
+
+        for (size_t i = 0; payload[i] != '\0'; ++i)
+            checksum = (unsigned char)(checksum + (unsigned char)payload[i]);
+
+        snprintf(packet, sizeof(packet), "$%s#%02x", payload, checksum);
+        gdb_send_all(ctx, ctx->gdb_client_socket, packet, strlen(packet));
+        gdb_close_client(ctx);
+    }
+}
+
 int gdb_init(kostool_context_t *ctx, uint16_t port) {
     if (gdb_socket_runtime_init(ctx) != 0)
         return -1;

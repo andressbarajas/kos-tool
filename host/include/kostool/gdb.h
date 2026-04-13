@@ -18,6 +18,9 @@ int gdb_send_all(kostool_context_t *ctx, int64_t sock, const void *data, size_t 
 /* Close the active GDB client connection, if any. */
 void gdb_close_client(kostool_context_t *ctx);
 
+/* Report a normal program exit to the GDB client, then close the connection. */
+void gdb_report_program_exit(kostool_context_t *ctx, int exit_code);
+
 /* Shut down the GDB server */
 void gdb_shutdown(kostool_context_t *ctx);
 
