@@ -63,7 +63,8 @@ static void usage(void) {
     printf("  -f           Fast mode (no FIFO delays)\n");
     printf("  -w           Sync console RTC to host time\n");
     printf("  -U <file>    Update firmware from external file\n");
-    printf("  -N           Skip automatic firmware update\n");
+    printf("  -F           Enable automatic firmware update\n");
+    printf("  -N           Disable automatic firmware update (default)\n");
     printf("  -h           Show this help\n\n");
 }
 
@@ -75,6 +76,7 @@ int main(int argc, char *argv[]) {
     ctx.load_address = DC_DEFAULT_LOAD_ADDR;
     ctx.initial_speed = SERIAL_DEFAULT_SPEED;
     ctx.console_enabled = 1;
+    ctx.skip_update = 1;
 
     /* Set up platform ops */
     ctx.serial_ops = platform_get_serial_ops();
@@ -184,6 +186,9 @@ int main(int argc, char *argv[]) {
         case 'U':
             if (++i < argc) ctx.firmware_path = argv[i];
             break;
+        case 'F':
+            ctx.skip_update = 0;
+            break;
         case 'N':
             ctx.skip_update = 1;
             break;
@@ -266,7 +271,7 @@ int main(int argc, char *argv[]) {
     ctx.target_big_endian = (strncmp(ctx.remote_version_string, "gc-load-", 8) == 0 ||
                              strncmp(ctx.remote_version_string, "gcload-", 7) == 0);
 
-    /* Auto-update firmware if needed */
+    /* Firmware update if requested */
     if (!ctx.skip_update || ctx.firmware_path) {
         int updated = auto_update_firmware(&ctx);
         if (updated < 0) {

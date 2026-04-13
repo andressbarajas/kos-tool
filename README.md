@@ -31,9 +31,9 @@
 * **Shared client code** — common client logic (main loop, screensaver, exception handler, CDFS, syscall table) is shared across all four firmware variants via a platform abstraction layer (`target_ops_t`)
 * **Unified build system** — one `make` builds everything: DC firmware, GC firmware, host tool, examples, and disc images
 
-### Automatic Firmware Update
+### Firmware Update
 * **Embedded firmware** — all four client firmware binaries (DC serial, DC IP, GC serial, GC IP) are embedded directly in the `kos-tool` host binary
-* **Auto-update on connect** — when `kos-tool` connects to a console running an older (or legacy dcload) firmware, it automatically uploads and installs the new firmware via architecture-specific trampolines (SH4 and PPC)
+* **Opt-in auto-update** — with `-F`, when `kos-tool` connects to a console running an older (or legacy dcload) firmware, it uploads and installs the new firmware via architecture-specific trampolines (SH4 and PPC)
 * **IP config preservation** — during network firmware updates, DHCP/static IP settings are detected and patched into the new firmware so the console stays reachable
 * **Legacy dcload compatibility** — auto-update works on consoles still running the original `dcload-serial` or `dcload-ip`, upgrading them in-place
 * **Manual update** — `-U <file>` flag for updating from an external firmware binary
@@ -175,7 +175,8 @@ Options:
   -f           Fast mode (no FIFO delays)
   -w           Sync console RTC to host time
   -U <file>    Update firmware from external file
-  -N           Skip automatic firmware update
+  -F           Enable automatic firmware update
+  -N           Disable automatic firmware update (default)
   -A [prefix]  Decode addresses via addr2line
 ```
 

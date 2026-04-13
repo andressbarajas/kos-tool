@@ -553,7 +553,7 @@ int auto_update_firmware(kostool_context_t *ctx) {
     if (fw_size == 0)
         return 0;
 
-    /* Skip if -N flag */
+    /* Skip embedded auto-update when it is disabled */
     if (ctx->skip_update)
         return 0;
 
