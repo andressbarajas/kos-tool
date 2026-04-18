@@ -14,6 +14,7 @@
 #include <kostool/discover.h>
 #include <kostool/firmware.h>
 #include <kostool/config.h>
+#include <kostool/gdb.h>
 
 /* Forward declarations */
 uint32_t upload(kostool_context_t *ctx, const char *filename, uint32_t address);
@@ -64,7 +65,6 @@ static void usage(void) {
     printf("  -w           Sync console RTC to host time\n");
     printf("  -U <file>    Update firmware from external file\n");
     printf("  -F           Enable automatic firmware update\n");
-    printf("  -N           Disable automatic firmware update (default)\n");
     printf("  -h           Show this help\n\n");
 }
 
@@ -194,9 +194,6 @@ int main(int argc, char *argv[]) {
         case 'F':
             ctx.skip_update = 0;
             break;
-        case 'N':
-            ctx.skip_update = 1;
-            break;
         case 'h':
             usage();
             return 0;
@@ -314,6 +311,12 @@ int main(int argc, char *argv[]) {
         ctx.load_address = upload(&ctx, filename, ctx.load_address);
         if (ctx.load_address == 0) { ret = 1; break; }
         ctx.loaded_binary_path = filename;
+        if (ctx.gdb_enabled && (ctx.console_enabled || ctx.dumb_terminal)) {
+            if (gdb_init(&ctx, NET_GDB_PORT) != 0) {
+                ret = 1;
+                break;
+            }
+        }
         ret = execute_command(&ctx, ctx.load_address);
         if (ret == 0 && (ctx.console_enabled || ctx.dumb_terminal))
             ret = do_console(&ctx);

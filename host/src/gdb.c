@@ -12,8 +12,31 @@
 #include <stdint.h>
 #include <string.h>
 
+#ifdef _WIN32
+#include <winsock2.h>
+#else
+#include <errno.h>
+#endif
+
 #include <kostool/gdb.h>
 #include <kostool/platform.h>
+
+static int gdb_bind_failed_port_in_use(void) {
+#ifdef _WIN32
+    return WSAGetLastError() == WSAEADDRINUSE;
+#else
+    return errno == EADDRINUSE;
+#endif
+}
+
+static void gdb_print_bind_failure_hint(uint16_t port) {
+    fprintf(stderr, "GDB relay port %u is already in use; aborting\n", port);
+#ifdef _WIN32
+    fprintf(stderr, "Check which process owns it with: netstat -ano | findstr :%u\n", port);
+#else
+    fprintf(stderr, "Check which process owns it with: lsof -nP -iTCP:%u -sTCP:LISTEN\n", port);
+#endif
+}
 
 int gdb_socket_runtime_init(kostool_context_t *ctx) {
     if (!ctx->socket_ops) {
@@ -92,7 +115,10 @@ int gdb_init(kostool_context_t *ctx, uint16_t port) {
         ctx->socket_ops->setsockopt_reuse(sock);
 
     if (ctx->socket_ops->bind_listen(sock, port) < 0) {
-        fprintf(stderr, "Failed to bind GDB server to port %u\n", port);
+        if (gdb_bind_failed_port_in_use())
+            gdb_print_bind_failure_hint(port);
+        else
+            fprintf(stderr, "Failed to bind GDB server to port %u\n", port);
         ctx->socket_ops->close(sock);
         ctx->gdb_server_socket = -1;
         return -1;
