@@ -22,6 +22,68 @@ int download(kostool_context_t *ctx, const char *filename, uint32_t address, uin
 int execute_command(kostool_context_t *ctx, uint32_t address);
 int do_console(kostool_context_t *ctx);
 
+static double diag_ms(uint64_t usec) {
+    return (double)usec / 1000.0;
+}
+
+static double diag_mib_per_sec(uint64_t bytes, uint64_t usec) {
+    if (usec == 0)
+        return 0.0;
+    return ((double)bytes * 1000000.0) / ((double)usec * 1024.0 * 1024.0);
+}
+
+static void diag_phase(kostool_context_t *ctx, const char *label,
+                       uint64_t usec) {
+    if (ctx->diagnostics_enabled)
+        printf("[diag] %s: %.3f ms\n", label, diag_ms(usec));
+}
+
+static void diag_summary(kostool_context_t *ctx) {
+    if (!ctx->diagnostics_enabled)
+        return;
+
+    printf("[diag] total elapsed: %.3f ms\n",
+           diag_ms(ctx->time_ops->time_usec() - ctx->diagnostics_start_usec));
+
+    if (ctx->diagnostics_uploaded_bytes) {
+        printf("[diag] uploaded: %llu bytes in %u sections\n",
+               (unsigned long long)ctx->diagnostics_uploaded_bytes,
+               ctx->diagnostics_upload_sections);
+    }
+
+    if (ctx->diagnostics_downloaded_bytes) {
+        printf("[diag] downloaded: %llu bytes\n",
+               (unsigned long long)ctx->diagnostics_downloaded_bytes);
+    }
+
+    if (ctx->diagnostics_net_send_bytes) {
+        printf("[diag] aggregate network RX-on-target: %.2f MiB/s stream, %.2f MiB/s effective\n",
+               diag_mib_per_sec(ctx->diagnostics_net_send_bytes,
+                                ctx->diagnostics_net_send_stream_usec),
+               diag_mib_per_sec(ctx->diagnostics_net_send_bytes,
+                                ctx->diagnostics_net_send_total_usec));
+    }
+
+    if (ctx->diagnostics_net_recv_bytes) {
+        printf("[diag] aggregate network TX-from-target: %.2f MiB/s stream, %.2f MiB/s effective\n",
+               diag_mib_per_sec(ctx->diagnostics_net_recv_bytes,
+                                ctx->diagnostics_net_recv_stream_usec),
+               diag_mib_per_sec(ctx->diagnostics_net_recv_bytes,
+                                ctx->diagnostics_net_recv_total_usec));
+    }
+
+    if (ctx->diagnostics_net_retransmitted_bytes ||
+        ctx->diagnostics_net_recovery_requests ||
+        ctx->diagnostics_net_loadbin_retries ||
+        ctx->diagnostics_net_recv_rerequests) {
+        printf("[diag] recovery: %llu retransmitted bytes, %u upload requests, %u LOADBIN retries, %u download rerequests\n",
+               (unsigned long long)ctx->diagnostics_net_retransmitted_bytes,
+               ctx->diagnostics_net_recovery_requests,
+               ctx->diagnostics_net_loadbin_retries,
+               ctx->diagnostics_net_recv_rerequests);
+    }
+}
+
 /* Detect serial device patterns across platforms */
 static int is_serial_device(const char *name) {
     if (!name) return 0;
@@ -62,6 +124,7 @@ static void usage(void) {
     printf("  -E           Use external clock\n");
     printf("  -l           Force legacy 1024-byte payloads\n");
     printf("  -f           Fast mode (no FIFO delays)\n");
+    printf("  -P, --diag   Print performance diagnostics\n");
     printf("  -w           Sync console RTC to host time\n");
     printf("  -U <file>    Update firmware from external file\n");
     printf("  -F           Enable automatic firmware update\n");
@@ -89,6 +152,8 @@ int main(int argc, char *argv[]) {
     ctx.fs_ops = platform_get_fs_ops();
     ctx.time_ops = platform_get_time_ops();
 
+    uint64_t diagnostics_start_usec = ctx.time_ops->time_usec();
+
     /* Load config file (sets addr2line defaults) */
     config_load(&ctx);
 
@@ -109,6 +174,12 @@ int main(int argc, char *argv[]) {
             /* -- separator: everything after this is program arguments */
             prog_args_start = i + 1;
             break;
+        }
+        if (strcmp(argv[i], "--diag") == 0 ||
+            strcmp(argv[i], "--diagnostics") == 0 ||
+            strcmp(argv[i], "--perf") == 0) {
+            ctx.diagnostics_enabled = 1;
+            continue;
         }
         switch (argv[i][1]) {
         case 'T':
@@ -185,6 +256,9 @@ int main(int argc, char *argv[]) {
             ctx.fast_mode = 1;
             printf("Enabling fast transfer mode\n");
             break;
+        case 'P':
+            ctx.diagnostics_enabled = 1;
+            break;
         case 'w':
             ctx.rtc_sync = 1;
             break;
@@ -202,6 +276,11 @@ int main(int argc, char *argv[]) {
             usage();
             return 1;
         }
+    }
+
+    if (ctx.diagnostics_enabled) {
+        ctx.diagnostics_start_usec = diagnostics_start_usec;
+        printf("[diag] performance diagnostics enabled\n");
     }
 
     /* Build program command line from args after -- */
@@ -264,9 +343,16 @@ int main(int argc, char *argv[]) {
     }
 
     /* Initialize transport */
+    uint64_t phase_start = ctx.time_ops->time_usec();
     if (ctx.transport->init(&ctx) != 0) {
         fprintf(stderr, "Failed to initialize %s transport\n", ctx.transport->name);
         return 1;
+    }
+    diag_phase(&ctx, "transport init", ctx.time_ops->time_usec() - phase_start);
+    if (ctx.diagnostics_enabled && strcmp(ctx.transport->name, "network") == 0) {
+        printf("[diag] network: adapter=0x%04x legacy=%d fast=%d fifo_delay=%u us/%u packets\n",
+               ctx.installed_adapter, ctx.legacy_mode, ctx.fast_mode,
+               ctx.rx_fifo_delay, ctx.rx_fifo_delay_count);
     }
 
     /* Detect target endianness from version string (gc-load = BE, dc-load = LE) */
@@ -275,7 +361,9 @@ int main(int argc, char *argv[]) {
 
     /* Firmware update if requested */
     if (!ctx.skip_update || ctx.firmware_path) {
+        phase_start = ctx.time_ops->time_usec();
         int updated = auto_update_firmware(&ctx);
+        diag_phase(&ctx, "firmware update check", ctx.time_ops->time_usec() - phase_start);
         if (updated < 0) {
             fprintf(stderr, "Firmware update failed\n");
             ctx.transport->shutdown(&ctx);
@@ -301,7 +389,9 @@ int main(int argc, char *argv[]) {
         time_t now = time(NULL);
         struct tm *lt = localtime(&now);
         time_t local_time = now + lt->tm_gmtoff;
+        phase_start = ctx.time_ops->time_usec();
         ctx.transport->set_rtc(&ctx, (uint32_t)local_time);
+        diag_phase(&ctx, "RTC sync", ctx.time_ops->time_usec() - phase_start);
     }
 
     int ret = 0;
@@ -312,14 +402,24 @@ int main(int argc, char *argv[]) {
         if (ctx.load_address == 0) { ret = 1; break; }
         ctx.loaded_binary_path = filename;
         if (ctx.gdb_enabled && (ctx.console_enabled || ctx.dumb_terminal)) {
+            phase_start = ctx.time_ops->time_usec();
             if (gdb_init(&ctx, NET_GDB_PORT) != 0) {
                 ret = 1;
                 break;
             }
+            diag_phase(&ctx, "GDB relay init", ctx.time_ops->time_usec() - phase_start);
         }
+        phase_start = ctx.time_ops->time_usec();
         ret = execute_command(&ctx, ctx.load_address);
-        if (ret == 0 && (ctx.console_enabled || ctx.dumb_terminal))
+        diag_phase(&ctx, "execute command", ctx.time_ops->time_usec() - phase_start);
+        if (ret == 0 && (ctx.console_enabled || ctx.dumb_terminal)) {
+            if (ctx.diagnostics_enabled)
+                printf("[diag] entering console at %.3f ms\n",
+                       diag_ms(ctx.time_ops->time_usec() - ctx.diagnostics_start_usec));
+            phase_start = ctx.time_ops->time_usec();
             ret = do_console(&ctx);
+            diag_phase(&ctx, "console session", ctx.time_ops->time_usec() - phase_start);
+        }
         break;
     case 'u':
         if (!filename) { fprintf(stderr, "No filename specified\n"); ret = 1; break; }
@@ -332,7 +432,9 @@ int main(int argc, char *argv[]) {
             ret = 1;
             break;
         }
+        phase_start = ctx.time_ops->time_usec();
         ret = download(&ctx, filename, ctx.load_address, ctx.download_size);
+        diag_phase(&ctx, "download command", ctx.time_ops->time_usec() - phase_start);
         break;
     case 'r':
         if (ctx.transport->reset)
@@ -346,6 +448,10 @@ int main(int argc, char *argv[]) {
         break;
     }
 
+    diag_summary(&ctx);
+
+    phase_start = ctx.time_ops->time_usec();
     ctx.transport->shutdown(&ctx);
+    diag_phase(&ctx, "transport shutdown", ctx.time_ops->time_usec() - phase_start);
     return ret;
 }

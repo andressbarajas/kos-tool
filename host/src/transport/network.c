@@ -58,6 +58,16 @@
 /* Uncomment to enable per-transfer statistics output */
 // #define NET_TRANSFER_STATS
 
+static double diag_ms(uint64_t usec) {
+    return (double)usec / 1000.0;
+}
+
+static double diag_mib_per_sec(uint64_t bytes, uint64_t usec) {
+    if (usec == 0)
+        return 0.0;
+    return ((double)bytes * 1000000.0) / ((double)usec * 1024.0 * 1024.0);
+}
+
 /* ===== Low-level UDP helpers ===== */
 
 /*
@@ -376,10 +386,23 @@ static void network_shutdown(kostool_context_t *ctx) {
 static int network_send_data(kostool_context_t *ctx, const uint8_t *data,
                              uint32_t dest_addr, uint32_t size) {
     uint8_t buffer[2048];
+    uint64_t diag_total_start = 0;
+    uint64_t diag_loadbin_done = 0;
+    uint64_t diag_stream_start = 0;
+    uint64_t diag_stream_end = 0;
+    uint64_t diag_pacing_wait = 0;
+    uint64_t diag_post_stream_wait = 0;
+    uint32_t diag_total_chunks = 0;
+    uint32_t diag_recovery_requests = 0;
+    uint32_t diag_retransmitted_bytes = 0;
+    uint32_t diag_loadbin_retries = 0;
 
     if (!size) return -1;
 
     prepare_comms(ctx);
+
+    if (ctx->diagnostics_enabled)
+        diag_total_start = ctx->time_ops->time_usec();
 
 #ifdef NET_TRANSFER_STATS
     uint32_t stat_total_chunks = 0;
@@ -395,6 +418,8 @@ static int network_send_data(kostool_context_t *ctx, const uint8_t *data,
         fprintf(stderr, "send_data: LOADBIN failed, giving up\n");
         return -1;
     }
+    if (ctx->diagnostics_enabled)
+        diag_loadbin_done = ctx->time_ops->time_usec();
 
     /* Send data in chunks with adaptive pacing */
     uint32_t chunk_size = ctx->legacy_mode ? NET_LEGACY_PAYLOAD_SIZE : NET_PAYLOAD_SIZE;
@@ -402,6 +427,7 @@ static int network_send_data(kostool_context_t *ctx, const uint8_t *data,
     uint32_t current_fifo_delay = ctx->rx_fifo_delay;
 
     uint32_t num_chunks = (size + chunk_size - 1) / chunk_size;
+    diag_total_chunks = num_chunks;
 #ifdef NET_TRANSFER_STATS
     stat_total_chunks = num_chunks;
 #endif
@@ -411,6 +437,9 @@ static int network_send_data(kostool_context_t *ctx, const uint8_t *data,
     int auto_fast = (num_chunks <= AUTO_FAST_CHUNK_THRESHOLD);
     if (auto_fast)
         current_fifo_delay = 0;
+
+    if (ctx->diagnostics_enabled)
+        diag_stream_start = ctx->time_ops->time_usec();
 
     for (uint32_t offset = 0; offset < size; offset += chunk_size) {
         uint32_t remaining = size - offset;
@@ -425,15 +454,21 @@ static int network_send_data(kostool_context_t *ctx, const uint8_t *data,
             uint64_t start = ctx->time_ops->time_usec();
             while ((ctx->time_ops->time_usec() - start) < current_fifo_delay)
                 ;
+            if (ctx->diagnostics_enabled)
+                diag_pacing_wait += ctx->time_ops->time_usec() - start;
             pacing_count = 0;
         }
     }
+    if (ctx->diagnostics_enabled)
+        diag_stream_end = ctx->time_ops->time_usec();
 
     /* Brief delay before DONEBIN to ensure data packets are sent */
     if (!ctx->fast_mode && !auto_fast) {
         uint64_t start = ctx->time_ops->time_usec();
         while ((ctx->time_ops->time_usec() - start) < NET_PACKET_TIMEOUT_USEC / 10)
             ;
+        if (ctx->diagnostics_enabled)
+            diag_post_stream_wait += ctx->time_ops->time_usec() - start;
     }
 
     /* Send DONEBIN and handle packet recovery with retry limit */
@@ -450,6 +485,8 @@ static int network_send_data(kostool_context_t *ctx, const uint8_t *data,
         stat_loadbin_retries++;
         stat_retransmitted_bytes += size;
 #endif
+        diag_loadbin_retries++;
+        diag_retransmitted_bytes += size;
 
         if (send_and_wait(ctx, NET_CMD_LOADBIN, dest_addr, size, NULL, 0,
                           buffer, sizeof(buffer), NET_CMD_LOADBIN) != 0) {
@@ -469,6 +506,8 @@ static int network_send_data(kostool_context_t *ctx, const uint8_t *data,
                 uint64_t start = ctx->time_ops->time_usec();
                 while ((ctx->time_ops->time_usec() - start) < current_fifo_delay)
                     ;
+                if (ctx->diagnostics_enabled)
+                    diag_pacing_wait += ctx->time_ops->time_usec() - start;
                 pacing_count = 0;
             }
         }
@@ -477,6 +516,8 @@ static int network_send_data(kostool_context_t *ctx, const uint8_t *data,
             uint64_t start = ctx->time_ops->time_usec();
             while ((ctx->time_ops->time_usec() - start) < NET_PACKET_TIMEOUT_USEC / 10)
                 ;
+            if (ctx->diagnostics_enabled)
+                diag_post_stream_wait += ctx->time_ops->time_usec() - start;
         }
 
         if (send_and_wait(ctx, NET_CMD_DONEBIN, 0, 0, NULL, 0,
@@ -518,6 +559,8 @@ static int network_send_data(kostool_context_t *ctx, const uint8_t *data,
         stat_recovery_rounds++;
         stat_retransmitted_bytes += miss_size;
 #endif
+        diag_recovery_requests++;
+        diag_retransmitted_bytes += miss_size;
 
         if (send_and_wait(ctx, NET_CMD_DONEBIN, 0, 0, NULL, 0,
                           buffer, sizeof(buffer), NET_CMD_DONEBIN) != 0) {
@@ -526,6 +569,7 @@ static int network_send_data(kostool_context_t *ctx, const uint8_t *data,
 #ifdef NET_TRANSFER_STATS
             stat_loadbin_retries++;
 #endif
+            diag_loadbin_retries++;
             if (loadbin_retries > 3) {
                 fprintf(stderr, "send_data: too many LOADBIN retries during recovery, giving up\n");
                 return -1;
@@ -562,6 +606,38 @@ static int network_send_data(kostool_context_t *ctx, const uint8_t *data,
         printf("  LOADBIN retries: %u\n", stat_loadbin_retries);
 #endif
 
+    if (ctx->diagnostics_enabled) {
+        uint64_t diag_total_usec = ctx->time_ops->time_usec() - diag_total_start;
+        uint64_t diag_loadbin_usec = diag_loadbin_done - diag_total_start;
+        uint64_t diag_stream_usec = diag_stream_end - diag_stream_start;
+        uint64_t diag_done_usec = diag_total_usec - diag_loadbin_usec - diag_stream_usec;
+
+        ctx->diagnostics_net_send_bytes += size;
+        ctx->diagnostics_net_send_stream_usec += diag_stream_usec;
+        ctx->diagnostics_net_send_total_usec += diag_total_usec;
+        ctx->diagnostics_net_retransmitted_bytes += diag_retransmitted_bytes;
+        ctx->diagnostics_net_recovery_requests += diag_recovery_requests;
+        ctx->diagnostics_net_loadbin_retries += diag_loadbin_retries;
+
+        printf("[diag] network upload section 0x%08x: %u bytes, %u chunks x %u, auto_fast=%d\n",
+               dest_addr, size, diag_total_chunks, chunk_size, auto_fast);
+        printf("[diag]   steady stream: %.3f ms, %.2f MiB/s, pacing %.3f ms, post-wait %.3f ms\n",
+               diag_ms(diag_stream_usec),
+               diag_mib_per_sec(size, diag_stream_usec),
+               diag_ms(diag_pacing_wait),
+               diag_ms(diag_post_stream_wait));
+        printf("[diag]   effective: %.3f ms, %.2f MiB/s; LOADBIN %.3f ms, DONE/recovery %.3f ms\n",
+               diag_ms(diag_total_usec),
+               diag_mib_per_sec(size, diag_total_usec),
+               diag_ms(diag_loadbin_usec),
+               diag_ms(diag_done_usec));
+        if (diag_retransmitted_bytes || diag_recovery_requests || diag_loadbin_retries) {
+            printf("[diag]   recovery: %u retransmitted bytes, %u requests, %u LOADBIN retries, final_delay=%u us\n",
+                   diag_retransmitted_bytes, diag_recovery_requests,
+                   diag_loadbin_retries, current_fifo_delay);
+        }
+    }
+
     return 0;
 }
 
@@ -578,8 +654,16 @@ static int network_recv_data(kostool_context_t *ctx, uint8_t *data,
                              uint32_t src_addr, uint32_t size, int quiet) {
     uint8_t buffer[2048];
     int retval;
+    uint64_t diag_total_start = 0;
+    uint64_t diag_stream_start = 0;
+    uint64_t diag_stream_end = 0;
+    uint32_t diag_packets = 0;
+    uint32_t diag_rerequests = 0;
 
     prepare_comms(ctx);
+
+    if (ctx->diagnostics_enabled)
+        diag_total_start = ctx->time_ops->time_usec();
 
     uint32_t chunk_size = ctx->legacy_mode ? NET_LEGACY_PAYLOAD_SIZE : NET_PAYLOAD_SIZE;
     uint32_t num_chunks = (size + chunk_size - 1) / chunk_size;
@@ -589,6 +673,8 @@ static int network_recv_data(kostool_context_t *ctx, uint8_t *data,
 
     /* Request the binary */
     const char *cmd_id = quiet ? NET_CMD_SENDBINQ : NET_CMD_SENDBIN;
+    if (ctx->diagnostics_enabled)
+        diag_stream_start = ctx->time_ops->time_usec();
     send_cmd(ctx, cmd_id, src_addr, size, NULL, 0);
 
     /* Receive packets */
@@ -618,8 +704,11 @@ static int network_recv_data(kostool_context_t *ctx, uint8_t *data,
                 }
             }
             packets++;
+            diag_packets++;
         }
     }
+    if (ctx->diagnostics_enabled)
+        diag_stream_end = ctx->time_ops->time_usec();
 
     /* Re-request any missing chunks with retry limit */
     int passes = 0;
@@ -630,6 +719,7 @@ static int network_recv_data(kostool_context_t *ctx, uint8_t *data,
         uint32_t req_size = ((size - c * chunk_size) >= chunk_size) ? chunk_size : (size - c * chunk_size);
 
         send_cmd(ctx, NET_CMD_SENDBINQ, req_addr, req_size, NULL, 0);
+        diag_rerequests++;
 
         start = ctx->time_ops->time_usec();
         while ((retval = ctx->socket_ops->recv(ctx->global_socket, buffer, 2048)) < 0 &&
@@ -665,6 +755,27 @@ static int network_recv_data(kostool_context_t *ctx, uint8_t *data,
     }
 
     free(map);
+
+    if (ctx->diagnostics_enabled) {
+        uint64_t diag_total_usec = ctx->time_ops->time_usec() - diag_total_start;
+        uint64_t diag_stream_usec = diag_stream_end - diag_stream_start;
+
+        ctx->diagnostics_net_recv_bytes += size;
+        ctx->diagnostics_net_recv_stream_usec += diag_stream_usec;
+        ctx->diagnostics_net_recv_total_usec += diag_total_usec;
+        ctx->diagnostics_net_recv_rerequests += diag_rerequests;
+
+        printf("[diag] network download 0x%08x: %u bytes, %u chunks x %u, packets=%u\n",
+               src_addr, size, num_chunks, chunk_size, diag_packets);
+        printf("[diag]   steady stream: %.3f ms, %.2f MiB/s\n",
+               diag_ms(diag_stream_usec),
+               diag_mib_per_sec(size, diag_stream_usec));
+        printf("[diag]   effective: %.3f ms, %.2f MiB/s, rerequests=%u\n",
+               diag_ms(diag_total_usec),
+               diag_mib_per_sec(size, diag_total_usec),
+               diag_rerequests);
+    }
+
     return 0;
 }
 

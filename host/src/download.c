@@ -45,5 +45,12 @@ int download(kostool_context_t *ctx, const char *filename,
     if (secs > 0)
         printf("Transferred at %.0f bytes / sec\n", size / secs);
 
+    if (ctx->diagnostics_enabled) {
+        ctx->diagnostics_downloaded_bytes += size;
+        printf("[diag] download total: %u bytes, %.3f ms, %.2f MiB/s\n",
+               size, (double)elapsed / 1000.0,
+               secs > 0 ? ((double)size / secs) / (1024.0 * 1024.0) : 0.0);
+    }
+
     return 0;
 }

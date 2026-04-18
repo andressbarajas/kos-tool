@@ -80,6 +80,23 @@ typedef struct kostool_context {
     int quiet_mode;
     int dumb_terminal;
 
+    /* Diagnostics / timing */
+    int diagnostics_enabled;
+    uint64_t diagnostics_start_usec;
+    uint64_t diagnostics_uploaded_bytes;
+    uint64_t diagnostics_downloaded_bytes;
+    uint64_t diagnostics_net_send_bytes;
+    uint64_t diagnostics_net_recv_bytes;
+    uint64_t diagnostics_net_send_stream_usec;
+    uint64_t diagnostics_net_recv_stream_usec;
+    uint64_t diagnostics_net_send_total_usec;
+    uint64_t diagnostics_net_recv_total_usec;
+    uint64_t diagnostics_net_retransmitted_bytes;
+    uint32_t diagnostics_upload_sections;
+    uint32_t diagnostics_net_recovery_requests;
+    uint32_t diagnostics_net_loadbin_retries;
+    uint32_t diagnostics_net_recv_rerequests;
+
     /* Command-line arguments for loaded program */
     uint32_t prog_argc;
     char     prog_command_line[256]; /* KOSLOAD_MAX_CMDLINE */

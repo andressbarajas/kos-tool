@@ -10,6 +10,7 @@ struct upload_state {
     kostool_context_t *ctx;
     int error;
     uint32_t total_bytes;
+    uint32_t sections;
 };
 
 static int upload_section_cb(const binary_section_t *section, void *user_data) {
@@ -20,8 +21,10 @@ static int upload_section_cb(const binary_section_t *section, void *user_data) {
         state->ctx, section->data, section->load_addr, section->size);
     if (ret != 0)
         state->error = 1;
-    else
+    else {
         state->total_bytes += section->size;
+        state->sections++;
+    }
     return ret;
 }
 
@@ -46,6 +49,14 @@ uint32_t upload(kostool_context_t *ctx, const char *filename, uint32_t address) 
     if (secs > 0)
         printf("Transferred %u bytes at %0.f bytes / sec\n",
                state.total_bytes, state.total_bytes / secs);
+
+    if (ctx->diagnostics_enabled) {
+        ctx->diagnostics_uploaded_bytes += state.total_bytes;
+        ctx->diagnostics_upload_sections += state.sections;
+        printf("[diag] upload total: %u bytes, %u sections, %.3f ms, %.2f MiB/s\n",
+               state.total_bytes, state.sections, (double)elapsed / 1000.0,
+               secs > 0 ? ((double)state.total_bytes / secs) / (1024.0 * 1024.0) : 0.0);
+    }
 
     return entry_addr;
 }
