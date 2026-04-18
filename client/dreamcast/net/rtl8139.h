@@ -6,7 +6,9 @@
 
 /* RTL8139C register definitions */
 #define RT_IDR0                0x00       /* Mac address */
+#define RT_IDR4                0x04       /* Mac address, upper 16 bits */
 #define RT_MAR0                0x08       /* Multicast filter */
+#define RT_MAR4                0x0C       /* Multicast filter, upper 32 bits */
 #define RT_TXSTATUS0           0x10       /* Transmit status (4 32bit regs) */
 #define RT_TXADDR0             0x20       /* Tx descriptors (also 4 32bit) */
 #define RT_RXBUF               0x30       /* Receive buffer start address */
@@ -38,7 +40,7 @@
 // There are many more...
 #define RT_CONFIG5             0xD8       /* Config register 5 */
 
-/* RTL8193C command bits; or these together and write teh resulting value
+/* RTL8139C command bits; OR these together and write the resulting value
    into CHIPCMD to execute it. */
 #define RT_CMD_RESET           0x10
 #define RT_CMD_RX_ENABLE       0x08
@@ -50,6 +52,7 @@
 #define RT_INT_TIMEOUT         0x4000     /* Set when TCTR reaches TimerInt value */
 #define RT_INT_RXFIFO_OVERFLOW 0x0040     /* Rx FIFO overflow */
 #define RT_INT_RXFIFO_UNDERRUN 0x0020     /* Packet underrun / link change */
+#define RT_INT_LINK_CHANGE     RT_INT_RXFIFO_UNDERRUN
 #define RT_INT_RXBUF_OVERFLOW  0x0010     /* Rx BUFFER overflow */
 #define RT_INT_TX_ERR          0x0008
 #define RT_INT_TX_OK           0x0004
@@ -67,6 +70,8 @@
 #define RT_TX_UNDERRUN         0x00004000 /* Transmit FIFO underrun */
 #define RT_TX_HOST_OWNS        0x00002000 /* Set to 1 when DMA operation is completed */
 #define RT_TX_SIZE_MASK        0x00001fff /* Descriptor size mask */
+#define RT_TXC_CLRABT          0x00000001 /* Clear abort/retransmit */
+#define RT_TX_ERTXTH_64        0x00020000 /* Early TX threshold: 64 bytes */
 
 /* RTL8139C receive status bits */
 #define RT_RX_MULTICAST        0x00008000 /* Multicast packet */
@@ -78,8 +83,39 @@
 #define RT_RX_CRC_ERR          0x00000004 /* CRC error */
 #define RT_RX_FRAME_ALIGN      0x00000002 /* Frame alignment error */
 #define RT_RX_STATUS_OK        0x00000001 /* Status ok: a good packet was received */
+#define RT_RX_STATUS_EARLY     0xfff0U    /* Early receive marker */
 
-/* Convienence macros */
+/* RTL8139C RX config bits */
+#define RT_ERTH(n)             ((n) << 24)
+#define RT_RXC_RXFTH(n)        ((n) << 13)
+#define RT_RXC_RBLEN(n)        ((n) << 11)
+#define RT_RXC_MXDMA(n)        ((n) << 8)
+#define RT_RXC_WRAP            0x00000080
+#define RT_RXC_AB              0x00000008 /* Accept broadcast packets */
+#define RT_RXC_AM              0x00000004 /* Accept multicast packets */
+#define RT_RXC_APM             0x00000002 /* Accept physical-match packets */
+#define RT_RXC_AAP             0x00000001 /* Accept all packets */
+
+/* RTL8139C TX config bits */
+#define RT_TXC_IFG_STANDARD    0x03000000U
+#define RT_TXC_MXDMA(n)        ((n) << 8)
+
+/* RTL8139C config bits */
+#define RT_CONFIG1_LED1        0x80
+#define RT_CONFIG1_LED0        0x40
+#define RT_CONFIG1_DVRLOAD     0x20
+#define RT_CONFIG1_LWACT       0x10
+#define RT_CONFIG4_RXFIFOAUTO  0x80
+#define RT_CONFIG5_LDPS        0x04
+
+/* RTL8139C MII bits */
+#define RT_MII_RESET           0x8000
+#define RT_MII_AN_ENABLE       0x1000
+#define RT_MII_AN_START        0x0200
+#define RT_MII_AN_COMPLETE     0x0020
+#define RT_MII_LINK            0x0004
+
+/* Convenience macros */
 #define REGL(a) (volatile unsigned long *)(a)
 #define vul volatile unsigned long
 #define REGS(a) (volatile unsigned short *)(a)
@@ -89,8 +125,31 @@
 
 /* Configuration definitions */
 // RTL8139 RX buffer size.
-#define RX_BUFFER_LEN        16384U
+#define RTL_MEM               0x01840000U
+#define RX_BUFFER_SHIFT       1U
+#define RX_BUFFER_LEN        (0x2000U << RX_BUFFER_SHIFT)
 //#define RX_BUFFER_LEN        32768U
+
+#define RTL_TX_BUFFER_OFFSET  (RX_BUFFER_LEN + 0x2000U)
+#define RTL_TX_BUFFER_LEN     0x800U
+#define RTL_TX_BUFFER_COUNT   4U
+
+#define RTL_RX_FIFO_THRESHOLD 0U
+#define RTL_RX_MAX_DMA_BURST  6U
+#define RTL_TX_MAX_DMA_BURST  1U
+
+#define RTL_RX_CONFIG_DEFAULT (RT_ERTH(0) | RT_RXC_RXFTH(RTL_RX_FIFO_THRESHOLD) | \
+                              RT_RXC_RBLEN(RX_BUFFER_SHIFT) | \
+                              RT_RXC_MXDMA(RTL_RX_MAX_DMA_BURST) | RT_RXC_WRAP)
+#define RTL_RX_ACCEPT         (RT_RXC_APM | RT_RXC_AB)
+#define RTL_RX_CONFIG_ACCEPT  (RTL_RX_CONFIG_DEFAULT | RTL_RX_ACCEPT)
+#define RTL_RX_CAPR_OFFSET    16U
+#define RTL_RX_CAPR_WRAP      (RTL_TX_BUFFER_OFFSET + (RTL_TX_BUFFER_LEN * RTL_TX_BUFFER_COUNT) - RTL_RX_CAPR_OFFSET)
+
+#define RTL_TX_CONFIG_DEFAULT (RT_TXC_IFG_STANDARD | RT_TXC_MXDMA(RTL_TX_MAX_DMA_BURST))
+
+#define RTL_AUTONEG_RESTART   (RT_MII_RESET | RT_MII_AN_ENABLE | RT_MII_AN_START)
+#define RTL_RESET_TIMEOUT     1000000U
 
 #define GAPSPCI_ID "GAPSPCI_BRIDGE_2"
 

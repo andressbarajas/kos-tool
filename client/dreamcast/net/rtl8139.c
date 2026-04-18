@@ -52,8 +52,10 @@ static rtl_status_t rtl = {0};
 static volatile bool rtl_link_up = false;
 static volatile bool rtl_is_copying = false;
 
-static void rtl_reset(void);
-static void rtl_init(void);
+static int rtl_reset(void);
+static int rtl_init(void);
+static void rtl_rx_reset(void);
+static void rtl_link_change(void);
 static void pktcpy(unsigned char *dest, unsigned char *src, unsigned int n);
 static int rtl_bb_rx(void);
 
@@ -72,14 +74,14 @@ static vul * const nic32 = REGL(0xa1001700);
 //static vus * const mem16 = REGS(0xa1840000);
 static vul * const mem32 = REGL(0xa1840000);
 
-#define GAPS_RX_IO_AREA 0x81840000U
-#define GAPS_TX_IO_AREA 0x81840000U
+#define GAPS_RX_IO_AREA (0x80000000U | RTL_MEM)
+#define GAPS_TX_IO_AREA (0x80000000U | RTL_MEM)
 
-static vuc * const txdesc[4] = {
-	REGC(GAPS_TX_IO_AREA + 0x6000),
-	REGC(GAPS_TX_IO_AREA + 0x6800),
-	REGC(GAPS_TX_IO_AREA + 0x7000),
-	REGC(GAPS_TX_IO_AREA + 0x7800)
+static vuc * const txdesc[RTL_TX_BUFFER_COUNT] = {
+	REGC(GAPS_TX_IO_AREA + RTL_TX_BUFFER_OFFSET + (RTL_TX_BUFFER_LEN * 0)),
+	REGC(GAPS_TX_IO_AREA + RTL_TX_BUFFER_OFFSET + (RTL_TX_BUFFER_LEN * 1)),
+	REGC(GAPS_TX_IO_AREA + RTL_TX_BUFFER_OFFSET + (RTL_TX_BUFFER_LEN * 2)),
+	REGC(GAPS_TX_IO_AREA + RTL_TX_BUFFER_OFFSET + (RTL_TX_BUFFER_LEN * 3))
 };
 
 int rtl_bb_detect(void)
@@ -102,46 +104,51 @@ int rtl_bb_detect(void)
 	}
 }
 
-static void rtl_reset(void)
+static int rtl_reset(void)
 {
+	unsigned int timeout = RTL_RESET_TIMEOUT;
+
 	/* Soft-reset the chip */
 	nic8[RT_CHIPCMD] = RT_CMD_RESET;
 
 	/* Wait for it to come back */
-	while (nic8[RT_CHIPCMD] & RT_CMD_RESET);
+	while ((nic8[RT_CHIPCMD] & RT_CMD_RESET) && timeout)
+		timeout--;
+
+	return timeout ? 0 : -1;
 }
 
-static void rtl_init(void)
+static int rtl_init(void)
 {
 	unsigned int tmp;
 
 	/* Read MAC address */
 	// Don't need to do anything with the eeprom if we're just reading it.
-	tmp = nic32[RT_IDR0];
+	tmp = nic32[RT_IDR0/4];
 	rtl.mac[0] = tmp & 0xff;
 	rtl.mac[1] = (tmp >> 8) & 0xff;
 	rtl.mac[2] = (tmp >> 16) & 0xff;
 	rtl.mac[3] = (tmp >> 24) & 0xff;
-	tmp = nic32[RT_IDR0+1];
+	tmp = nic32[RT_IDR4/4];
 	rtl.mac[4] = tmp & 0xff;
 	rtl.mac[5] = (tmp >> 8) & 0xff;
 	memcpy(adapter_bba.mac, rtl.mac, 6);
 
 	/* Soft-reset the chip to clear any garbage from power on */
-	rtl_reset();
+	if (rtl_reset() < 0)
+		return -1;
 
 	/* Setup Rx and Tx buffers */
-	nic32[RT_RXBUF/4] = 0x01840000;
-	nic32[RT_TXADDR0/4 + 0] = 0x01846000;
-	nic32[RT_TXADDR0/4 + 1] = 0x01846800;
-	nic32[RT_TXADDR0/4 + 2] = 0x01847000;
-	nic32[RT_TXADDR0/4 + 3] = 0x01847800;
+	nic32[RT_RXBUF/4] = RTL_MEM;
+	for (tmp = 0; tmp < RTL_TX_BUFFER_COUNT; tmp++)
+		nic32[RT_TXADDR0/4 + tmp] = RTL_MEM + RTL_TX_BUFFER_OFFSET + (tmp * RTL_TX_BUFFER_LEN);
 
 	__asm__ volatile ("nop\n" : : : "memory"); // Compiler barrier so that GCC doesn't get clever here
 
 	// This is so strange, but ok...
 	// reset it AGAIN...
-	rtl_reset();
+	if (rtl_reset() < 0)
+		return -2;
 
 	// Another dance of some kind...
 	nic8[RT_CHIPCMD] = RT_CMD_RX_ENABLE;
@@ -157,14 +164,14 @@ static void rtl_init(void)
 	__asm__ volatile ("nop\n" : : : "memory"); // Compiler barrier so that GCC doesn't get clever here
 
 	// Yet another dance of some kind...
-	nic32[RT_MAR0/4 + 0] = 0x55aaff00;
-	nic32[RT_MAR0/4 + 1] = 0xaa5500ff;
+	nic32[RT_MAR0/4] = 0x55aaff00;
+	nic32[RT_MAR4/4] = 0xaa5500ff;
 
-	if((nic32[RT_MAR0/4 + 0] == 0x55aaff00) && (nic32[RT_MAR0/4 + 1] == 0xaa5500ff))
+	if((nic32[RT_MAR0/4] == 0x55aaff00) && (nic32[RT_MAR4/4] == 0xaa5500ff))
 	{
 		nic8[RT_CHIPCMD] = RT_CMD_RX_ENABLE | RT_CMD_TX_ENABLE;
-		nic32[RT_MAR0/4 + 0] = 0xffffffff;
-		nic32[RT_MAR0/4 + 1] = 0xffffffff;
+		nic32[RT_MAR0/4] = 0xffffffff;
+		nic32[RT_MAR4/4] = 0xffffffff;
 	}
 
 	__asm__ volatile ("nop\n" : : : "memory"); // Compiler barrier so that GCC doesn't get clever here
@@ -315,44 +322,43 @@ static void rtl_init(void)
 	/* Enable receive and transmit functions */
 	nic8[RT_CHIPCMD] = RT_CMD_RX_ENABLE | RT_CMD_TX_ENABLE;
 
-	/* Set Rx FIFO threshold to 16 bytes, Rx size to 16k+16, 1024 byte DMA burst */
+	/* Set Rx FIFO threshold to 1K, Rx size to 16k+16, 1024 byte DMA burst */
 //	nic32[RT_RXCONFIG/4] = 0x00000e00; // (1<<7 = 0x80) for nowrap or bit 7 = 0 for wrap, 1024 byte dma burst (6<<8 = 0x600)
 	// Why only 16k + 16? let's do 32k + 16.
-	nic32[RT_RXCONFIG/4] = 0x00004980; // nowrap, 16k + 16, 32 byte DMA burst, 64 byte Rx threshold, Early Rx: none
+	nic32[RT_RXCONFIG/4] = RTL_RX_CONFIG_DEFAULT; // nowrap, 16k + 16, 1024 byte DMA burst, 1K Rx threshold, Early Rx: none
 //	nic32[RT_RXCONFIG/4] = 0x00002980; // nowrap, 16k + 16, 32 byte DMA burst, 32 byte Rx threshold, Early Rx: none
 //	nic32[RT_RXCONFIG/4] = 0x00005180; // nowrap, 32k + 16, 32 byte DMA burst, 64 byte Rx threshold, Early Rx: none
 
 //	nic32[RT_RXCONFIG/4] = 0x00005100; // wrap, 32k + 16, 32 byte DMA burst, 64 byte Rx threshold, Early Rx: none
 //	nic32[RT_RXCONFIG/4] = 0x00004900; // wrap, 16k + 16, 32 byte DMA burst, 64 byte Rx threshold, Early Rx: none
 
-	/* Set Tx 1024 byte DMA burst */
+	/* Set Tx IFG and keep the current 32 byte DMA burst baseline */
 	// Found a bug: this was 00000600 before. 1024 byte DMA burst is 0x600 (hex), not 600 (dec).
 	// See pgs. 20-21 of RTL8139 datasheet: http://realtek.info/pdf/rtl8139cp.pdf
 //>	nic32[RT_TXCONFIG/4] = 0x03000600; // Set IFG to NOT violate 802.3 standard, 1024 byte DMA burst
-	nic32[RT_TXCONFIG/4] = 0x03000100; // Set IFG to NOT violate 802.3 standard, 32 byte DMA burst
+	nic32[RT_TXCONFIG/4] = RTL_TX_CONFIG_DEFAULT; // Set IFG to NOT violate 802.3 standard, 32 byte DMA burst
 
 	/* Enable writing to the config registers */
 	nic8[RT_CFG9346] = 0xc0;
 
-	/* Disable power management (zeroes are otherwise default values) */
-	// and 	/* Set the driver-loaded bit (0x20) */
-	// LEDs are apparently meant to be set to 0b10. Maybe those pins are repurposed?
-	nic8[RT_CONFIG1] = (nic8[RT_CONFIG1] | 0x80 | 0x20) & 0xbf;
+	/* Disable power management, mark the driver loaded, and set LEDs to 0b10. */
+	nic8[RT_CONFIG1] = (nic8[RT_CONFIG1] & ~(RT_CONFIG1_LWACT | RT_CONFIG1_LED0)) |
+		RT_CONFIG1_DVRLOAD | RT_CONFIG1_LED1;
 
 	/* Enable FIFO auto-clear */
-	nic8[RT_CONFIG4] |= 0x80;
+	nic8[RT_CONFIG4] |= RT_CONFIG4_RXFIFOAUTO;
 
-	// Make internal FIFO address pointer increment downwards
+	// Disable link-down power saver.
 	// This apparently can be set without unlocking the EEPROM,
 	// but might as well keep it here with the others.
-	nic8[RT_CONFIG5] |= 0x04;
+	nic8[RT_CONFIG5] |= RT_CONFIG5_LDPS;
 
 	/* Switch back to normal operation mode */
 	nic8[RT_CFG9346] = 0;
 
 	/* Filter out all multicast packets */
-	nic32[RT_MAR0/4 + 0] = 0;
-	nic32[RT_MAR0/4 + 1] = 0;
+	nic32[RT_MAR0/4] = 0;
+	nic32[RT_MAR4/4] = 0;
 
 	/* Disable all multi-interrupts */
 	nic16[RT_MULTIINTR/2] = 0;
@@ -367,14 +373,77 @@ static void rtl_init(void)
 	nic8[RT_CHIPCMD] = RT_CMD_RX_ENABLE | RT_CMD_TX_ENABLE;
 
 	/* Enable auto-negotiation and restart that process */
-	nic16[RT_MII_BMCR/2] |= 0x9200;
+	nic16[RT_MII_BMCR/2] = RTL_AUTONEG_RESTART;
 
 	/* Initialize status vars */
 	rtl.cur_tx = 0;
 	rtl.cur_rx = 0;
 
 	/* Enable receiving broadcast and physical match packets */
-	nic32[RT_RXCONFIG/4] |= 0x0000000a;
+	nic32[RT_RXCONFIG/4] |= RTL_RX_ACCEPT;
+
+	return 0;
+}
+
+static void rtl_rx_reset(void)
+{
+	unsigned int timeout = RTL_RESET_TIMEOUT;
+
+	rtl.cur_rx = nic16[RT_RXBUFHEAD/2];
+	if (rtl.cur_rx < RTL_RX_CAPR_OFFSET)
+		nic16[RT_RXBUFTAIL/2] = RTL_RX_CAPR_WRAP;
+	else
+		nic16[RT_RXBUFTAIL/2] = rtl.cur_rx - RTL_RX_CAPR_OFFSET;
+
+	rtl.cur_rx = 0;
+	rtl_is_copying = false;
+
+	nic8[RT_CHIPCMD] = RT_CMD_TX_ENABLE;
+	nic32[RT_RXCONFIG/4] = RTL_RX_CONFIG_ACCEPT;
+
+	while (!(nic8[RT_CHIPCMD] & RT_CMD_RX_ENABLE) && timeout)
+	{
+		nic8[RT_CHIPCMD] = RT_CMD_TX_ENABLE | RT_CMD_RX_ENABLE;
+		timeout--;
+	}
+
+	nic32[RT_RXCONFIG/4] = RTL_RX_CONFIG_ACCEPT;
+	nic16[RT_INTRSTATUS/2] = 0xffff;
+}
+
+static void rtl_link_change(void)
+{
+	/* Wake screensaver on link change so main screen is visible */
+	screensaver_wake();
+
+	if (nic16[RT_MII_BMSR/2] & RT_MII_LINK)
+	{
+		if (booted && (!running) && (!receiving))
+		{
+			disp_status("idle...");
+		}
+
+		/* If we were waiting in a loop with a timeout when link changed,
+		 * timeout immediately upon bringing link back up, so we can retry immediately. */
+		if (timeout_loop > 0)
+		{
+			dhcp_attempts = 0;
+			timeout_loop = -1;
+			escape_loop = 1;
+		}
+
+		rtl_link_up = true;
+	}
+	else
+	{
+		if (booted && (!running) && (!receiving))
+		{
+			disp_status("link lost...");
+		}
+
+		nic16[RT_MII_BMCR/2] = RTL_AUTONEG_RESTART;
+		rtl_link_up = false;
+	}
 }
 
 int rtl_bb_init(void)
@@ -451,7 +520,8 @@ int rtl_bb_init(void)
 				// I think GAPS automatically pulls RSTB low for 120ns, which causes the
 				// EEPROM to autoload all the registers initially. So we don't need to
 				// worry about it.
-				rtl_init();
+				if (rtl_init() < 0)
+					return -4;
 			}
 			else
 			{
@@ -473,12 +543,12 @@ int rtl_bb_init(void)
 
 void rtl_bb_start(void)
 {
-	nic32[RT_RXCONFIG/4] |= 0x0000000a;
+	nic32[RT_RXCONFIG/4] |= RTL_RX_ACCEPT;
 }
 
 void rtl_bb_stop(void)
 {
-	nic32[RT_RXCONFIG/4] &= 0xfffffff5;
+	nic32[RT_RXCONFIG/4] &= ~RTL_RX_ACCEPT;
 }
 
 int rtl_bb_tx(unsigned char * pkt, int len) // pg. 15 in RTL8139C datasheet: http://realtek.info/pdf/rtl8139cp.pdf
@@ -487,14 +557,14 @@ int rtl_bb_tx(unsigned char * pkt, int len) // pg. 15 in RTL8139C datasheet: htt
 	// this bit before reading from/writing to G2. So do that here.
 	while((*(volatile unsigned int*)0xa05f688c) & 0x20U);
 
-	while (!(nic32[RT_TXSTATUS0/4 + rtl.cur_tx] & 0x2000U))
+	while (!(nic32[RT_TXSTATUS0/4 + rtl.cur_tx] & RT_TX_HOST_OWNS))
 	{ // While tx is not complete (checking OWN)
-		if (nic32[RT_TXSTATUS0/4 + rtl.cur_tx] & 0x40000000U)
+		if (nic32[RT_TXSTATUS0/4 + rtl.cur_tx] & RT_TX_ABORTED)
 		{ // Check for abort
 			// Found another bug: (nic32[RT_TXSTATUS0/4 + rtl.cur_tx] |= 1; // <-- If abort, set descriptor size to 1)
 			// |= the length to 1 doesn't do anything if the length is an odd number >= 1...
 			// Should probably be RT_TXCONFIG register |= 1, which clears abort state and retransmits, see pg 21 of RTL8139C or pg 17 of RTL8139D datasheet
-			nic32[RT_TXCONFIG/4] |= 0x1;
+			nic32[RT_TXCONFIG/4] |= RT_TXC_CLRABT;
 		}
 	}
 
@@ -624,11 +694,11 @@ int rtl_bb_tx(unsigned char * pkt, int len) // pg. 15 in RTL8139C datasheet: htt
 	// Software writes don't impact the read-only bits.
 	// Zeroing also sets Early FIFO TX threshold to 8 bytes.
 	// Finally, writing to the status register triggers the packet send.
-		nic32[RT_TXSTATUS0/4 + rtl.cur_tx] = len | 0x20000; // Set Early TX to 64 bytes
+		nic32[RT_TXSTATUS0/4 + rtl.cur_tx] = len | RT_TX_ERTXTH_64; // Set Early TX to 64 bytes
 	//nic32[RT_TXSTATUS0/4 + rtl.cur_tx] = len | 0x10000; // Set Early TX to 32 bytes
 //	nic32[RT_TXSTATUS0/4 + rtl.cur_tx] = len;
 
-	rtl.cur_tx = (rtl.cur_tx + 1) % 4; // Move to next txdesc buffer
+	rtl.cur_tx = (rtl.cur_tx + 1) % RTL_TX_BUFFER_COUNT; // Move to next txdesc buffer
 
 	return 1;
 }
@@ -665,7 +735,7 @@ static int rtl_bb_rx()
 	processed = 0;
 
 	/* While we have frames left to process... */
-	while (!(nic8[RT_CHIPCMD] & 1))
+	while (!(nic8[RT_CHIPCMD] & RT_CMD_RX_BUF_EMPTY))
 	{
 
 		/* Get frame size and status */
@@ -678,12 +748,18 @@ static int rtl_bb_rx()
 		rx_size = (rx_status >> 16) & 0xffffU;
 
 		/* apparently this means the rtl8139 is still copying */
-		if (rx_size == 0xfff0U)
+		if (rx_size == RT_RX_STATUS_EARLY)
 		{
 			rtl_is_copying = true; // Really don't want to run a DHCP renewal while data is in flight...
 			break;
 		}
 		rtl_is_copying = false;
+
+		if (rx_size < 4)
+		{
+			rtl_rx_reset();
+			break;
+		}
 
 		pkt_size = rx_size - 4;
 
@@ -692,7 +768,7 @@ static int rtl_bb_rx()
     unsigned long long int first_array1 = PMCR_RegRead(DCLOAD_PMCR);
 #endif
 
-		if ((rx_status & 1) && (pkt_size <= RX_PKT_BUF_SIZE))
+		if ((rx_status & RT_RX_STATUS_OK) && (pkt_size <= RX_PKT_BUF_SIZE))
 		{
 			pkt = (unsigned char*)(GAPS_RX_IO_AREA + 0x0000 + ring_offset + 4); // + 4 to skip the status byte (DMA)
 
@@ -733,6 +809,11 @@ static int rtl_bb_rx()
 #endif
 
 		}
+		else
+		{
+			rtl_rx_reset();
+			break;
+		}
 
 		// Align next packet to 4-bytes (add 4 to account for transmit status; the 4 extra bytes included in rx_size are the CRC)
 		rtl.cur_rx = (rtl.cur_rx + rx_size + 4 + 3) & ~3;
@@ -741,7 +822,7 @@ static int rtl_bb_rx()
 		{
 			// Prevent underflowing the RX buffer
 			rtl.cur_rx %= RX_BUFFER_LEN;
-			nic16[RT_RXBUFTAIL/2] = 0x7ff0;
+			nic16[RT_RXBUFTAIL/2] = RTL_RX_CAPR_WRAP;
 			// According to the RTL8139C datasheet, 0xfff0 = 65520 is the default value of the register,
 			// and the register cannot be written to before data has been read from the buffer for some
 			// reason. So, presumably, we can just use that value here.
@@ -755,7 +836,7 @@ static int rtl_bb_rx()
 		else
 		{
 			rtl.cur_rx %= RX_BUFFER_LEN;
-			nic16[RT_RXBUFTAIL/2] = rtl.cur_rx - 16;
+			nic16[RT_RXBUFTAIL/2] = rtl.cur_rx - RTL_RX_CAPR_OFFSET;
 			// Why 16? NetBSD and Linux do this, too. Status is 4, CRC appended is 4, what's the other 8?
 			// Things don't work if this isn't 16, anyways (I tried changing it). Maybe this is 16 for DMA reasons?
 			// RealTek does it here: https://www.cs.usfca.edu/~cruse/cs326f04/RTL8139_ProgrammersGuide.pdf
@@ -826,40 +907,9 @@ void rtl_bb_loop(bool is_main_loop)
 		}
 
 		/* link change */
-		if (__builtin_expect(intr & RT_INT_RXFIFO_UNDERRUN, 0))
+		if (__builtin_expect(intr & RT_INT_LINK_CHANGE, 0))
 		{
-			/* Wake screensaver on link change so main screen is visible */
-			screensaver_wake();
-
-			if (booted && (!running) && (!receiving))
-			{
-				disp_status("link change...");
-			}
-
-			nic16[RT_MII_BMCR/2] = 0x9200;
-
-			/* wait for valid link */
-			while (!(nic16[RT_MII_BMSR/2] & 0x20));
-
-			/* wait for the additional link change interrupt that is coming */
-			while (!(nic16[RT_INTRSTATUS/2] & RT_INT_RXFIFO_UNDERRUN));
-			nic16[RT_INTRSTATUS/2] = RT_INT_RXFIFO_UNDERRUN;
-
-			if (booted && (!running) && (!receiving))
-			{
-				disp_status("idle...");
-			}
-
-			/* if we were waiting in a loop with a timeout when link changed, timeout
-			 * immediately upon bringing link back up, so we can retry immediately */
-			if (timeout_loop > 0 )
-			{
-				dhcp_attempts = 0;
-				timeout_loop = -1;
-				escape_loop = 1;
-			}
-
-			rtl_link_up = true; // Good to go!
+			rtl_link_change();
 		}
 
 		/* Rx FIFO overflow */
@@ -873,27 +923,7 @@ void rtl_bb_loop(bool is_main_loop)
 		/* Rx Buffer overflow */
 		if (intr & RT_INT_RXBUF_OVERFLOW)
 		{
-/*
-			// Update CAPR
-			rtl.cur_rx = nic16[RT_RXBUFHEAD];
-			nic16[RT_RXBUFTAIL] = rtl.cur_rx - 16;
-			rtl.cur_rx = 0;
-
-			// Disable receive
-			nic8[RT_CHIPCMD] = RT_CMD_TX_ENABLE;
-
-			// Wait for it
-			while ( !(nic8[RT_CHIPCMD] & RT_CMD_RX_ENABLE))
-				nic8[RT_CHIPCMD] = RT_CMD_TX_ENABLE | RT_CMD_RX_ENABLE; // Weirdly, keep spamming re-enable receive
-
-			// Re-set RXCONFIG
-			nic32[RT_RXCONFIG/4] = 0x0000f60a; // This should be whatever is set in init plus enabling packet reception (| 0x...a)
-
-			// clear interrupts
-			nic16[RT_INTRSTATUS/2] = 0xffff;
-	*/
-			// NetBSD, FreeBSD, and OpenBSD all just do a full re-init if this happens.
-			rtl_init();
+			rtl_rx_reset();
 		}
 
 		if(is_main_loop && rtl_link_up && (!rtl_is_copying)) // Only want this to run in main loop
