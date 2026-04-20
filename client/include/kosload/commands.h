@@ -27,8 +27,7 @@ void cmd_reboot(void);
 void cmd_maple(ip_header_t *ip, udp_header_t *udp, net_command_t *command);
 void cmd_pmcr(ip_header_t *ip, udp_header_t *udp, net_command_t *command);
 
-/* Shared state (defined in commands.c) */
-extern volatile unsigned int our_ip;
+/* Shared command state (defined in commands.c) */
 extern unsigned int tool_ip;
 extern unsigned char tool_mac[6];
 extern unsigned short tool_port;

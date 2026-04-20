@@ -64,7 +64,7 @@ static void w5500_gc_generate_mac(unsigned char *mac)
     union {
         unsigned int cid[4];
         unsigned char data[19];
-    } ecid;
+    } ecid = {0};
     unsigned int sum;
     int i;
 
@@ -75,8 +75,8 @@ static void w5500_gc_generate_mac(unsigned char *mac)
 
     /* Mix in a salt to differentiate from ENC28J60 MAC */
     ecid.data[15] ^= 0x55;
-    ecid.data[16] ^= 0x00;
-    ecid.data[17] ^= 0xA5;
+    ecid.data[16] = 0x00;
+    ecid.data[17] = 0xA5;
 
     /* Hash ECID into 3 bytes */
     sum = 0x57;  /* Seed: 'W' for W5500 */
