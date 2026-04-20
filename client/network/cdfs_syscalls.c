@@ -9,9 +9,9 @@
 
 #include <string.h>
 #include <kosload/protocol.h>
+#include <kosload/net_adapter.h>
 #include "packet.h"
 #include "net.h"
-#include "adapter.h"
 #include "commands.h"
 
 /* From network_syscalls.c */

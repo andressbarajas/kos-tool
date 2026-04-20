@@ -21,6 +21,7 @@
 #include <kosload/transport.h>
 #include <kosload/video.h>
 #include <kosload/info.h>
+#include <kosload/net_adapter.h>
 
 #include "dhcp.h"
 #include "dcload.h"
@@ -45,20 +46,6 @@ extern unsigned int tool_ip;
 extern unsigned short tool_port;
 
 extern kosload_info_t kosload_info;
-
-/* From adapter.c */
-typedef struct {
-    const char *name;
-    unsigned char mac[6];
-    unsigned char pad[2];
-    int (*detect)(void);
-    int (*init)(void);
-    void (*start)(void);
-    void (*stop)(void);
-    void (*loop)(bool is_main_loop);
-    int (*tx)(unsigned char *pkt, int len);
-} adapter_t;
-extern adapter_t *bb;
 
 /* ===== Global state ===== */
 

@@ -16,7 +16,7 @@
 #include <kosload/target.h>
 #include <kosload/transport.h>
 #include <kosload/info.h>
-#include "adapter.h"
+#include <kosload/net_adapter.h>
 #include "dcload.h"
 #include "net.h"
 #include "packet.h"

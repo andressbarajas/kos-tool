@@ -51,6 +51,20 @@ Current shared client transport implementations live in:
 - `client/serial/serial_transport.c`
 - `client/network/network_transport.c`
 
+Network transport hardware is split one layer lower. Shared network code uses
+the adapter contract in:
+
+- `client/include/kosload/net_adapter.h`
+
+Current console-specific adapter selection lives in:
+
+- `client/dreamcast/net/adapter.c`
+- `client/gamecube/net/adapter.c`
+
+Individual Ethernet drivers stay under the console tree when they are hardware
+specific, or under `client/common/drivers/` when the chip driver is shared by
+multiple consoles.
+
 The shared entrypoint is:
 
 - `client/common/main.c`

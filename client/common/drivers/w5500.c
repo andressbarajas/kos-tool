@@ -14,8 +14,8 @@
  */
 
 #include <string.h>
+#include <kosload/net_adapter.h>
 #include "w5500.h"
-#include "adapter.h"
 #include "packet.h"
 #include "net.h"
 #include "dcload.h"
