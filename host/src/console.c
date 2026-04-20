@@ -790,6 +790,8 @@ static void ser_recv_data(kostool_context_t *ctx, void *data, uint32_t total) {
 
 /* ===== Network console helpers ===== */
 
+#define GC_ENC_RETVAL_DELAY_USEC 5000
+
 static int net_send_cmd(kostool_context_t *ctx, const char cmd[4],
                         uint32_t addr, uint32_t size,
                         const uint8_t *data, uint32_t dsize) {
@@ -801,6 +803,11 @@ static int net_send_cmd(kostool_context_t *ctx, const char cmd[4],
     tmp = htonl(addr); memcpy(buf + 4, &tmp, 4);
     tmp = htonl(size); memcpy(buf + 8, &tmp, 4);
     if (data && dsize > 0) memcpy(buf + 12, data, dsize);
+    if (ctx->installed_adapter == ADAPTER_GC_ENC &&
+        memcmp(cmd, NET_CMD_RETVAL, 4) == 0 &&
+        ctx->time_ops && ctx->time_ops->sleep_usec) {
+        ctx->time_ops->sleep_usec(GC_ENC_RETVAL_DELAY_USEC);
+    }
     return ctx->socket_ops->send(ctx->global_socket, buf, 12 + dsize);
 }
 

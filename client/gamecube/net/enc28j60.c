@@ -695,7 +695,7 @@ int enc28j60_init(void)
 
 void enc28j60_start(void)
 {
-    enc_rearm_runtime();
+    enc_set_bits(ECON1, ECON1_RXEN);
 }
 
 void enc28j60_stop(void)
