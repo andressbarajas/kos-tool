@@ -232,6 +232,11 @@ static int serial_init(kostool_context_t *ctx) {
 
     /* If user requested a different speed, negotiate it */
     if (ctx->initial_speed != SERIAL_DEFAULT_SPEED) {
+        if (!transport_can_change_speed(ctx->transport)) {
+            fprintf(stderr, "%s transport does not support speed changes\n",
+                    ctx->transport->name);
+            return -1;
+        }
         if (ctx->transport->change_speed(ctx, ctx->initial_speed) != 0) {
             fprintf(stderr, "Failed to change speed to %u\n", ctx->initial_speed);
             return -1;
@@ -480,7 +485,8 @@ static int serial_set_rtc(kostool_context_t *ctx, uint32_t timestamp) {
 
 const transport_ops_t serial_transport_ops = {
     .name = "serial",
-    .capabilities = TRANSPORT_CAP_COMPRESS,
+    .capabilities = TRANSPORT_CAP_COMPRESS | TRANSPORT_CAP_RTC |
+                    TRANSPORT_CAP_SPEED_CHANGE,
     .init = serial_init,
     .shutdown = serial_shutdown,
     .send_data = serial_send_data,
