@@ -241,6 +241,7 @@ IP_OBJS := \
     $(IPDIR)/w5500_spi_dc.o \
     $(IPDIR)/net.o \
     $(IPDIR)/packet.o \
+    $(IPDIR)/packet_helpers.o \
     $(IPDIR)/dhcp.o \
     $(IPDIR)/crt0.o \
     $(IPDIR)/go.o
@@ -286,6 +287,9 @@ $(IPDIR)/net.o: net/net.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
 $(IPDIR)/packet.o: net/packet.c $(VERSION_H) | $(IPDIR)
+	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
+
+$(IPDIR)/packet_helpers.o: $(CLIENTDIR)/network/packet_helpers.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
 $(IPDIR)/dhcp.o: net/dhcp.c $(VERSION_H) | $(IPDIR)

@@ -242,6 +242,7 @@ IP_OBJS := \
     $(IPDIR)/w5500_spi_gc.o \
     $(IPDIR)/net.o \
     $(IPDIR)/packet.o \
+    $(IPDIR)/packet_helpers.o \
     $(IPDIR)/dhcp.o
 
 IP_ELF := $(IPDIR)/gc-load-ip.elf
@@ -282,6 +283,9 @@ $(IPDIR)/net.o: net/net.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
 $(IPDIR)/packet.o: net/packet.c $(VERSION_H) | $(IPDIR)
+	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
+
+$(IPDIR)/packet_helpers.o: $(CLIENTDIR)/network/packet_helpers.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
 $(IPDIR)/dhcp.o: net/dhcp.c $(VERSION_H) | $(IPDIR)
