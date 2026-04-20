@@ -141,3 +141,7 @@ int adapter_detect(void)
 
     return 0;
 }
+
+void adapter_start_static_ip(void)
+{
+}

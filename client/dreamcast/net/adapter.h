@@ -66,6 +66,7 @@ typedef struct {
 
 // Detect which adapter we are using and init our structs.
 int adapter_detect();
+void adapter_start_static_ip(void);
 
 // The configured adapter, to be used in all other funcs.
 extern adapter_t *bb;

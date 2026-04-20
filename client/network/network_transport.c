@@ -105,11 +105,10 @@ static int network_transport_init(void)
     set_ip_from_string();
     kosload_info.dc_ip = our_ip;
 
-    /* DHCP starts the adapter while sending its first discover packet.
-     * Static IP mode is otherwise silent at boot, so bring RX online now
-     * so ARP/ping/tool probes can reach the loader. */
+    /* Static IP mode is silent at boot.  Let the target adapter layer decide
+     * whether it needs to bring RX online before the first host probe. */
     if (our_ip != 0)
-        bb->start();
+        adapter_start_static_ip();
 
     /* Advertise DHCP capability only when no static IP was configured.
      * This is checked at runtime (not compile time) so the host can

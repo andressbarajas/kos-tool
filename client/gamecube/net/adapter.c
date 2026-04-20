@@ -131,3 +131,9 @@ detected:
 
     return 0;
 }
+
+void adapter_start_static_ip(void)
+{
+    if (bb == &adapter_enc28j60)
+        bb->start();
+}

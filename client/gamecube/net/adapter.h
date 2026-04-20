@@ -31,6 +31,7 @@ typedef struct {
 
 /* Detect which adapter we are using and init our structs */
 int adapter_detect(void);
+void adapter_start_static_ip(void);
 
 /* The configured adapter */
 extern adapter_t *bb;
