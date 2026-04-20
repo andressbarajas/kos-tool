@@ -10,6 +10,8 @@ These interfaces are the preferred extension points for new consoles and new
 peripherals. Shared code should use them instead of branching on Dreamcast,
 GameCube, serial, network, or a future transport name.
 
+For concrete porting and smoke-test steps, see `docs/porting.md`.
+
 ## Client Layout
 
 Client firmware is assembled from one console target and one client transport.
