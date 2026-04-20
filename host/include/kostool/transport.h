@@ -6,13 +6,31 @@
 #include <stddef.h>
 #include "context.h"
 
-/* Transport capability flags */
+/*
+ * Transport capability flags.
+ *
+ * Host code should prefer these flags when deciding whether to expose optional
+ * operations. A transport may leave an unsupported callback NULL when the
+ * matching capability bit is not set.
+ */
 #define TRANSPORT_CAP_RESET     (1 << 0)
 #define TRANSPORT_CAP_MAPLE     (1 << 1)
 #define TRANSPORT_CAP_PMCR      (1 << 2)
 #define TRANSPORT_CAP_COMPRESS  (1 << 3)    /* LZO compression (serial) */
 #define TRANSPORT_CAP_RECOVERY  (1 << 4)    /* Packet recovery (network) */
 
+/*
+ * Host-side transport interface.
+ *
+ * This is the host boundary for talking to a loader. High-level code should use
+ * this table for upload, download, execute, console, and maintenance commands
+ * instead of branching on serial/network implementation details.
+ *
+ * A new host transport should implement the core data and command callbacks,
+ * set capability bits for optional behavior, and leave unsupported optional
+ * callbacks NULL. Wire protocol constants and shared packet structures belong
+ * in include/kosload/protocol.h so host and client stay in sync.
+ */
 typedef struct transport_ops {
     const char *name;
     uint32_t capabilities;

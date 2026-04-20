@@ -30,6 +30,7 @@
 * **Single host tool** — `kos-tool` replaces both `dc-tool-ser` and `dc-tool-ip` with one binary that handles serial and network transports for both Dreamcast and GameCube
 * **Shared client code** — common client logic (main loop, screensaver, exception handler, CDFS, syscall table) is shared across all four firmware variants via a platform abstraction layer (`target_ops_t`)
 * **Unified build system** — one `make` builds everything: DC firmware, GC firmware, host tool, examples, and disc images
+* **Documented extension points** — see [`docs/architecture.md`](docs/architecture.md) for the console and transport boundaries used by new ports
 
 ### Firmware Update
 * **Embedded firmware** — all four client firmware binaries (DC serial, DC IP, GC serial, GC IP) are embedded directly in the `kos-tool` host binary

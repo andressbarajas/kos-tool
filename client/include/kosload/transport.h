@@ -6,7 +6,25 @@
 #include <stdint.h>
 #include <stddef.h>
 
-/* Client-side transport interface */
+/*
+ * Client-side transport interface.
+ *
+ * This is the loader-to-host communication boundary for client firmware.
+ * Shared client code chooses one transport at startup and should not need to
+ * know whether the wire is serial, network, USB, or another future peripheral.
+ *
+ * Lifecycle:
+ * - init() prepares the device/protocol. common_main() may retry it on failure.
+ * - loop(true) is the main command loop and may block indefinitely.
+ * - syscall_send() sends a console syscall response/request over this transport.
+ * - exit_notify() lets the host know the loaded program returned.
+ * - stop()/start() bracket periods where a transport must pause or resume
+ *   background packet handling around target program execution.
+ *
+ * Keep protocol additions in include/kosload/protocol.h. Prefer capability
+ * bits or transport-private helpers for optional features so new transports do
+ * not have to fake unsupported behavior.
+ */
 typedef struct client_transport_ops {
     const char *name;
     const char *init_error_msg;   /* Message shown when init() fails, or NULL */
