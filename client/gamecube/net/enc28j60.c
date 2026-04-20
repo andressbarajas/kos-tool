@@ -54,16 +54,14 @@ static unsigned short next_pkt_ptr;
 
 /* ===== Low-level EXI/SPI access ===== */
 
-/*
- * EXI clock speed selection.
- * Memory card slots (ch0 dev0, ch1 dev0) support 32MHz.
- * Serial Port 1 / BBA slot (ch0 dev2) is limited to 16MHz.
- */
 static int enc_exi_speed(void)
 {
-    if (enc_channel == 0 && enc_device == 2)
-        return EXI_CLK_16MHZ;
-    return EXI_CLK_32MHZ;
+    /*
+     * The GameCube EXI bus can run memory-card slots at 32MHz, but the
+     * ENC28J60 SPI interface is rated for 20MHz max. Stay at 16MHz for
+     * every ENJ placement so Slot A/B GCNet adapters are not overclocked.
+     */
+    return EXI_CLK_16MHZ;
 }
 
 static void enc_select(void)
@@ -181,20 +179,33 @@ static void enc_write_reg16(unsigned char reg_l, unsigned short val)
     enc_write_reg(reg_l + 1, val >> 8);
 }
 
+static void enc_delay_ms(unsigned int ms);
+static void enc_delay_us(unsigned int us);
+
 /* ===== PHY register access (indirect via MII interface) ===== */
 
 static unsigned short enc_phy_read(unsigned char reg)
 {
     unsigned short val;
+    int timeout;
 
     enc_write_reg(MIREGADR, reg);
     enc_write_reg(MICMD, MICMD_MIIRD);
+    enc_delay_us(15);
 
     /* Wait for MII read to complete (~10.24 us) */
-    while (enc_read_reg(MISTAT) & MISTAT_BUSY)
+    timeout = 10000;
+    while (enc_read_reg(MISTAT) & MISTAT_BUSY) {
+        if (--timeout == 0) {
+            enc_write_reg(MICMD, 0x00);
+            return 0xFFFF;
+        }
+        enc_delay_us(1);
         ;
+    }
 
     enc_write_reg(MICMD, 0x00);
+    enc_delay_us(1);
 
     val = enc_read_reg(MIRDL);
     val |= (unsigned short)enc_read_reg(MIRDH) << 8;
@@ -203,13 +214,39 @@ static unsigned short enc_phy_read(unsigned char reg)
 
 static void enc_phy_write(unsigned char reg, unsigned short val)
 {
+    int timeout;
+
     enc_write_reg(MIREGADR, reg);
     enc_write_reg(MIWRL, val & 0xFF);
     enc_write_reg(MIWRH, val >> 8);  /* Writing high byte triggers MII write */
+    enc_delay_us(15);
 
     /* Wait for MII write to complete */
-    while (enc_read_reg(MISTAT) & MISTAT_BUSY)
+    timeout = 10000;
+    while (enc_read_reg(MISTAT) & MISTAT_BUSY) {
+        if (--timeout == 0)
+            break;
+        enc_delay_us(1);
         ;
+    }
+}
+
+static bool enc_phy_id_matches(unsigned short *phid1, unsigned short *phid2)
+{
+    int i;
+
+    for (i = 0; i < 8; i++) {
+        *phid1 = enc_phy_read(PHID1);
+        *phid2 = enc_phy_read(PHID2);
+
+        if (*phid1 == ENC28J60_PHID1_EXPECTED &&
+            (*phid2 & 0xFC00) == (ENC28J60_PHID2_EXPECTED & 0xFC00))
+            return true;
+
+        enc_delay_ms(1);
+    }
+
+    return false;
 }
 
 /* ===== Buffer memory access ===== */
@@ -263,6 +300,161 @@ static void delay_loop(volatile int count)
         ;
 }
 
+static void enc_delay_ms(unsigned int ms)
+{
+    const target_ops_t *t = target_get_ops();
+    uint64_t start;
+    uint64_t ticks;
+
+    if (!t || !t->get_ticks || !t->ticks_per_second) {
+        while (ms-- > 0)
+            delay_loop(100000);
+        return;
+    }
+
+    ticks = (uint64_t)(t->ticks_per_second / 1000) * ms;
+    if (ticks == 0)
+        ticks = 1;
+
+    start = t->get_ticks();
+    while ((t->get_ticks() - start) < ticks)
+        ;
+}
+
+static void enc_delay_us(unsigned int us)
+{
+    const target_ops_t *t = target_get_ops();
+    uint64_t start;
+    uint64_t ticks;
+
+    if (!t || !t->get_ticks || !t->ticks_per_second) {
+        delay_loop((int)us * 100);
+        return;
+    }
+
+    ticks = (uint64_t)(t->ticks_per_second / 1000000) * us;
+    if (ticks == 0)
+        ticks = 1;
+
+    start = t->get_ticks();
+    while ((t->get_ticks() - start) < ticks)
+        ;
+}
+
+/*
+ * Wake the ENC28J60 out of power-save before issuing SPI soft reset.
+ *
+ * Silicon errata #19 says the System Reset command is ignored while
+ * ECON2.PWRSV is set. This shows up most often on GameCube when a loaded
+ * program returns after using the adapter and leaves the controller in a
+ * non-default low-power state.
+ */
+static void enc_wake_and_reset(int channel, int device)
+{
+    exi_select(channel, device, EXI_CLK_1MHZ);
+    exi_imm(channel,
+            ENC28J60_CMD_BFC(ECON2) | ((unsigned int)ECON2_PWRSV << 16),
+            2, EXI_IMM_WRITE);
+    exi_deselect(channel);
+
+    /* Allow the regulator to stabilize before reset (errata #19). */
+    enc_delay_ms(2);
+
+    exi_select(channel, device, EXI_CLK_1MHZ);
+    exi_imm(channel, ENC28J60_CMD_SRC, 1, EXI_IMM_WRITE);
+    exi_deselect(channel);
+
+    /* Errata #2: wait >= 1 ms after reset; don't poll CLKRDY.
+     * Leave extra room for the PHY/MIIM path to become readable too. */
+    enc_delay_ms(5);
+}
+
+static bool enc_wait_for_link_up(void)
+{
+    const target_ops_t *t = target_get_ops();
+    uint64_t start = t->get_ticks();
+    uint64_t timeout = t->ticks_per_second;
+
+    do {
+        if (enc_phy_read(PHSTAT2) & PHSTAT2_LSTAT)
+            return true;
+
+        enc_delay_ms(1);
+    } while ((t->get_ticks() - start) < timeout);
+
+    return false;
+}
+
+static void enc_reset_tx_logic(void)
+{
+    enc_clear_bits(ECON1, ECON1_TXRTS);
+    enc_set_bits(ECON1, ECON1_TXRST);
+    enc_clear_bits(ECON1, ECON1_TXRST);
+    enc_clear_bits(EIR, EIR_TXIF | EIR_TXERIF);
+}
+
+static void enc_restore_runtime_config(void)
+{
+    if (enc_read_reg(ECON2) & ECON2_PWRSV) {
+        enc_clear_bits(ECON2, ECON2_PWRSV);
+        enc_delay_ms(2);
+    }
+
+    enc_set_bits(ECON2, ECON2_AUTOINC);
+    enc_write_reg(ERXFCON, ERXFCON_UCEN | ERXFCON_BCEN | ERXFCON_CRCEN);
+    enc_write_reg(MACON1, MACON1_MARXEN | MACON1_TXPAUS | MACON1_RXPAUS);
+    enc_write_reg(MACON2, 0x00);
+    enc_write_reg(MACON3, MACON3_PADCFG0 | MACON3_TXCRCEN | MACON3_FRMLNEN);
+    enc_write_reg(MACON4, MACON4_DEFER);
+    enc_write_reg16(MAMXFLL, ENC_MAX_FRAME);
+    enc_clear_bits(EIR,
+                   EIR_RXERIF | EIR_TXERIF | EIR_TXIF |
+                   EIR_LINKIF | EIR_DMAIF | EIR_PKTIF);
+    enc_set_bank(ERDPTL);
+}
+
+static void enc_rearm_rx_ring(void)
+{
+    int packets;
+
+    /* Reprogramming ERXST/ERXND while RX is disabled resets the internal
+     * hardware write pointer to ERXST. That gives us a clean RX ring without
+     * repeatedly using RXRST during normal return-to-menu rearming. */
+    enc_write_reg16(ERXSTL, ENC_RX_START);
+    enc_write_reg16(ERXNDL, ENC_RX_END);
+    enc_write_reg16(ERXRDPTL, ENC_RX_END);
+    enc_write_reg16(ERDPTL, ENC_RX_START);
+    next_pkt_ptr = ENC_RX_START;
+
+    packets = 255;
+    while ((enc_read_reg(EPKTCNT) != 0) && packets-- > 0)
+        enc_set_bits(ECON2, ECON2_PKTDEC);
+
+    enc_clear_bits(EIR, EIR_RXERIF | EIR_PKTIF);
+}
+
+static int enc_rx_next_valid(unsigned short ptr)
+{
+    return ptr <= ENC_RX_END && ((ptr & 1) == 0);
+}
+
+static void enc_rearm_runtime(void)
+{
+    int timeout;
+
+    enc_clear_bits(ECON1, ECON1_RXEN | ECON1_TXRTS);
+
+    timeout = 10000;
+    while ((enc_read_reg(ESTAT) & ESTAT_RXBUSY) && timeout-- > 0)
+        enc_delay_us(1);
+
+    enc_restore_runtime_config();
+    enc_reset_tx_logic();
+    enc_rearm_rx_ring();
+    enc_restore_runtime_config();
+    enc_set_bits(ECON1, ECON1_RXEN);
+}
+
 /* ===== MAC address generation =====
  *
  * The ENC28J60 has no factory-programmed MAC address.
@@ -304,7 +496,7 @@ static void enc_generate_mac(unsigned char *mac)
     union {
         unsigned int cid[4];
         unsigned char data[19];
-    } ecid;
+    } ecid = { { 0 } };
     unsigned int sum;
     int i;
 
@@ -361,15 +553,10 @@ static int enc_probe(int channel, int device)
 
     /* Soft-reset potential ENC28J60 and retry. After swiss-gc uses the
      * chip, ERDPT registers are modified so exi_get_id() returns a
-     * different value (could even be 0x00000000). SRC restores power-on
-     * defaults. Harmless to non-ENC28J60 devices (undefined SPI command). */
-    exi_select(channel, device, EXI_CLK_1MHZ);
-    exi_imm(channel, ENC28J60_CMD_SRC, 1, EXI_IMM_WRITE);
-    exi_deselect(channel);
-
-    /* Errata #2: wait >= 1ms after reset (don't poll CLKRDY).
-     * ~100k iterations at Gekko speed ≈ 1.2ms. */
-    delay_loop(100000);
+     * different value (could even be 0x00000000). Clear PWRSV first so
+     * the reset still works if a prior program left the chip asleep.
+     * Harmless to non-ENC28J60 devices (undefined SPI command). */
+    enc_wake_and_reset(channel, device);
 
     /* Retry — registers should now be at power-on defaults */
     id = exi_get_id(channel, device);
@@ -409,20 +596,14 @@ int enc28j60_detect(void)
 
 int enc28j60_init(void)
 {
-    /* Soft reset (errata #19: must not be in power-save mode) */
-    enc_select();
-    exi_imm(enc_channel, ENC28J60_CMD_SRC, 1, EXI_IMM_WRITE);
-    enc_deselect();
-
-    /* Errata #2: wait >= 1ms after reset; don't poll CLKRDY */
-    delay_loop(50000);
+    unsigned short phid1;
+    unsigned short phid2;
 
     current_bank = 0;
+    enc_wake_and_reset(enc_channel, enc_device);
 
     /* Validate PHY ID */
-    unsigned short phid1 = enc_phy_read(PHID1);
-    unsigned short phid2 = enc_phy_read(PHID2);
-    if (phid1 != ENC28J60_PHID1_EXPECTED || (phid2 & 0xFC00) != (ENC28J60_PHID2_EXPECTED & 0xFC00))
+    if (!enc_phy_id_matches(&phid1, &phid2))
         return -1;
 
     /* --- RX buffer setup ---
@@ -439,6 +620,9 @@ int enc28j60_init(void)
     /* --- TX buffer setup --- */
     enc_write_reg16(ETXSTL, ENC_TX_START);
     enc_write_reg16(EWRPTL, ENC_TX_START);
+
+    /* Keep buffer pointer auto-increment enabled after reset. */
+    enc_set_bits(ECON2, ECON2_AUTOINC);
 
     /* --- Receive filter ---
      * Accept: unicast to our MAC + broadcast + CRC valid */
@@ -477,6 +661,10 @@ int enc28j60_init(void)
 
     /* --- PHY configuration --- */
 
+    /* Clear any prior power-save / loopback state the loaded program may
+     * have left behind before we re-enable the link. */
+    enc_phy_write(PHCON1, 0x0000);
+
     /* Errata #9: disable half-duplex loopback */
     enc_phy_write(PHCON2, PHCON2_HDLDIS);
 
@@ -486,8 +674,18 @@ int enc28j60_init(void)
     /* Enable link change interrupt on PHY */
     enc_phy_write(PHIE, PHIE_PLNKIE | PHIE_PGEIE);
 
+    /* Clear any sticky status before going live again. */
+    enc_clear_bits(EIR,
+                   EIR_RXERIF | EIR_TXERIF | EIR_TXIF |
+                   EIR_LINKIF | EIR_DMAIF | EIR_PKTIF);
+
     /* Disable CLKOUT pin (not needed) */
     enc_write_reg(ECOCON, 0x00);
+
+    /* Give the PHY up to ~1s to relink so the next host upload doesn't
+     * race a just-reset adapter. */
+    if (enc_wait_for_link_up())
+        enc_delay_ms(50);
 
     /* Return to bank 0 for runtime operation */
     enc_set_bank(ERDPTL);
@@ -497,20 +695,27 @@ int enc28j60_init(void)
 
 void enc28j60_start(void)
 {
-    /* Enable packet reception */
-    enc_set_bits(ECON1, ECON1_RXEN);
+    enc_rearm_runtime();
 }
 
 void enc28j60_stop(void)
 {
-    /* Disable packet reception */
-    enc_clear_bits(ECON1, ECON1_RXEN);
+    int timeout;
+
+    /* Disable receive and cancel any in-flight transmit request. */
+    enc_clear_bits(ECON1, ECON1_RXEN | ECON1_TXRTS);
+
+    timeout = 10000;
+    while ((enc_read_reg(ESTAT) & ESTAT_RXBUSY) && timeout-- > 0)
+        enc_delay_us(1);
 }
 
 /* ===== TX ===== */
 
 int enc28j60_tx(unsigned char *pkt, int len)
 {
+    int attempt;
+
     /* Pad to minimum Ethernet frame size (60 bytes without CRC).
      * Zero-pad to prevent leaking prior packet data (EtherLeak). */
     if (len < 60) {
@@ -518,45 +723,56 @@ int enc28j60_tx(unsigned char *pkt, int len)
         len = 60;
     }
 
-    /* Errata #12: reset TX logic before each transmission */
-    enc_set_bits(ECON1, ECON1_TXRST);
-    enc_clear_bits(ECON1, ECON1_TXRST);
+    for (attempt = 0; attempt < 4; attempt++) {
+        unsigned char eir = 0;
+        unsigned char estat;
+        int timeout;
 
-    /* Clear TX interrupt flags */
-    enc_clear_bits(EIR, EIR_TXIF | EIR_TXERIF);
+        /* Errata #12: reset TX logic before each transmission */
+        enc_reset_tx_logic();
 
-    /* Set write pointer to TX buffer start */
-    enc_write_reg16(EWRPTL, ENC_TX_START);
+        /* Set write pointer to TX buffer start */
+        enc_write_reg16(EWRPTL, ENC_TX_START);
 
-    /* Set TX start pointer */
-    enc_write_reg16(ETXSTL, ENC_TX_START);
+        /* Set TX start pointer */
+        enc_write_reg16(ETXSTL, ENC_TX_START);
 
-    /* Set TX end pointer (start + 1 control byte + packet data - 1) */
-    enc_write_reg16(ETXNDL, ENC_TX_START + len);
+        /* Set TX end pointer (start + 1 control byte + packet data - 1) */
+        enc_write_reg16(ETXNDL, ENC_TX_START + len);
 
-    /* Write per-packet control byte (0x00 = use MACON3 defaults) */
-    unsigned char control = 0x00;
-    enc_write_buffer(&control, 1);
+        /* Write per-packet control byte (0x00 = use MACON3 defaults) */
+        unsigned char control = 0x00;
+        enc_write_buffer(&control, 1);
 
-    /* Write packet data */
-    enc_write_buffer(pkt, len);
+        /* Write packet data */
+        enc_write_buffer(pkt, len);
 
-    /* Start transmission */
-    enc_set_bits(ECON1, ECON1_TXRTS);
+        /* Start transmission */
+        enc_set_bits(ECON1, ECON1_TXRTS);
 
-    /* Wait for transmit complete */
-    int timeout = 100000;
-    while (timeout > 0) {
-        unsigned char eir = enc_read_reg(EIR);
-        if (eir & (EIR_TXIF | EIR_TXERIF))
-            break;
-        timeout--;
+        /* Wait for transmit complete */
+        timeout = 20000;
+        while (timeout > 0) {
+            eir = enc_read_reg(EIR);
+            if (eir & (EIR_TXIF | EIR_TXERIF))
+                break;
+            enc_delay_us(1);
+            timeout--;
+        }
+
+        estat = enc_read_reg(ESTAT);
+
+        if (timeout != 0 && !(eir & EIR_TXERIF) && !(estat & ESTAT_TXABRT)) {
+            enc_clear_bits(ECON1, ECON1_TXRTS);
+            enc_clear_bits(EIR, EIR_TXIF | EIR_TXERIF);
+            return 1;
+        }
+
+        enc_reset_tx_logic();
+        enc_delay_us(100);
     }
 
-    /* Clear TX interrupt flags */
-    enc_clear_bits(EIR, EIR_TXIF | EIR_TXERIF);
-
-    return 1;
+    return 0;
 }
 
 /* ===== RX ===== */
@@ -579,6 +795,11 @@ static int enc28j60_rx(void)
         pkt_next   = (unsigned short)rsv[0] | ((unsigned short)rsv[1] << 8);
         pkt_len    = (unsigned short)rsv[2] | ((unsigned short)rsv[3] << 8);
         pkt_status = (unsigned short)rsv[4] | ((unsigned short)rsv[5] << 8);
+
+        if (!enc_rx_next_valid(pkt_next) || pkt_len > (RX_PKT_BUF_SIZE + 4)) {
+            enc_rearm_runtime();
+            break;
+        }
 
         /* Validate: check "Received OK" bit and reasonable length */
         if ((pkt_status & 0x0080) && pkt_len >= 18 && pkt_len <= (RX_PKT_BUF_SIZE + 4)) {
