@@ -124,9 +124,7 @@ COMMON_C_OBJS := \
     $(COMMONDIR)/cache.o \
     $(COMMONDIR)/memfuncs.o \
     $(COMMONDIR)/usbgecko.o \
-    $(COMMONDIR)/serial_io.o \
-    $(COMMONDIR)/gfx_gx.o \
-    $(COMMONDIR)/gfx_font.o
+    $(COMMONDIR)/serial_io.o
 
 COMMON_S_OBJS := \
     $(COMMONDIR)/crt0.o \
@@ -165,12 +163,6 @@ $(COMMONDIR)/usbgecko.o: serial/usbgecko.c $(VERSION_H) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(COMMONDIR)/serial_io.o: serial/serial_io.c $(VERSION_H) | $(COMMONDIR)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-$(COMMONDIR)/gfx_gx.o: gfx_gx.c $(VERSION_H) | $(COMMONDIR)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-$(COMMONDIR)/gfx_font.o: $(CLIENTDIR)/common/gfx_font.c $(VERSION_H) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Common ASM object rules
@@ -331,18 +323,7 @@ $(EXBUILD)/%.elf: $(EXDIR)/%/main.c $(EXDIR)/gc-example.ld | $(EXBUILD)
 	    -DGC_KOSLOAD_BASE=$(GC_LOADER_BASE) \
 	    -T $(EXDIR)/gc-example.ld $< -o $@
 
-# gfx-test links against gfx backend + font + support objects
-GFX_TEST_ELF := $(EXBUILD)/gfx-test.elf
-GFX_TEST_DEPS := $(COMMONDIR)/gfx_gx.o $(COMMONDIR)/gfx_font.o \
-                 $(COMMONDIR)/cache.o $(COMMONDIR)/memfuncs.o
-
-$(GFX_TEST_ELF): $(EXDIR)/gfx-test/main.c $(EXDIR)/gc-example.ld $(GFX_TEST_DEPS) | $(EXBUILD)
-	@echo "  CC+LD   $@"
-	@$(CC) $(ARCH_CFLAGS) -O2 -ffreestanding -fno-zero-initialized-in-bss -nostdlib \
-	    $(INCLUDES) -DGC_KOSLOAD_BASE=$(GC_LOADER_BASE) \
-	    -T $(EXDIR)/gc-example.ld $< $(GFX_TEST_DEPS) -o $@
-
-examples: $(GC_EXAMPLE_ELFS) $(GFX_TEST_ELF)
+examples: $(GC_EXAMPLE_ELFS)
 
 # ============================================================
 # Phony targets
