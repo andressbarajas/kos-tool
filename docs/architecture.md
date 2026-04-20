@@ -60,9 +60,18 @@ Shared network stack declarations live in:
 
 - `client/include/kosload/net_stack.h`
 
+Shared packet helper declarations live in:
+
+- `client/include/kosload/packet.h`
+
 Console-local `net.h` files remain thin wrappers so target drivers can keep
 their existing local include paths while shared code includes the common
 contract directly.
+
+Console-local `packet.h` files intentionally remain wrappers that select the
+target byte-order macros before including the shared packet helper
+declarations. Packet helper implementations still live under each console tree
+because checksum odd-byte handling and copy behavior differ by CPU.
 
 Current console-specific adapter selection lives in:
 
