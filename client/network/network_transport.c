@@ -22,9 +22,9 @@
 #include "packet.h"
 #include <kosload/screensaver.h>
 
-/* IP configuration: default 0.0.0.0 means DHCP mode */
-#ifndef DREAMCAST_IP
-#define DREAMCAST_IP "0.0.0.0"
+/* IP configuration: default 0.0.0.0 means DHCP mode. */
+#ifndef KOSLOAD_IP
+#define KOSLOAD_IP "0.0.0.0"
 #endif
 
 /*
@@ -40,7 +40,7 @@ typedef struct {
 
 static const ip_config_block_t ip_config __attribute__((used)) = {
     .magic = {'K','O','S','L','D','_','I','P'},
-    .ip = DREAMCAST_IP
+    .ip = KOSLOAD_IP
 };
 
 /* From entry.c */
@@ -104,6 +104,12 @@ static int network_transport_init(void)
     /* Set initial IP address from patchable config block */
     set_ip_from_string();
     kosload_info.dc_ip = our_ip;
+
+    /* DHCP starts the adapter while sending its first discover packet.
+     * Static IP mode is otherwise silent at boot, so bring RX online now
+     * so ARP/ping/tool probes can reach the loader. */
+    if (our_ip != 0)
+        bb->start();
 
     /* Advertise DHCP capability only when no static IP was configured.
      * This is checked at runtime (not compile time) so the host can

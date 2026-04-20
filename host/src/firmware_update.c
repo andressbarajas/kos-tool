@@ -619,7 +619,7 @@ int auto_update_firmware(kostool_context_t *ctx) {
             }
         }
         /* Legacy dcload-ip: probe memory to detect DHCP vs static.
-         * The DREAMCAST_IP string literal lives in .rodata. */
+         * The patchable IP string literal lives in .rodata. */
         else if (strstr(remote_name, "dcload") != NULL) {
             #define PROBE_SIZE 24576
             uint8_t *loader_mem = malloc(PROBE_SIZE);
