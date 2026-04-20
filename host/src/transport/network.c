@@ -961,7 +961,8 @@ static int network_set_rtc(kostool_context_t *ctx, uint32_t timestamp) {
 const transport_ops_t network_transport_ops = {
     .name = "network",
     .capabilities = TRANSPORT_CAP_RESET | TRANSPORT_CAP_MAPLE |
-                    TRANSPORT_CAP_PMCR | TRANSPORT_CAP_RECOVERY,
+                    TRANSPORT_CAP_PMCR | TRANSPORT_CAP_RECOVERY |
+                    TRANSPORT_CAP_RTC,
     .init = network_init,
     .shutdown = network_shutdown,
     .send_data = network_send_data,

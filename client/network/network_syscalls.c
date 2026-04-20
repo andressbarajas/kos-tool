@@ -14,10 +14,10 @@
 #include <string.h>
 #include <kosload/protocol.h>
 #include <kosload/types.h>
+#include <kosload/net_adapter.h>
+#include <kosload/net_stack.h>
 #include "commands.h"
 #include "packet.h"
-#include "net.h"
-#include "adapter.h"
 
 /* ===== Syscall shared state ===== */
 

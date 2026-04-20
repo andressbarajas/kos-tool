@@ -385,7 +385,7 @@ int main(int argc, char *argv[]) {
     /* Sync RTC if requested — works standalone or with any command.
      * The DC BIOS expects local time in the AICA RTC, not UTC,
      * so add the host's UTC offset (tm_gmtoff) to the timestamp. */
-    if (ctx.rtc_sync && ctx.transport->set_rtc) {
+    if (ctx.rtc_sync && transport_can_set_rtc(ctx.transport)) {
         time_t now = time(NULL);
         struct tm *lt = localtime(&now);
         time_t local_time = now + lt->tm_gmtoff;
@@ -437,7 +437,7 @@ int main(int argc, char *argv[]) {
         diag_phase(&ctx, "download command", ctx.time_ops->time_usec() - phase_start);
         break;
     case 'r':
-        if (ctx.transport->reset)
+        if (transport_can_reset(ctx.transport))
             ret = ctx.transport->reset(&ctx);
         break;
     default:

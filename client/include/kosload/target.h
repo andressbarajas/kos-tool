@@ -5,7 +5,21 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/* Target platform interface — one implementation per console */
+/*
+ * Target platform interface.
+ *
+ * This is the console boundary for client firmware. Shared client code should
+ * use this table for hardware-facing work instead of branching on Dreamcast,
+ * GameCube, or future console names. A new console port should provide one
+ * implementation of this table, wire it into its serial/network entrypoints,
+ * and keep console-specific video, timer, cache, reboot, execute, and storage
+ * behavior behind these callbacks.
+ *
+ * The common entrypoint calls init() before transport initialization. Transport
+ * implementations may use the timer and video callbacks after common_main()
+ * stores this table, so implementations should leave those callbacks usable
+ * for the rest of the loader lifetime.
+ */
 typedef struct target_ops {
     const char *name;               /* "Dreamcast" or "GameCube" */
     uint32_t    default_load;       /* DC: 0x8c010000, GC: 0x80003100 */

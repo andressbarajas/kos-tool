@@ -7,6 +7,10 @@
 /*
  * Shared protocol definitions for kosload.
  *
+ * Keep command IDs, packet structures, capability-related constants, adapter
+ * IDs, and memory-layout constants centralized here so host and client code
+ * stay in sync as new consoles or transports are added.
+ *
  * Serial protocol: Preserved from dcload-serial
  *   - Single-byte commands ('A'-'V'), LZO compression, XOR checksums
  *
