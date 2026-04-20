@@ -15,9 +15,9 @@
 
 #include <string.h>
 #include <kosload/net_adapter.h>
+#include <kosload/net_stack.h>
 #include "w5500.h"
 #include "packet.h"
-#include "net.h"
 #include "dcload.h"
 #include "dhcp.h"
 #include <kosload/target.h>

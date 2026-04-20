@@ -17,8 +17,8 @@
 #include <kosload/transport.h>
 #include <kosload/info.h>
 #include <kosload/net_adapter.h>
+#include <kosload/net_stack.h>
 #include "dcload.h"
-#include "net.h"
 #include "packet.h"
 #include <kosload/screensaver.h>
 
@@ -49,7 +49,6 @@ extern volatile bool running;
 extern unsigned int global_bg_color;
 
 /* From commands.c */
-extern volatile unsigned int our_ip;
 extern unsigned int tool_ip;
 extern unsigned short tool_port;
 

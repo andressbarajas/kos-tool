@@ -22,6 +22,7 @@
 #include <kosload/video.h>
 #include <kosload/info.h>
 #include <kosload/net_adapter.h>
+#include <kosload/net_stack.h>
 
 #include "dhcp.h"
 #include "dcload.h"
@@ -41,7 +42,6 @@ extern void uint_to_string(unsigned int foo, unsigned char *bar);
 extern void clear_lines(int y, int height, unsigned int color);
 
 /* From commands.c */
-extern volatile unsigned int our_ip;
 extern unsigned int tool_ip;
 extern unsigned short tool_port;
 

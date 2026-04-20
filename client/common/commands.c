@@ -16,8 +16,8 @@
 #include <kosload/info.h>
 #include <kosload/screensaver.h>
 #include <kosload/net_adapter.h>
+#include <kosload/net_stack.h>
 #include "commands.h"
-#include "net.h"
 #include "dcload.h"
 #include "maple.h"
 #include "perfctr.h"

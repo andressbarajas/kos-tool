@@ -56,6 +56,14 @@ the adapter contract in:
 
 - `client/include/kosload/net_adapter.h`
 
+Shared network stack declarations live in:
+
+- `client/include/kosload/net_stack.h`
+
+Console-local `net.h` files remain thin wrappers so target drivers can keep
+their existing local include paths while shared code includes the common
+contract directly.
+
 Current console-specific adapter selection lives in:
 
 - `client/dreamcast/net/adapter.c`
