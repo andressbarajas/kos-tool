@@ -227,24 +227,46 @@ endif
 
 IP_CFLAGS := $(CFLAGS) $(IP_INCLUDES)
 
-IP_OBJS := \
+# IP object groups keep the network layering visible:
+# - platform adapters and bus bindings live under client/dreamcast/net/
+# - shared chip drivers live under client/common/drivers/
+# - shared transport/stack code lives under client/network/
+IP_CLIENT_TRANSPORT_OBJS := \
     $(IPDIR)/main.o \
     $(IPDIR)/entry.o \
     $(IPDIR)/network_transport.o \
     $(IPDIR)/network_syscalls.o \
     $(IPDIR)/cdfs_syscalls.o \
-    $(IPDIR)/commands.o \
+    $(IPDIR)/commands.o
+
+IP_PLATFORM_NET_OBJS := \
     $(IPDIR)/adapter.o \
     $(IPDIR)/rtl8139.o \
-    $(IPDIR)/lan_adapter.o \
-    $(IPDIR)/w5500.o \
-    $(IPDIR)/w5500_spi_dc.o \
+    $(IPDIR)/lan_adapter.o
+
+IP_SHARED_CHIP_DRIVER_OBJS := \
+    $(IPDIR)/w5500.o
+
+IP_PLATFORM_BUS_BINDING_OBJS := \
+    $(IPDIR)/w5500_spi_dc.o
+
+IP_NETWORK_STACK_OBJS := \
     $(IPDIR)/net.o \
     $(IPDIR)/packet.o \
     $(IPDIR)/packet_helpers.o \
-    $(IPDIR)/dhcp.o \
+    $(IPDIR)/dhcp.o
+
+IP_STARTUP_OBJS := \
     $(IPDIR)/crt0.o \
     $(IPDIR)/go.o
+
+IP_OBJS := \
+    $(IP_CLIENT_TRANSPORT_OBJS) \
+    $(IP_PLATFORM_NET_OBJS) \
+    $(IP_SHARED_CHIP_DRIVER_OBJS) \
+    $(IP_PLATFORM_BUS_BINDING_OBJS) \
+    $(IP_NETWORK_STACK_OBJS) \
+    $(IP_STARTUP_OBJS)
 
 IP_ELF := $(IPDIR)/dc-load-ip.elf
 IP_BIN := $(IPDIR)/dc-load-ip.bin

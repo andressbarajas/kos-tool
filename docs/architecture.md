@@ -90,6 +90,23 @@ Individual Ethernet drivers stay under the console tree when they are hardware
 specific, or under `client/common/drivers/` when the chip driver is shared by
 multiple consoles.
 
+Network drivers are layered as follows:
+
+- `client/<console>/net/adapter.c` chooses the active adapter for that console
+  and exposes it through `net_adapter_ops_t`
+- console-owned integrated adapters and timing-sensitive hardware drivers stay
+  under `client/<console>/net/`
+- shared chip drivers, such as `client/common/drivers/w5500.c`, keep reusable
+  register and socket logic outside any one console tree
+- console bus bindings, such as `client/dreamcast/net/w5500_spi_dc.c` and
+  `client/gamecube/net/w5500_spi_gc.c`, connect a shared chip driver to the
+  target's bus, GPIO, EXI, SPI, or similar hardware path
+
+Future adapters should follow the same split. If a chip can be reused across
+multiple consoles, keep its chip-level driver in `client/common/drivers/` and
+put only the console bus binding under `client/<console>/net/`. Adapter
+probing, priority, and selection should remain console-specific.
+
 The shared entrypoint is:
 
 - `client/common/main.c`
