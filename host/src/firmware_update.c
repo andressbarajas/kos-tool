@@ -7,8 +7,8 @@
  * older (or a different loader, e.g. dcload → dc-load), uploads
  * a trampoline + new firmware binary and reconnects.
  *
- * Supports multiple consoles: DC (SH4 trampoline) and GC (PPC,
- * not yet implemented).  Firmware is embedded per-console per-transport:
+ * Supports multiple consoles: DC (SH4 trampoline) and GC (PPC trampoline).
+ * Firmware is embedded per-console per-transport:
  *   firmware_dc_serial, firmware_dc_ip, firmware_gc_serial, firmware_gc_ip
  *
  * The SH4 trampoline copies the firmware to 0x8c004000 (DC loader
@@ -157,7 +157,8 @@ static const arch_update_params_t sh4_params = {
  *
  * Behavior:
  *   1. Load base register r7 = 0x80100000
- *   2. Disable interrupts (MSR = 0)
+ *   2. Disable external interrupts while keeping BAT translation enabled
+ *      (MSR = FP | IR | DR, same as the GC bootstrap/startup path)
  *   3. Set up temporary stack at 0x80200000
  *   4. Copy firmware from 0x80100100 to 0x817EC000 (word-at-a-time)
  *   5. Flush D-cache (dcbf) + invalidate I-cache (icbi) over dest range
@@ -175,8 +176,8 @@ static const arch_update_params_t sh4_params = {
 static const uint8_t ppc_trampoline[256] = {
     /* 0x00: lis r7, 0x8010 */
     0x3c, 0xe0, 0x80, 0x10,
-    /* 0x04: li r0, 0 */
-    0x38, 0x00, 0x00, 0x00,
+    /* 0x04: li r0, 0x2030 -- FP | IR | DR, EE off */
+    0x38, 0x00, 0x20, 0x30,
     /* 0x08: mtmsr r0 */
     0x7c, 0x00, 0x01, 0x24,
     /* 0x0C: isync */
