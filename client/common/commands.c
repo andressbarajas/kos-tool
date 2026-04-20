@@ -558,7 +558,7 @@ void cmd_retval(ip_header_t *ip, udp_header_t *udp, command_t *command)
 
 void cmd_maple(ip_header_t *ip, udp_header_t *udp, command_t *command)
 {
-	char *res;
+	unsigned char *res;
 	int i;
 	unsigned char *buffer = pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN;
 	command_t *response = (command_t *)buffer;
@@ -566,13 +566,13 @@ void cmd_maple(ip_header_t *ip, udp_header_t *udp, command_t *command)
 	memcpy(response, command, COMMAND_LEN);
 
 	do {
-		res = (char *)maple_docmd(command->data[0], command->data[1],
-		                          command->data[2], command->data[3],
-		                          command->data + 4);
-	} while (*res == MAPLE_RESPONSE_AGAIN);
+		res = maple_docmd(command->data[0], command->data[1],
+		                   command->data[2], command->data[3],
+		                   command->data + 4);
+	} while ((signed char)res[0] == MAPLE_RESPONSE_AGAIN);
 
 	/* Send response back */
-	i = ((res[0] < 0) ? 4 : ((res[3] + 1) << 2));
+	i = (((signed char)res[0] < 0) ? 4 : ((res[3] + 1) << 2));
 	response->size = htonl(i);
 	fast_aligned_memcpy(to_cached(response->data), to_cached(res), i);
 

@@ -389,7 +389,6 @@ static uint8_t *load_firmware_file(const char *path, uint32_t *out_size) {
 
 static int perform_update(kostool_context_t *ctx, const uint8_t *fw_data,
                           uint32_t fw_size, const char *patch_ip,
-                          int dhcp_reconnect,
                           const arch_update_params_t *arch) {
     /* Build combined blob: trampoline (256 bytes) + firmware .bin */
     uint32_t blob_size = arch->trampoline_size + fw_size;
@@ -517,7 +516,7 @@ int auto_update_firmware(kostool_context_t *ctx) {
 
         printf("Updating firmware...\n");
 
-        int ret = perform_update(ctx, fw_data, fw_size, NULL, 0, arch);
+        int ret = perform_update(ctx, fw_data, fw_size, NULL, arch);
         free(ext_fw);
         return ret;
     }
@@ -666,7 +665,7 @@ int auto_update_firmware(kostool_context_t *ctx) {
         printf("Legacy loader found...\n");
     printf("Updating firmware...\n");
 
-    int result = perform_update(ctx, fw_data, fw_size, patch_ip, dhcp_reconnect, arch);
+    int result = perform_update(ctx, fw_data, fw_size, patch_ip, arch);
 
     /* Network static IP: print the expected new version and pre-fill
      * remote_version_string so prepare_comms() skips its duplicate printf.
