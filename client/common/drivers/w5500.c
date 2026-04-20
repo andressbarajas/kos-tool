@@ -26,10 +26,25 @@
 /* ===== SPI backend (set by platform) ===== */
 
 static const w5500_spi_ops_t *spi;
+static int w5500_spi_active;
+static int w5500_ready;
+static int w5500_last_link = -1;
+static uint64_t w5500_next_link_poll;
 
 void w5500_set_spi_ops(const w5500_spi_ops_t *ops)
 {
     spi = ops;
+}
+
+static void w5500_deactivate(void)
+{
+    if (w5500_spi_active && spi)
+        spi->shutdown();
+
+    w5500_spi_active = 0;
+    w5500_ready = 0;
+    w5500_last_link = -1;
+    w5500_next_link_poll = 0;
 }
 
 /* ===== Adapter instance ===== */
@@ -244,9 +259,92 @@ static int w5500_soft_reset(void)
 
 /* ===== Link Status ===== */
 
-static int w5500_link_up(void)
+int w5500_ethernet_link_up(void)
 {
-    return w5500_read_reg(W5500_COMMON_BLOCK, W5500_PHYCFGR) & 0x01;
+    if (!w5500_ready)
+        return 0;
+
+    return (w5500_read_reg(W5500_COMMON_BLOCK, W5500_PHYCFGR) &
+            W5500_PHYCFGR_LNK) != 0;
+}
+
+static uint64_t w5500_ms_to_ticks(const target_ops_t *t, unsigned int ms)
+{
+    return ((uint64_t)t->ticks_per_second * ms) / 1000;
+}
+
+static void w5500_reset_link_state(void)
+{
+    w5500_last_link = -1;
+    w5500_next_link_poll = 0;
+}
+
+static void w5500_link_change(int old_link_up, int link_up)
+{
+    screensaver_wake();
+
+    if (link_up) {
+        if (booted && !running && !receiving)
+            disp_status("idle...");
+
+        /* Match the BBA/LAN behavior: if DHCP was waiting for link, break
+         * the timeout loop so it can retry immediately after link comes up. */
+        if (timeout_loop > 0) {
+            dhcp_attempts = 0;
+            timeout_loop = -1;
+            escape_loop = 1;
+        }
+    } else {
+        if (booted && !running && !receiving) {
+            if (old_link_up > 0)
+                disp_status("link lost...");
+            else
+                disp_status("link change...");
+        }
+    }
+}
+
+static void w5500_poll_link_change(void)
+{
+    const target_ops_t *t = target_get_ops();
+    uint64_t now;
+    int link_up;
+
+    if (!w5500_ready)
+        return;
+
+    now = t->get_ticks();
+
+    if (w5500_next_link_poll && now < w5500_next_link_poll)
+        return;
+
+    w5500_next_link_poll = now + w5500_ms_to_ticks(t, 100);
+    link_up = w5500_ethernet_link_up();
+
+    if (w5500_last_link < 0 || link_up != w5500_last_link) {
+        int old_link_up = w5500_last_link;
+        w5500_last_link = link_up;
+        w5500_link_change(old_link_up, link_up);
+    }
+}
+
+static int w5500_wait_send_complete(void)
+{
+    int i;
+
+    for (i = 0; i < 1000; i++) {
+        unsigned char ir = w5500_read_reg(W5500_S0_REG_BLOCK, W5500_Sn_IR);
+
+        if (ir & W5500_Sn_IR_SENDOK) {
+            w5500_write_reg(W5500_S0_REG_BLOCK, W5500_Sn_IR,
+                            W5500_Sn_IR_SENDOK);
+            return 0;
+        }
+
+        delay_loop(1000);
+    }
+
+    return -1;
 }
 
 /* ===== Detection ===== */
@@ -288,13 +386,22 @@ int w5500_init(void)
     int i;
     unsigned char ver;
 
-    /* Initialize SPI */
+    if (!spi)
+        return -1;
+
+    /* Reinitialize from a clean SCIF/SPI state. This is important after
+     * returning from a program, which may have touched serial registers. */
+    if (w5500_spi_active)
+        w5500_deactivate();
+
     if (spi->init() < 0)
         return -1;
 
+    w5500_spi_active = 1;
+
     /* Soft reset */
     if (w5500_soft_reset() < 0) {
-        spi->shutdown();
+        w5500_deactivate();
         return -1;
     }
 
@@ -307,7 +414,7 @@ int w5500_init(void)
     /* Verify chip version */
     ver = w5500_read_reg(W5500_COMMON_BLOCK, W5500_VERSIONR);
     if (ver != W5500_VERSION_EXPECTED) {
-        spi->shutdown();
+        w5500_deactivate();
         return -1;
     }
 
@@ -334,16 +441,18 @@ int w5500_init(void)
                     W5500_Sn_MR_MACRAW | W5500_Sn_MR_MFEN);
 
     if (w5500_exec_cmd(W5500_S0_REG_BLOCK, W5500_CR_OPEN) < 0) {
-        spi->shutdown();
+        w5500_deactivate();
         return -1;
     }
 
     /* Verify socket opened in MACRAW mode */
     if (w5500_read_reg(W5500_S0_REG_BLOCK, W5500_Sn_SR) != W5500_SOCK_MACRAW) {
-        spi->shutdown();
+        w5500_deactivate();
         return -1;
     }
 
+    w5500_ready = 1;
+    w5500_reset_link_state();
     return 0;
 }
 
@@ -351,15 +460,16 @@ int w5500_init(void)
 
 void w5500_start(void)
 {
-    /* Nothing additional needed — socket is already open from init */
+    if (!w5500_ready)
+        w5500_init();
 }
 
 void w5500_stop(void)
 {
-    /* Close Socket 0 and reset the chip */
-    w5500_exec_cmd(W5500_S0_REG_BLOCK, W5500_CR_CLOSE);
-    w5500_write_reg(W5500_COMMON_BLOCK, W5500_MR, W5500_MR_RST);
-    spi->shutdown();
+    /* Keep the socket and SPI backend alive. The network syscall path calls
+     * stop/start around user code, so a destructive stop would strand the
+     * first console/fileserver syscall after EXEC. Full reset happens in init.
+     */
 }
 
 /* ===== Transmit ===== */
@@ -368,8 +478,11 @@ int w5500_tx(unsigned char *pkt, int len)
 {
     unsigned short fsr, wr_ptr;
 
+    if (!w5500_ready)
+        return 0;
+
     /* Check link */
-    if (!w5500_link_up())
+    if (!w5500_ethernet_link_up())
         return 0;
 
     /* Check TX free space */
@@ -385,8 +498,13 @@ int w5500_tx(unsigned char *pkt, int len)
     wr_ptr += len;
     w5500_write_reg16(W5500_S0_REG_BLOCK, W5500_Sn_TX_WR, wr_ptr);
 
+    w5500_write_reg(W5500_S0_REG_BLOCK, W5500_Sn_IR, W5500_Sn_IR_SENDOK);
+
     /* Issue SEND command */
     if (w5500_exec_cmd(W5500_S0_REG_BLOCK, W5500_CR_SEND) < 0)
+        return 0;
+
+    if (w5500_wait_send_complete() < 0)
         return 0;
 
     return 1;
@@ -399,6 +517,9 @@ static int w5500_rx(void)
     unsigned short rsr, rd_ptr, data_len, read_len;
     unsigned char head[2];
     int processed = 0;
+
+    if (!w5500_ready)
+        return 0;
 
     /* Check if any data is available */
     rsr = w5500_read_reg16_safe(W5500_S0_REG_BLOCK, W5500_Sn_RX_RSR);
@@ -469,6 +590,11 @@ void w5500_loop(bool is_main_loop)
     while (!escape_loop) {
         /* Poll for received packets */
         w5500_rx();
+
+        /* Poll W5500 PHY link state. The W5500 path has no NIC interrupt
+         * status like the BBA, so this synthesizes link-change behavior from
+         * PHYCFGR.LNK with a throttled SPI register read. */
+        w5500_poll_link_change();
 
         if (is_main_loop) {
             dhcp_poll();

@@ -54,6 +54,10 @@ typedef struct {
 #define W5500_PHYCFGR       0x002E  /* PHY Configuration Register */
 #define W5500_VERSIONR      0x0039  /* Chip Version Register (should read 0x04) */
 
+/* ===== PHY Configuration Register Bits ===== */
+
+#define W5500_PHYCFGR_LNK   0x01    /* Link status: Ethernet link is up */
+
 /* ===== Socket 0 Register Addresses ===== */
 
 #define W5500_Sn_MR         0x0000  /* Socket Mode */
@@ -126,6 +130,7 @@ void w5500_start(void);
 void w5500_stop(void);
 void w5500_loop(bool is_main_loop);
 int  w5500_tx(unsigned char *pkt, int len);
+int  w5500_ethernet_link_up(void);
 
 /* Defined in w5500.c — use after including platform adapter.h */
 /* extern adapter_t adapter_w5500; */

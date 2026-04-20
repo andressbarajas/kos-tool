@@ -28,6 +28,10 @@
 #define BBA_RX_FIFO_DELAY_COUNT  10       /* packets per burst */
 #define LAN_RX_FIFO_DELAY_TIME   1250     /* microseconds */
 #define LAN_RX_FIFO_DELAY_COUNT  1        /* packets per burst */
+#define W5500_RX_FIFO_DELAY_TIME 7000     /* microseconds */
+#define W5500_RX_FIFO_DELAY_COUNT 3       /* packets per burst */
+#define W5500_BULK_RX_FIFO_DELAY_TIME 9000 /* microseconds */
+#define W5500_UPLOAD_WINDOW_SIZE (32U * 1024U)
 #define DEFAULT_RX_FIFO_DELAY    (NET_PACKET_TIMEOUT_USEC / 51)
 #define DEFAULT_RX_FIFO_COUNT    15
 
@@ -66,6 +70,14 @@ static double diag_mib_per_sec(uint64_t bytes, uint64_t usec) {
     if (usec == 0)
         return 0.0;
     return ((double)bytes * 1000000.0) / ((double)usec * 1024.0 * 1024.0);
+}
+
+static int adapter_is_w5500(uint32_t adapter) {
+    return adapter == ADAPTER_DC_W5500 || adapter == ADAPTER_GC_W5500;
+}
+
+static int adapter_is_spi(uint32_t adapter) {
+    return adapter_is_w5500(adapter) || adapter == ADAPTER_GC_ENC;
 }
 
 /* ===== Low-level UDP helpers ===== */
@@ -231,8 +243,8 @@ static int prepare_comms(kostool_context_t *ctx) {
                   ctx->installed_adapter == ADAPTER_GC_BBA);
     int is_lan = (ctx->installed_adapter == LEGACY_LAN_MODEL ||
                   ctx->installed_adapter == ADAPTER_DC_LAN);
-    int is_gc_spi = (ctx->installed_adapter == ADAPTER_GC_ENC ||
-                     ctx->installed_adapter == ADAPTER_GC_W5500);
+    int is_w5500 = adapter_is_w5500(ctx->installed_adapter);
+    int is_spi = adapter_is_spi(ctx->installed_adapter);
 
     printf("%s\n", ctx->remote_version_string);
 
@@ -255,7 +267,10 @@ static int prepare_comms(kostool_context_t *ctx) {
         } else {
             ctx->rx_fifo_delay = 0;
         }
-    } else if (is_gc_spi) {
+    } else if (is_w5500) {
+        ctx->rx_fifo_delay = W5500_RX_FIFO_DELAY_TIME;
+        ctx->rx_fifo_delay_count = W5500_RX_FIFO_DELAY_COUNT;
+    } else if (is_spi) {
         //if (!ctx->fast_mode) {
             ctx->rx_fifo_delay = DEFAULT_RX_FIFO_DELAY;
             ctx->rx_fifo_delay_count = DEFAULT_RX_FIFO_COUNT;
@@ -383,8 +398,8 @@ static void network_shutdown(kostool_context_t *ctx) {
  * - Drain delay after LOADBIN retry to discard stale in-flight packets
  * - Adaptive pacing: increase FIFO delay when packet loss detected
  */
-static int network_send_data(kostool_context_t *ctx, const uint8_t *data,
-                             uint32_t dest_addr, uint32_t size) {
+static int network_send_data_once(kostool_context_t *ctx, const uint8_t *data,
+                                  uint32_t dest_addr, uint32_t size) {
     uint8_t buffer[2048];
     uint64_t diag_total_start = 0;
     uint64_t diag_loadbin_done = 0;
@@ -398,8 +413,6 @@ static int network_send_data(kostool_context_t *ctx, const uint8_t *data,
     uint32_t diag_loadbin_retries = 0;
 
     if (!size) return -1;
-
-    prepare_comms(ctx);
 
     if (ctx->diagnostics_enabled)
         diag_total_start = ctx->time_ops->time_usec();
@@ -434,7 +447,8 @@ static int network_send_data(kostool_context_t *ctx, const uint8_t *data,
 
     /* Auto-fast: skip FIFO pacing for small transfers (e.g. syscall I/O).
      * These fit in the BBA's RX FIFO without loss, so pacing is pure waste. */
-    int auto_fast = (num_chunks <= AUTO_FAST_CHUNK_THRESHOLD);
+    int auto_fast = (!adapter_is_spi(ctx->installed_adapter) &&
+                     num_chunks <= AUTO_FAST_CHUNK_THRESHOLD);
     if (auto_fast)
         current_fifo_delay = 0;
 
@@ -639,6 +653,53 @@ static int network_send_data(kostool_context_t *ctx, const uint8_t *data,
     }
 
     return 0;
+}
+
+static int network_send_data(kostool_context_t *ctx, const uint8_t *data,
+                             uint32_t dest_addr, uint32_t size) {
+    uint32_t offset = 0;
+    uint32_t saved_fifo_delay;
+    int ret = 0;
+
+    if (!size)
+        return -1;
+
+    prepare_comms(ctx);
+
+    if (!adapter_is_w5500(ctx->installed_adapter) ||
+        size <= W5500_UPLOAD_WINDOW_SIZE) {
+        return network_send_data_once(ctx, data, dest_addr, size);
+    }
+
+    if (ctx->diagnostics_enabled) {
+        printf("[diag] W5500 upload split: %u bytes into %u-byte windows\n",
+               size, W5500_UPLOAD_WINDOW_SIZE);
+    }
+
+    saved_fifo_delay = ctx->rx_fifo_delay;
+
+    /* Large W5500 uploads are split into windows, but each window is still
+     * large enough to benefit from slightly slower FIFO pacing. Keep this
+     * upload-only delay out of smaller syscall/console transfers. */
+    ctx->rx_fifo_delay = W5500_BULK_RX_FIFO_DELAY_TIME;
+
+    while (offset < size) {
+        uint32_t chunk = size - offset;
+
+        if (chunk > W5500_UPLOAD_WINDOW_SIZE)
+            chunk = W5500_UPLOAD_WINDOW_SIZE;
+
+        if (network_send_data_once(ctx, data + offset,
+                                   dest_addr + offset, chunk) != 0) {
+            ret = -1;
+            break;
+        }
+
+        offset += chunk;
+    }
+
+    ctx->rx_fifo_delay = saved_fifo_delay;
+    return ret;
 }
 
 /*

@@ -25,10 +25,10 @@
 #define SH4_FREQUENCY (199496956)
 #define PERFCOUNTER_SCALE SH4_FREQUENCY
 
-/* Adapter model IDs — must match legacy dcload-ip (octal values) */
+/* Adapter model IDs — legacy BBA/LAN are octal dcload-ip values. */
 #define LAN_MODEL   0300
 #define BBA_MODEL   0400
-#define W5500_MODEL 0500
+#define W5500_MODEL 0x5500
 
 /* Global state */
 extern volatile bool booted;
