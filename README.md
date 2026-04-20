@@ -176,7 +176,6 @@ Options:
   -w           Sync console RTC to host time
   -U <file>    Update firmware from external file
   -F           Enable automatic firmware update
-  -N           Disable automatic firmware update (default)
   -A [prefix]  Decode addresses via addr2line
 ```
 
