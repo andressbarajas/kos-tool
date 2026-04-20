@@ -14,6 +14,7 @@
 #include <string.h>
 #include <kosload/target.h>
 #include <kosload/info.h>
+#include <kosload/screensaver.h>
 #include "commands.h"
 #include "net.h"
 #include "adapter.h"
@@ -189,6 +190,7 @@ void cmd_execute(ether_header_t *ether, ip_header_t *ip, udp_header_t *udp, comm
 		running = false;
 		disp_info();
 		disp_status("idle...");
+		screensaver_reset();
 	}
 }
 
