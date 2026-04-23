@@ -442,6 +442,24 @@ void cmd_sendbin(ip_header_t *ip, udp_header_t *udp, command_t *command)
 	}
 }
 
+void cmd_capabilities(ip_header_t *ip, udp_header_t *udp, command_t *command)
+{
+	unsigned char *buffer = pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN;
+	command_t *response = (command_t *)buffer;
+
+	memcpy(response, command, COMMAND_LEN);
+	response->address = htonl(kosload_info.capabilities);
+	response->size = htonl(0);
+
+	make_ip(ntohl(ip->src), our_ip, UDP_H_LEN + COMMAND_LEN,
+	        IP_UDP_PROTOCOL, (ip_header_t *)(pkt_buf + ETHER_H_LEN),
+	        ip->packet_id);
+	make_udp(ntohs(udp->src), dcload_syscall_port, COMMAND_LEN,
+	         (ip_header_t *)(pkt_buf + ETHER_H_LEN),
+	         (udp_header_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN));
+	bb->tx(pkt_buf, ETHER_H_LEN + IP_H_LEN + UDP_H_LEN + COMMAND_LEN);
+}
+
 void cmd_version(ip_header_t *ip, udp_header_t *udp, command_t *command)
 {
 #if CMD_DEBUG
@@ -473,9 +491,8 @@ void cmd_version(ip_header_t *ip, udp_header_t *udp, command_t *command)
 	datalength += j;
 
 	response->size = htonl(datalength);
-	/* Stuff adapter type (lower 16 bits) and capability flags (upper 16 bits)
-	 * in the otherwise unused address field */
-	response->address = htonl((kosload_info.capabilities << 16) | installed_adapter);
+	/* VERSION only reports the installed adapter model. */
+	response->address = htonl(installed_adapter);
 
 	make_ip(ntohl(ip->src), our_ip, UDP_H_LEN + COMMAND_LEN + datalength, IP_UDP_PROTOCOL, (ip_header_t *)(pkt_buf + ETHER_H_LEN), ip->packet_id);
 	make_udp(ntohs(udp->src), dcload_syscall_port, COMMAND_LEN + datalength, (ip_header_t *)(pkt_buf + ETHER_H_LEN), (udp_header_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN));
