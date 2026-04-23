@@ -402,7 +402,7 @@ static int serial_execute(kostool_context_t *ctx, uint32_t addr,
 
     printf("Sending execute command (0x%08x, console=%d)...", addr, console_enabled);
     if (ctx->prog_argc > 0)
-        printf("args(%u): \"%s\"...", ctx->prog_argc, ctx->prog_command_line);
+        printf("argv(%u, argv0=\"%s\")...", ctx->prog_argc, ctx->prog_argv_data);
 
     c = SERIAL_CMD_EXECUTE;
     ctx->serial_ops->write(ctx->serial_handle, &c, 1);
@@ -411,7 +411,7 @@ static int serial_execute(kostool_context_t *ctx, uint32_t addr,
     send_uint(ctx, addr);
 
     /* Encode "args follow" flag in bit 31 of console field.
-     * kosload-serial checks this bit and reads argc + cmdline after console.
+     * kosload-serial checks this bit and reads argc + argv data after console.
      * Legacy dcload-serial just does if(console), so 0x80000001 is still
      * truthy (console enabled) — harmless.  Extra bytes are only sent when
      * args are present, so with no args the protocol is identical to legacy. */
@@ -422,10 +422,12 @@ static int serial_execute(kostool_context_t *ctx, uint32_t addr,
 
     if (ctx->prog_argc > 0) {
         send_uint(ctx, ctx->prog_argc);
-        uint32_t cmdline_len = (uint32_t)strlen(ctx->prog_command_line) + 1;
-        send_uint(ctx, cmdline_len);
+        uint32_t argv_data_len = 0;
+        for (uint32_t i = 0; i < ctx->prog_argc; i++)
+            argv_data_len += (uint32_t)strlen(ctx->prog_argv_data + argv_data_len) + 1;
+        send_uint(ctx, argv_data_len);
         ctx->serial_ops->write(ctx->serial_handle,
-                               (const uint8_t *)ctx->prog_command_line, cmdline_len);
+                               (const uint8_t *)ctx->prog_argv_data, argv_data_len);
     }
 
     printf("executing\n");

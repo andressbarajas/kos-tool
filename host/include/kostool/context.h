@@ -97,9 +97,10 @@ typedef struct kostool_context {
     uint32_t diagnostics_net_loadbin_retries;
     uint32_t diagnostics_net_recv_rerequests;
 
-    /* Command-line arguments for loaded program */
+    /* Argument vector data for the loaded program.
+     * Serialized as: "argv0\0argv1\0...argvN\0". */
     uint32_t prog_argc;
-    char     prog_command_line[256]; /* KOSLOAD_MAX_CMDLINE */
+    char     prog_argv_data[256];
 
     /* RTC sync */
     int rtc_sync;

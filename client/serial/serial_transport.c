@@ -301,18 +301,18 @@ static void serial_transport_loop(bool is_main_loop)
              * Legacy dc-tool-ser never sets this bit, so kosload-serial
              * stays backwards-compatible with the old host tool. */
             kosload_info.argc = 0;
-            kosload_info.command_line[0] = '\0';
+            kosload_info.argv_data[0] = '\0';
 
             if (console & (1u << 31)) {
                 console &= ~(1u << 31); /* clear flag before use */
                 unsigned int prog_argc = get_uint();
                 if (prog_argc > 0) {
-                    unsigned int cmdline_len = get_uint();
-                    if (cmdline_len > KOSLOAD_MAX_CMDLINE)
-                        cmdline_len = KOSLOAD_MAX_CMDLINE;
-                    for (unsigned int ci = 0; ci < cmdline_len; ci++)
-                        kosload_info.command_line[ci] = serial_io_getchar();
-                    kosload_info.command_line[cmdline_len - 1] = '\0';
+                    unsigned int argv_data_len = get_uint();
+                    if (argv_data_len > KOSLOAD_MAX_ARGV_DATA)
+                        argv_data_len = KOSLOAD_MAX_ARGV_DATA;
+                    for (unsigned int ci = 0; ci < argv_data_len; ci++)
+                        kosload_info.argv_data[ci] = serial_io_getchar();
+                    kosload_info.argv_data[argv_data_len - 1] = '\0';
                     kosload_info.argc = prog_argc;
                 }
             }
