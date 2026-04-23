@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 #include <kosload/protocol.h>
 #include <kostool/gdb.h>
@@ -22,6 +23,8 @@
     long __LZO_MMODEL var[((size) + (sizeof(long) - 1)) / sizeof(long)]
 
 static HEAP_ALLOC(wrkmem, LZO1X_1_MEM_COMPRESS);
+
+static bool serial_remote_supports_capabilities(const kostool_context_t *ctx);
 
 /* ===== Low-level serial helpers ===== */
 
@@ -268,6 +271,16 @@ static int serial_init(kostool_context_t *ctx) {
         serial_getc(ctx, &ch);
 
         ctx->remote_capabilities = 0;
+        /* Modern serial loaders can answer a dedicated capability query.
+         * Legacy dcload-serial does not support unknown commands, so only
+         * probe loaders whose version string identifies them as kosload. */
+        if (serial_remote_supports_capabilities(ctx)) {
+            uint8_t caps_cmd = SERIAL_CMD_CAPABILITIES;
+            ctx->serial_ops->write(ctx->serial_handle, &caps_cmd, 1);
+            serial_getc(ctx, &echo);
+            ctx->remote_capabilities = recv_uint(ctx);
+        }
+
         if (!ctx->quiet_mode)
             printf("%s\n", ctx->remote_version_string);
     }
@@ -384,6 +397,11 @@ static int serial_recv_response(kostool_context_t *ctx, uint8_t *buffer,
     if (buffer_size < 1) return -1;
     blread(ctx, buffer, 1);
     return 1;
+}
+
+static bool serial_remote_supports_capabilities(const kostool_context_t *ctx) {
+    return strncmp(ctx->remote_version_string, "dc-load-serial ", 15) == 0 ||
+           strncmp(ctx->remote_version_string, "gc-load-serial ", 15) == 0;
 }
 
 /*

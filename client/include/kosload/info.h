@@ -16,16 +16,10 @@
 #define KOSLOAD_INFO_H
 
 #include <stdint.h>
+#include <kosload/protocol.h>
 
 #define KOSLOAD_INFO_MAGIC      0x4b4f5349  /* "KOSI" */
 #define KOSLOAD_MAX_ARGV_DATA   256
-
-/* Capability flags */
-#define KOSLOAD_CAP_SERIAL     (1 << 0)
-#define KOSLOAD_CAP_NETWORK    (1 << 1)
-#define KOSLOAD_CAP_GDB        (1 << 2)
-#define KOSLOAD_CAP_DHCP       (1 << 3)
-#define KOSLOAD_CAP_CDFS_REDIR (1 << 4)
 
 /* Transport types */
 #define KOSLOAD_TRANSPORT_SERIAL   0
