@@ -96,6 +96,29 @@ static int is_serial_device(const char *name) {
     return 0;
 }
 
+static const char *program_basename(const char *path) {
+    const char *base = path;
+    const char *slash;
+#ifdef _WIN32
+    const char *backslash;
+#endif
+
+    if (!path || !path[0])
+        return path;
+
+    slash = strrchr(path, '/');
+    if (slash && slash[1] != '\0')
+        base = slash + 1;
+
+#ifdef _WIN32
+    backslash = strrchr(path, '\\');
+    if (backslash && backslash[1] != '\0' && (!slash || backslash > slash))
+        base = backslash + 1;
+#endif
+
+    return base;
+}
+
 static void usage(void) {
     printf("\nkostool %s — Unified console loader\n\n", KOSLOAD_VERSION_STRING);
     printf("Usage: kostool [options] -t <transport>\n\n");
@@ -283,23 +306,36 @@ int main(int argc, char *argv[]) {
         printf("[diag] performance diagnostics enabled\n");
     }
 
-    /* Build program command line from args after -- */
-    if (prog_args_start > 0 && prog_args_start < argc) {
+    /* Build argv data for EXEC: "argv0\0argv1\0...".
+     * Always synthesize argv[0] from the uploaded filename so KOS can
+     * expose a real argc/argv pair to the loaded program. */
+    if (command == 'x' && filename) {
         size_t offset = 0;
-        for (int i = prog_args_start; i < argc; i++) {
-            size_t len = strlen(argv[i]);
-            if (offset + len + (i > prog_args_start ? 1 : 0) >= sizeof(ctx.prog_command_line)) {
-                fprintf(stderr, "Warning: program arguments truncated to %zu bytes\n",
-                        sizeof(ctx.prog_command_line) - 1);
-                break;
-            }
-            if (i > prog_args_start)
-                ctx.prog_command_line[offset++] = ' ';
-            memcpy(ctx.prog_command_line + offset, argv[i], len);
+        const char *argv0 = program_basename(filename);
+        size_t len = strlen(argv0) + 1;
+
+        if (len > sizeof(ctx.prog_argv_data)) {
+            fprintf(stderr, "Warning: argv[0] too long for loader argv buffer; argv disabled\n");
+        } else {
+            memcpy(ctx.prog_argv_data + offset, argv0, len);
             offset += len;
-            ctx.prog_argc++;
+            ctx.prog_argc = 1;
+
+            if (prog_args_start > 0 && prog_args_start < argc) {
+                for (int i = prog_args_start; i < argc; i++) {
+                    len = strlen(argv[i]) + 1;
+                    if (offset + len > sizeof(ctx.prog_argv_data)) {
+                        fprintf(stderr, "Warning: program arguments truncated to %zu bytes\n",
+                                sizeof(ctx.prog_argv_data));
+                        break;
+                    }
+
+                    memcpy(ctx.prog_argv_data + offset, argv[i], len);
+                    offset += len;
+                    ctx.prog_argc++;
+                }
+            }
         }
-        ctx.prog_command_line[offset] = '\0';
     }
 
     /* Handle -t auto: broadcast VERS to discover dcload/kosload on the network */

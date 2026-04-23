@@ -16,16 +16,10 @@
 #define KOSLOAD_INFO_H
 
 #include <stdint.h>
+#include <kosload/protocol.h>
 
-#define KOSLOAD_INFO_MAGIC  0x4b4f5349  /* "KOSI" */
-#define KOSLOAD_MAX_CMDLINE 256
-
-/* Capability flags */
-#define KOSLOAD_CAP_SERIAL     (1 << 0)
-#define KOSLOAD_CAP_NETWORK    (1 << 1)
-#define KOSLOAD_CAP_GDB        (1 << 2)
-#define KOSLOAD_CAP_DHCP       (1 << 3)
-#define KOSLOAD_CAP_CDFS_REDIR (1 << 4)
+#define KOSLOAD_INFO_MAGIC      0x4b4f5349  /* "KOSI" */
+#define KOSLOAD_MAX_ARGV_DATA   256
 
 /* Transport types */
 #define KOSLOAD_TRANSPORT_SERIAL   0
@@ -47,9 +41,10 @@ typedef struct {
     /* Serial fields (zero for network builds) */
     uint32_t baud_rate;       /* Serial baud rate (e.g. 1562500) */
 
-    /* Command-line arguments (populated by EXEC command from host) */
-    uint32_t argc;            /* Number of arguments (0 = none) */
-    char     command_line[KOSLOAD_MAX_CMDLINE]; /* Space-separated args, NUL-terminated */
+    /* Argument vector data (populated by EXEC command from host).
+     * argv_data stores NUL-separated strings including argv[0]. */
+    uint32_t argc;            /* Final argc including argv[0] (0 = unavailable) */
+    char     argv_data[KOSLOAD_MAX_ARGV_DATA];
 } kosload_info_t;
 
 #endif /* KOSLOAD_INFO_H */

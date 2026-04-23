@@ -21,6 +21,7 @@ void cmd_partbin(net_command_t *command);
 void cmd_donebin(ip_header_t *ip, udp_header_t *udp, net_command_t *command);
 void cmd_sendbin(ip_header_t *ip, udp_header_t *udp, net_command_t *command);
 void cmd_sendbinq(ip_header_t *ip, udp_header_t *udp, net_command_t *command);
+void cmd_capabilities(ip_header_t *ip, udp_header_t *udp, net_command_t *command);
 void cmd_version(ip_header_t *ip, udp_header_t *udp, net_command_t *command);
 void cmd_retval(ip_header_t *ip, udp_header_t *udp, net_command_t *command);
 void cmd_reboot(void);

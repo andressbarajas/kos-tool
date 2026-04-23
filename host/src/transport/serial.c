@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 #include <kosload/protocol.h>
 #include <kostool/gdb.h>
@@ -22,6 +23,9 @@
     long __LZO_MMODEL var[((size) + (sizeof(long) - 1)) / sizeof(long)]
 
 static HEAP_ALLOC(wrkmem, LZO1X_1_MEM_COMPRESS);
+
+static bool serial_remote_supports_capabilities(const kostool_context_t *ctx);
+static bool serial_remote_supports_argv(const kostool_context_t *ctx);
 
 /* ===== Low-level serial helpers ===== */
 
@@ -268,6 +272,16 @@ static int serial_init(kostool_context_t *ctx) {
         serial_getc(ctx, &ch);
 
         ctx->remote_capabilities = 0;
+        /* Modern serial loaders can answer a dedicated capability query.
+         * Legacy dcload-serial does not support unknown commands, so only
+         * probe loaders whose version string identifies them as kosload. */
+        if (serial_remote_supports_capabilities(ctx)) {
+            uint8_t caps_cmd = SERIAL_CMD_CAPABILITIES;
+            ctx->serial_ops->write(ctx->serial_handle, &caps_cmd, 1);
+            serial_getc(ctx, &echo);
+            ctx->remote_capabilities = recv_uint(ctx);
+        }
+
         if (!ctx->quiet_mode)
             printf("%s\n", ctx->remote_version_string);
     }
@@ -386,6 +400,15 @@ static int serial_recv_response(kostool_context_t *ctx, uint8_t *buffer,
     return 1;
 }
 
+static bool serial_remote_supports_capabilities(const kostool_context_t *ctx) {
+    return strncmp(ctx->remote_version_string, "dc-load-serial ", 15) == 0 ||
+           strncmp(ctx->remote_version_string, "gc-load-serial ", 15) == 0;
+}
+
+static bool serial_remote_supports_argv(const kostool_context_t *ctx) {
+    return (ctx->remote_capabilities & KOSLOAD_CAP_ARGV) != 0;
+}
+
 /*
  * Execute at address on DC.
  * Serial protocol: optionally send 'H' for CDFS redir, then send 'A' + addr + console.
@@ -393,6 +416,7 @@ static int serial_recv_response(kostool_context_t *ctx, uint8_t *buffer,
 static int serial_execute(kostool_context_t *ctx, uint32_t addr,
                           int console_enabled, int cdfs_redir) {
     uint8_t c;
+    bool send_argv = (ctx->prog_argc > 0) && serial_remote_supports_argv(ctx);
 
     if (cdfs_redir) {
         c = SERIAL_CMD_CDFS_REDIR;
@@ -401,8 +425,10 @@ static int serial_execute(kostool_context_t *ctx, uint32_t addr,
     }
 
     printf("Sending execute command (0x%08x, console=%d)...", addr, console_enabled);
-    if (ctx->prog_argc > 0)
-        printf("args(%u): \"%s\"...", ctx->prog_argc, ctx->prog_command_line);
+    if (send_argv)
+        printf("argv(%u, argv0=\"%s\")...", ctx->prog_argc, ctx->prog_argv_data);
+    else if (ctx->prog_argc > 0)
+        fprintf(stderr, "Note: remote loader does not support argv metadata; using legacy execute frame\n");
 
     c = SERIAL_CMD_EXECUTE;
     ctx->serial_ops->write(ctx->serial_handle, &c, 1);
@@ -411,21 +437,23 @@ static int serial_execute(kostool_context_t *ctx, uint32_t addr,
     send_uint(ctx, addr);
 
     /* Encode "args follow" flag in bit 31 of console field.
-     * kosload-serial checks this bit and reads argc + cmdline after console.
+     * kosload-serial checks this bit and reads argc + argv data after console.
      * Legacy dcload-serial just does if(console), so 0x80000001 is still
      * truthy (console enabled) — harmless.  Extra bytes are only sent when
      * args are present, so with no args the protocol is identical to legacy. */
     uint32_t console_flags = (uint32_t)console_enabled;
-    if (ctx->prog_argc > 0)
+    if (send_argv)
         console_flags |= (1u << 31);
     send_uint(ctx, console_flags);
 
-    if (ctx->prog_argc > 0) {
+    if (send_argv) {
         send_uint(ctx, ctx->prog_argc);
-        uint32_t cmdline_len = (uint32_t)strlen(ctx->prog_command_line) + 1;
-        send_uint(ctx, cmdline_len);
+        uint32_t argv_data_len = 0;
+        for (uint32_t i = 0; i < ctx->prog_argc; i++)
+            argv_data_len += (uint32_t)strlen(ctx->prog_argv_data + argv_data_len) + 1;
+        send_uint(ctx, argv_data_len);
         ctx->serial_ops->write(ctx->serial_handle,
-                               (const uint8_t *)ctx->prog_command_line, cmdline_len);
+                               (const uint8_t *)ctx->prog_argv_data, argv_data_len);
     }
 
     printf("executing\n");
