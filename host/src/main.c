@@ -121,10 +121,7 @@ static const char *program_basename(const char *path) {
 
 static void usage(void) {
     printf("\nkostool %s — Unified console loader\n\n", KOSLOAD_VERSION_STRING);
-    printf("Usage: kostool [options] -t <transport>\n\n");
-    printf("Transports:\n");
-    printf("  -T serial    Use serial transport\n");
-    printf("  -T network   Use network transport\n\n");
+    printf("Usage: kostool [options] -t <device|ip|auto>\n\n");
     printf("Commands:\n");
     printf("  -x <file>    Upload and execute <file>\n");
     printf("     [-- args] Pass arguments to loaded program (must be last)\n");
@@ -180,7 +177,6 @@ int main(int argc, char *argv[]) {
     /* Load config file (sets addr2line defaults) */
     config_load(&ctx);
 
-    const char *transport_name = NULL;
     char command = 0;
     const char *filename = NULL;
 
@@ -205,9 +201,6 @@ int main(int argc, char *argv[]) {
             continue;
         }
         switch (argv[i][1]) {
-        case 'T':
-            if (++i < argc) transport_name = argv[i];
-            break;
         case 'x':
             command = 'x';
             if (++i < argc) filename = argv[i];
@@ -348,7 +341,6 @@ int main(int argc, char *argv[]) {
         if (found_ip) {
             printf("Found at %s\n", found_ip);
             ctx.hostname = found_ip;
-            if (!transport_name) transport_name = "network";
         } else {
             fprintf(stderr, "No devices found on the network\n");
             fprintf(stderr, "You can also specify the IP directly with -t <ip>\n");
@@ -357,24 +349,12 @@ int main(int argc, char *argv[]) {
     }
 
     /* Select transport */
-    if (!transport_name) {
-        /* Infer from -t argument shape */
-        if (is_serial_device(ctx.device_name))
-            transport_name = "serial";
-        else if (ctx.hostname)
-            transport_name = "network";
-        else {
-            fprintf(stderr, "Error: specify -t <device|ip|auto> or -T <serial|network>\n");
-            return 1;
-        }
-    }
-
-    if (strcmp(transport_name, "serial") == 0) {
+    if (is_serial_device(ctx.device_name)) {
         ctx.transport = &serial_transport_ops;
-    } else if (strcmp(transport_name, "network") == 0) {
+    } else if (ctx.hostname) {
         ctx.transport = &network_transport_ops;
     } else {
-        fprintf(stderr, "Unknown transport: %s\n", transport_name);
+        fprintf(stderr, "Error: specify -t <device|ip|auto>\n");
         return 1;
     }
 
