@@ -102,7 +102,7 @@ static int network_transport_init(void)
 
     /* Set initial IP address from patchable config block */
     set_ip_from_string();
-    kosload_info.dc_ip = our_ip;
+    kosload_info.console_ip = our_ip;
 
     /* Static IP mode is silent at boot.  Let the target adapter layer decide
      * whether it needs to bring RX online before the first host probe. */
