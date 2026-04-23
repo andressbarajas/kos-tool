@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -162,6 +163,42 @@ static int send_and_wait(kostool_context_t *ctx, const char cmd[4],
     return -1;
 }
 
+static bool network_remote_supports_capabilities(const kostool_context_t *ctx) {
+    return strncmp(ctx->remote_version_string, "dc-load-ip ", 11) == 0 ||
+           strncmp(ctx->remote_version_string, "gc-load-ip ", 11) == 0;
+}
+
+static int query_capabilities(kostool_context_t *ctx, uint32_t *capabilities) {
+    uint8_t buffer[2048];
+
+    for (int attempt = 0; attempt < 2; attempt++) {
+        uint64_t start = ctx->time_ops->time_usec();
+
+        send_cmd(ctx, NET_CMD_CAPABILITIES, 0, 0, NULL, 0);
+
+        while ((ctx->time_ops->time_usec() - start) < NET_PACKET_TIMEOUT_USEC) {
+            uint64_t elapsed = ctx->time_ops->time_usec() - start;
+            uint32_t remaining = (uint32_t)(NET_PACKET_TIMEOUT_USEC - elapsed);
+            int rv;
+
+            if (remaining == 0)
+                break;
+
+            rv = recv_resp(ctx, buffer, sizeof(buffer), remaining);
+            if (rv <= 0)
+                break;
+
+            if (memcmp(buffer, NET_CMD_CAPABILITIES, 4) != 0)
+                continue;
+
+            *capabilities = ntohl(((net_command_t *)buffer)->address);
+            return 0;
+        }
+    }
+
+    return -1;
+}
+
 /*
  * Encode dc-tool version into a uint32 for handshake: (major<<16)|(minor<<8)|patch
  * Returns 0 if force_legacy is set.
@@ -224,17 +261,21 @@ static int prepare_comms(kostool_context_t *ctx) {
         ctx->socket_fd = -1;
     }
 
-    /* Extract adapter type and capabilities from the VERSION response.
-     * kosload encodes: address = (capabilities << 16) | adapter_model
-     * Legacy dcload has no capabilities, so upper 16 bits are zero. */
+    /* Extract the adapter type from the VERSION response. */
     net_command_t *cmd = (net_command_t *)buffer;
     uint32_t raw_addr = ntohl(cmd->address);
-    ctx->installed_adapter = raw_addr & 0xFFFF;
-    ctx->remote_capabilities = (raw_addr >> 16) & 0xFFFF;
+    ctx->installed_adapter = raw_addr;
+    ctx->remote_capabilities = 0;
 
     /* Store version string for firmware update decisions */
     snprintf(ctx->remote_version_string,
              sizeof(ctx->remote_version_string), "%s", (char *)cmd->data);
+
+    /* Modern network loaders can answer a dedicated capability query.
+     * Legacy dcload-ip does not advertise CAPS, so only probe loaders
+     * whose version string identifies them as kosload. */
+    if (network_remote_supports_capabilities(ctx))
+        query_capabilities(ctx, &ctx->remote_capabilities);
 
     /* Accept legacy octal IDs and modern ADAPTER_* IDs.
      * Old loaders sometimes report octal 0400/0300 as decimal 256/192. */
@@ -852,24 +893,33 @@ static int network_recv_response(kostool_context_t *ctx, uint8_t *buffer,
     return recv_resp(ctx, buffer, buffer_size, timeout_usec);
 }
 
+static bool network_remote_supports_argv(const kostool_context_t *ctx) {
+    return (ctx->remote_capabilities & KOSLOAD_CAP_ARGV) != 0;
+}
+
 static int network_execute(kostool_context_t *ctx, uint32_t addr,
                            int console_enabled, int cdfs_redir) {
     uint8_t buffer[2048];
+    bool send_argv;
 
     prepare_comms(ctx);
+    send_argv = (ctx->prog_argc > 0) && network_remote_supports_argv(ctx);
 
     uint32_t flags = ((uint32_t)cdfs_redir << 1) | (uint32_t)console_enabled;
 
-    /* Build EXEC data payload: [argc (4 bytes BE)] [command_line string with NUL] */
-    uint8_t exec_data[4 + 256];
+    /* Build EXEC data payload: [argc (4 bytes BE)] [argv data blob]
+     * where argv data = "argv0\0argv1\0...". */
+    uint8_t exec_data[4 + sizeof(ctx->prog_argv_data)];
     uint32_t exec_data_len = 0;
 
-    if (ctx->prog_argc > 0) {
+    if (send_argv) {
         uint32_t argc_be = htonl(ctx->prog_argc);
+        uint32_t argv_data_len = 0;
         memcpy(exec_data, &argc_be, 4);
-        uint32_t cmdline_len = (uint32_t)strlen(ctx->prog_command_line) + 1;
-        memcpy(exec_data + 4, ctx->prog_command_line, cmdline_len);
-        exec_data_len = 4 + cmdline_len;
+        for (uint32_t i = 0; i < ctx->prog_argc; i++)
+            argv_data_len += (uint32_t)strlen(ctx->prog_argv_data + argv_data_len) + 1;
+        memcpy(exec_data + 4, ctx->prog_argv_data, argv_data_len);
+        exec_data_len = 4 + argv_data_len;
     }
 
     /* For v2+ dcload, use uncached address */
@@ -880,8 +930,10 @@ static int network_execute(kostool_context_t *ctx, uint32_t addr,
         printf("Sending execute command (0x%08x, console=%d, cdfsredir=%d)...",
                addr, console_enabled, cdfs_redir);
 
-    if (ctx->prog_argc > 0)
-        printf("args(%u): \"%s\"...", ctx->prog_argc, ctx->prog_command_line);
+    if (send_argv)
+        printf("argv(%u, argv0=\"%s\")...", ctx->prog_argc, ctx->prog_argv_data);
+    else if (ctx->prog_argc > 0)
+        fprintf(stderr, "Note: remote loader does not support argv metadata; using legacy EXEC payload\n");
 
     if (send_and_wait(ctx, NET_CMD_EXECUTE, addr, flags,
                       exec_data_len ? exec_data : NULL, exec_data_len,

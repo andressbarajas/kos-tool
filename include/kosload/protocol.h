@@ -25,6 +25,7 @@
 #define SERIAL_CMD_DOWNLOAD     'F'     /* Download from DC (verbose) */
 #define SERIAL_CMD_DOWNLOAD_Q   'G'     /* Download from DC (quiet) */
 #define SERIAL_CMD_CDFS_REDIR   'H'     /* Enable CDFS redirection */
+#define SERIAL_CMD_CAPABILITIES 'I'     /* Query capability bitmask */
 #define SERIAL_CMD_SPEED        'S'     /* Change serial speed */
 #define SERIAL_CMD_SETRTC       'W'     /* Set RTC to host time */
 
@@ -69,6 +70,7 @@
 #define NET_CMD_SENDBIN   "SBIN"    /* Send a binary */
 #define NET_CMD_SENDBINQ  "SBIQ"    /* Send a binary, quiet */
 #define NET_CMD_VERSION   "VERS"    /* Version info exchange */
+#define NET_CMD_CAPABILITIES "CAPS" /* Query capability bitmask */
 #define NET_CMD_RETVAL    "RETV"    /* Return value */
 #define NET_CMD_REBOOT    "RBOT"    /* Reboot console */
 #define NET_CMD_MAPLE     "MAPL"    /* Maple bus passthrough */
@@ -101,7 +103,15 @@
 #define NET_SYSCALL_REWINDDIR "DC21"
 #define NET_SYSCALL_PROGEXIT  "DC22"
 #define NET_SYSCALL_MKDIR     "DC23"
+
 /* ===== Shared Protocol Tags ===== */
+
+#define KOSLOAD_CAP_SERIAL     (1 << 0)
+#define KOSLOAD_CAP_NETWORK    (1 << 1)
+#define KOSLOAD_CAP_GDB        (1 << 2)
+#define KOSLOAD_CAP_DHCP       (1 << 3)
+#define KOSLOAD_CAP_CDFS_REDIR (1 << 4)
+#define KOSLOAD_CAP_ARGV       (1 << 5)
 
 #define KOSLOAD_EXCEPTION_TAG "EXPT"    /* Exception frame marker (both serial and network) */
 

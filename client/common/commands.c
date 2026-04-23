@@ -132,28 +132,29 @@ void cmd_execute(ether_header_t *ether, ip_header_t *ip, udp_header_t *udp, comm
 		make_udp(tool_port, ntohs(udp->dest), COMMAND_LEN, (ip_header_t *)(pkt_buf + ETHER_H_LEN), (udp_header_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN));
 		bb->tx(pkt_buf, ETHER_H_LEN + IP_H_LEN + UDP_H_LEN + COMMAND_LEN);
 
-		/* Extract command-line arguments from EXEC data payload if present.
-		 * Payload format: [argc (4 bytes BE)] [command_line string with NUL]
+		/* Extract argv data from EXEC payload if present.
+		 * Payload format: [argc (4 bytes BE)] [argv data blob]
+		 * where argv data = "argv0\0argv1\0...".
 		 * Data starts at command->data, length derived from UDP packet size. */
 		{
 			unsigned int udp_payload = ntohs(udp->length) - UDP_H_LEN;
 			unsigned int data_len = (udp_payload > COMMAND_LEN) ? udp_payload - COMMAND_LEN : 0;
 
 			kosload_info.argc = 0;
-			kosload_info.command_line[0] = '\0';
+			kosload_info.argv_data[0] = '\0';
 
 			if (data_len >= 5) { /* at least 4-byte argc + 1-byte NUL */
 				unsigned int argc_be;
 				memcpy(&argc_be, command->data, 4);
 				unsigned int prog_argc = ntohl(argc_be);
-				unsigned int cmdline_len = data_len - 4;
+				unsigned int argv_data_len = data_len - 4;
 
-				if (prog_argc > 0 && cmdline_len > 0) {
-					if (cmdline_len > KOSLOAD_MAX_CMDLINE)
-						cmdline_len = KOSLOAD_MAX_CMDLINE;
+				if (prog_argc > 0 && argv_data_len > 0) {
+					if (argv_data_len > KOSLOAD_MAX_ARGV_DATA)
+						argv_data_len = KOSLOAD_MAX_ARGV_DATA;
 					kosload_info.argc = prog_argc;
-					memcpy(kosload_info.command_line, command->data + 4, cmdline_len);
-					kosload_info.command_line[cmdline_len - 1] = '\0';
+					memcpy(kosload_info.argv_data, command->data + 4, argv_data_len);
+					kosload_info.argv_data[argv_data_len - 1] = '\0';
 				}
 			}
 		}
@@ -441,6 +442,24 @@ void cmd_sendbin(ip_header_t *ip, udp_header_t *udp, command_t *command)
 	}
 }
 
+void cmd_capabilities(ip_header_t *ip, udp_header_t *udp, command_t *command)
+{
+	unsigned char *buffer = pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN;
+	command_t *response = (command_t *)buffer;
+
+	memcpy(response, command, COMMAND_LEN);
+	response->address = htonl(kosload_info.capabilities);
+	response->size = htonl(0);
+
+	make_ip(ntohl(ip->src), our_ip, UDP_H_LEN + COMMAND_LEN,
+	        IP_UDP_PROTOCOL, (ip_header_t *)(pkt_buf + ETHER_H_LEN),
+	        ip->packet_id);
+	make_udp(ntohs(udp->src), dcload_syscall_port, COMMAND_LEN,
+	         (ip_header_t *)(pkt_buf + ETHER_H_LEN),
+	         (udp_header_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN));
+	bb->tx(pkt_buf, ETHER_H_LEN + IP_H_LEN + UDP_H_LEN + COMMAND_LEN);
+}
+
 void cmd_version(ip_header_t *ip, udp_header_t *udp, command_t *command)
 {
 #if CMD_DEBUG
@@ -472,9 +491,8 @@ void cmd_version(ip_header_t *ip, udp_header_t *udp, command_t *command)
 	datalength += j;
 
 	response->size = htonl(datalength);
-	/* Stuff adapter type (lower 16 bits) and capability flags (upper 16 bits)
-	 * in the otherwise unused address field */
-	response->address = htonl((kosload_info.capabilities << 16) | installed_adapter);
+	/* VERSION only reports the installed adapter model. */
+	response->address = htonl(installed_adapter);
 
 	make_ip(ntohl(ip->src), our_ip, UDP_H_LEN + COMMAND_LEN + datalength, IP_UDP_PROTOCOL, (ip_header_t *)(pkt_buf + ETHER_H_LEN), ip->packet_id);
 	make_udp(ntohs(udp->src), dcload_syscall_port, COMMAND_LEN + datalength, (ip_header_t *)(pkt_buf + ETHER_H_LEN), (udp_header_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN));

@@ -294,6 +294,12 @@ static void process_udp(ether_header_t *ether, ip_header_t *ip, udp_header_t *ud
 			pkt_match_id = 0;
 		}
 
+		if ((pkt_match_id) && (!memcmp_32bit_eq(&pkt_match_id, CMD_CAPABILITIES, 4/4)))
+		{
+			cmd_capabilities(ip, udp, command);
+			pkt_match_id = 0;
+		}
+
 		if ((pkt_match_id) && (!memcmp_32bit_eq(&pkt_match_id, CMD_SETRTC, 4/4)))
 		{
 			cmd_setrtc(ip, udp, command);
