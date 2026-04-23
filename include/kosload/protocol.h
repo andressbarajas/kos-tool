@@ -70,6 +70,7 @@
 #define NET_CMD_SENDBIN   "SBIN"    /* Send a binary */
 #define NET_CMD_SENDBINQ  "SBIQ"    /* Send a binary, quiet */
 #define NET_CMD_VERSION   "VERS"    /* Version info exchange */
+#define NET_CMD_CAPABILITIES "CAPS" /* Query capability bitmask */
 #define NET_CMD_RETVAL    "RETV"    /* Return value */
 #define NET_CMD_REBOOT    "RBOT"    /* Reboot console */
 #define NET_CMD_MAPLE     "MAPL"    /* Maple bus passthrough */

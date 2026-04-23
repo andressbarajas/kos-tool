@@ -163,6 +163,42 @@ static int send_and_wait(kostool_context_t *ctx, const char cmd[4],
     return -1;
 }
 
+static bool network_remote_supports_capabilities(const kostool_context_t *ctx) {
+    return strncmp(ctx->remote_version_string, "dc-load-ip ", 11) == 0 ||
+           strncmp(ctx->remote_version_string, "gc-load-ip ", 11) == 0;
+}
+
+static int query_capabilities(kostool_context_t *ctx, uint32_t *capabilities) {
+    uint8_t buffer[2048];
+
+    for (int attempt = 0; attempt < 2; attempt++) {
+        uint64_t start = ctx->time_ops->time_usec();
+
+        send_cmd(ctx, NET_CMD_CAPABILITIES, 0, 0, NULL, 0);
+
+        while ((ctx->time_ops->time_usec() - start) < NET_PACKET_TIMEOUT_USEC) {
+            uint64_t elapsed = ctx->time_ops->time_usec() - start;
+            uint32_t remaining = (uint32_t)(NET_PACKET_TIMEOUT_USEC - elapsed);
+            int rv;
+
+            if (remaining == 0)
+                break;
+
+            rv = recv_resp(ctx, buffer, sizeof(buffer), remaining);
+            if (rv <= 0)
+                break;
+
+            if (memcmp(buffer, NET_CMD_CAPABILITIES, 4) != 0)
+                continue;
+
+            *capabilities = ntohl(((net_command_t *)buffer)->address);
+            return 0;
+        }
+    }
+
+    return -1;
+}
+
 /*
  * Encode dc-tool version into a uint32 for handshake: (major<<16)|(minor<<8)|patch
  * Returns 0 if force_legacy is set.
@@ -225,17 +261,21 @@ static int prepare_comms(kostool_context_t *ctx) {
         ctx->socket_fd = -1;
     }
 
-    /* Extract adapter type and capabilities from the VERSION response.
-     * kosload encodes: address = (capabilities << 16) | adapter_model
-     * Legacy dcload has no capabilities, so upper 16 bits are zero. */
+    /* Extract the adapter type from the VERSION response. */
     net_command_t *cmd = (net_command_t *)buffer;
     uint32_t raw_addr = ntohl(cmd->address);
-    ctx->installed_adapter = raw_addr & 0xFFFF;
-    ctx->remote_capabilities = (raw_addr >> 16) & 0xFFFF;
+    ctx->installed_adapter = raw_addr;
+    ctx->remote_capabilities = 0;
 
     /* Store version string for firmware update decisions */
     snprintf(ctx->remote_version_string,
              sizeof(ctx->remote_version_string), "%s", (char *)cmd->data);
+
+    /* Modern network loaders can answer a dedicated capability query.
+     * Legacy dcload-ip does not advertise CAPS, so only probe loaders
+     * whose version string identifies them as kosload. */
+    if (network_remote_supports_capabilities(ctx))
+        query_capabilities(ctx, &ctx->remote_capabilities);
 
     /* Accept legacy octal IDs and modern ADAPTER_* IDs.
      * Old loaders sometimes report octal 0400/0300 as decimal 256/192. */

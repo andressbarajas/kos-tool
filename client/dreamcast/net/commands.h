@@ -20,6 +20,7 @@ typedef net_command_t command_t;
 #define CMD_SENDBIN  "SBIN"
 #define CMD_SENDBINQ "SBIQ"
 #define CMD_VERSION  "VERS"
+#define CMD_CAPABILITIES "CAPS"
 #define CMD_RETVAL   "RETV"
 #define CMD_REBOOT   "RBOT"
 #define CMD_MAPLE    "MAPL"
@@ -42,6 +43,7 @@ void cmd_partbin(command_t *command);
 void cmd_donebin(ip_header_t *ip, udp_header_t *udp, command_t *command);
 void cmd_sendbinq(ip_header_t *ip, udp_header_t *udp, command_t *command);
 void cmd_sendbin(ip_header_t *ip, udp_header_t *udp, command_t *command);
+void cmd_capabilities(ip_header_t *ip, udp_header_t *udp, command_t *command);
 void cmd_version(ip_header_t *ip, udp_header_t *udp, command_t *command);
 void cmd_retval(ip_header_t *ip, udp_header_t *udp, command_t *command);
 void cmd_maple(ip_header_t *ip, udp_header_t *udp, command_t *command);
