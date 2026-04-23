@@ -145,11 +145,7 @@ make gc STATICIP=192.168.1.100
 ## Usage
 
 ```
-kos-tool [options]
-
-Transports:
-  -T serial    Use serial transport
-  -T network   Use network transport
+kos-tool [options] -t <device|ip|auto>
 
 Commands:
   -x <file>    Upload and execute <file>
