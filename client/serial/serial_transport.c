@@ -389,6 +389,10 @@ static void serial_transport_loop(bool is_main_loop)
             break;
         }
 
+        case SERIAL_CMD_CAPABILITIES: /* 'I' - query capability bitmask */
+            put_uint(kosload_info.capabilities);
+            break;
+
         case 'V': /* version */
             serial_io_puts((const unsigned char *)NAME);
             serial_io_puts((const unsigned char *)"\n");

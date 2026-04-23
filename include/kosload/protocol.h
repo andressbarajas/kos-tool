@@ -25,6 +25,7 @@
 #define SERIAL_CMD_DOWNLOAD     'F'     /* Download from DC (verbose) */
 #define SERIAL_CMD_DOWNLOAD_Q   'G'     /* Download from DC (quiet) */
 #define SERIAL_CMD_CDFS_REDIR   'H'     /* Enable CDFS redirection */
+#define SERIAL_CMD_CAPABILITIES 'I'     /* Query capability bitmask */
 #define SERIAL_CMD_SPEED        'S'     /* Change serial speed */
 #define SERIAL_CMD_SETRTC       'W'     /* Set RTC to host time */
 
@@ -101,7 +102,14 @@
 #define NET_SYSCALL_REWINDDIR "DC21"
 #define NET_SYSCALL_PROGEXIT  "DC22"
 #define NET_SYSCALL_MKDIR     "DC23"
+
 /* ===== Shared Protocol Tags ===== */
+
+#define KOSLOAD_CAP_SERIAL     (1 << 0)
+#define KOSLOAD_CAP_NETWORK    (1 << 1)
+#define KOSLOAD_CAP_GDB        (1 << 2)
+#define KOSLOAD_CAP_DHCP       (1 << 3)
+#define KOSLOAD_CAP_CDFS_REDIR (1 << 4)
 
 #define KOSLOAD_EXCEPTION_TAG "EXPT"    /* Exception frame marker (both serial and network) */
 
