@@ -15,14 +15,14 @@
 | Connection | Client Firmware | Adapter |
 |---|---|---|
 | Serial | `dc-load-serial` | Coders Cable (RS-232 or USB-Serial) |
-| Ethernet | `dc-load-ip` | Broadband Adapter (HIT-0400) or LAN Adapter (HIT-0300) |
+| Ethernet | `dc-load-ip` | Broadband Adapter (HIT-0400), LAN Adapter (HIT-0300), or W5500 (SCIF-SPI) |
 
 ### GameCube
 
 | Connection | Client Firmware | Adapter |
 |---|---|---|
 | Serial | `gc-load-serial` | USB Gecko |
-| Ethernet | `gc-load-ip` | Broadband Adapter (DOL-015) or ENC28J60 SPI adapter |
+| Ethernet | `gc-load-ip` | Broadband Adapter (DOL-015), ENC28J60 SPI adapter, or W5500 (EXI-SPI) |
 
 ## Improvements over dcload-serial / dcload-ip
 
@@ -40,37 +40,38 @@
 * **Manual update** — `-U <file>` flag for updating from an external firmware binary
 
 ### GameCube Support
-* **Full GameCube port** — serial transport via USB Gecko (EXI channel 1), network transport via Broadband Adapter (BBA) and ENC28J60 SPI adapter
+* **Full GameCube port** — serial transport via USB Gecko (EXI channel 1), network transport via Broadband Adapter (BBA), ENC28J60 SPI adapter, and W5500 (EXI-SPI)
 * **Shared protocol** — GameCube uses the same serial and network protocols as Dreamcast, so the host tool works identically for both consoles
 * **DHCP support** — GameCube network firmware supports DHCP, same as Dreamcast
 
 ### Host Tool Enhancements
-* **Automatic transport detection** — if `-T` is not specified, `kos-tool` auto-detects whether the target is a serial device or network address
+* **Automatic transport detection** — `kos-tool` infers serial vs network from `-t <device|ip|auto>`
 * **Network auto-discovery** — `-t auto` broadcasts on the LAN to find consoles (tries both legacy port 31313 and new port 53535)
-* **addr2line integration** — `-A` flag decodes hex addresses in console output to `function:line` annotations using `addr2line`, with automatic toolchain prefix detection from the ELF's `e_machine` field (SH4 or PPC)
+* **Automatic addr2line integration** — when the uploaded file is an ELF and `kos-tool.cfg` points at valid `addr2line` binaries, console stack addresses are annotated automatically for SH4 or PPC
 * **RTC sync** — `-w` flag sets the console's real-time clock to the host's local time
 * **Program arguments** — `-- arg1 arg2` passes arguments to the loaded program
+* **Performance diagnostics** — `-P` / `--diag` prints transfer timing and recovery statistics
 * **Larger network payloads** — 1440-byte payloads (up from 1024 in legacy dcload-ip), with automatic fallback to 1024-byte legacy mode for older firmware
 
 ### Client Firmware Enhancements
 * **Screensaver** — bouncing bitmap icon activates after 30 seconds of idle, deactivates automatically on any command
-* **Version and capability reporting** — firmware reports its version string and capability flags to the host on connect, enabling protocol negotiation
+* **Version and capability reporting** — firmware reports its version string and explicit capability flags to the host on connect, enabling feature negotiation
 * **Performance counters** — Dreamcast firmware exposes SH4 performance counter access via syscalls
 
 ### Build System
 * **Simple Makefiles** — no CMake dependency; just `make` with the cross-compiler toolchains in PATH
 * **Disc image generation** — `make disc` produces bootable CDI (Dreamcast) and ISO (GameCube) disc images
-* **Example programs** — 10 freestanding test programs (console, rainbow, syscall, CDFS, exception, maple, etc.) built automatically
+* **Example programs** — freestanding test programs (console, rainbow, syscall, CDFS, exception, maple, etc.) built automatically
 
 ## Features
 
 * Load `elf`, `srec`, and `bin` files (serial transfers are LZO-compressed)
 * PC I/O — read/write files on the host from the console (KOS `/pc/` filesystem)
-* CDFS redirection — redirect GD-ROM reads to an ISO image on the host
+* Dreamcast CDFS redirection — redirect GD-ROM reads to an ISO image on the host
 * GDB remote debugging via GDB-over-dcload
 * Exception handler with full register dump
 * Auto-discovery of network devices (`-t auto`)
-* Supports both BBA and LAN Adapter in a single binary (Dreamcast IP)
+* Network firmware supports BBA/LAN/W5500 on Dreamcast and BBA/ENC28J60/W5500 on GameCube
 * Runtime baud rate negotiation up to 1.5Mbaud (Dreamcast serial)
 * Cross-platform host tool: Linux, macOS, Windows (MSYS2)
 
@@ -170,10 +171,11 @@ Options:
   -E           Use external clock
   -l           Force legacy 1024-byte payloads
   -f           Fast mode (no FIFO delays)
+  -P, --diag   Print performance diagnostics
   -w           Sync console RTC to host time
   -U <file>    Update firmware from external file
   -F           Enable automatic firmware update
-  -A [prefix]  Decode addresses via addr2line
+  -h           Show this help
 ```
 
 ### Examples
@@ -203,8 +205,8 @@ kos-tool -t /dev/ttyUSB0 -x program.elf
 # GameCube network — upload and run
 kos-tool -t 192.168.1.50 -x program.elf
 
-# addr2line — auto-detect toolchain from ELF
-kos-tool -t /dev/ttyUSB0 -A -x program.elf
+# Enable performance diagnostics
+kos-tool -t auto --diag -x program.elf
 
 # GDB debugging session
 kos-tool -t /dev/ttyUSB0 -g -x program.elf
@@ -223,7 +225,7 @@ When the client firmware boots, it displays:
   idle...
 ```
 
-* Blue background = Broadband Adapter, Green = LAN Adapter, Red = no adapter detected
+* Blue background = Broadband Adapter, Green = LAN Adapter, dark cyan = W5500, Red = no adapter detected
 * After 30 seconds of inactivity, a screensaver activates (bouncing icon)
 * The screensaver deactivates automatically when a command is received
 
@@ -252,7 +254,7 @@ kos-tool/
 │   ├── network/         # Network transport
 │   ├── include/         # Client headers
 │   ├── dreamcast/       # DC platform (SCIF, video, BBA/LA drivers)
-│   ├── gamecube/        # GC platform (USBGecko, EXI, BBA/ENC28J60 drivers)
+│   ├── gamecube/        # GC platform (USBGecko, EXI, BBA/ENC28J60/W5500 drivers)
 │   └── examples/        # Freestanding test programs
 ├── host/                # Host tool (kos-tool)
 │   ├── src/             # Main, console, upload/download, discovery
