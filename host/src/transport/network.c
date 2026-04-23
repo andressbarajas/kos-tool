@@ -860,16 +860,19 @@ static int network_execute(kostool_context_t *ctx, uint32_t addr,
 
     uint32_t flags = ((uint32_t)cdfs_redir << 1) | (uint32_t)console_enabled;
 
-    /* Build EXEC data payload: [argc (4 bytes BE)] [command_line string with NUL] */
-    uint8_t exec_data[4 + 256];
+    /* Build EXEC data payload: [argc (4 bytes BE)] [argv data blob]
+     * where argv data = "argv0\0argv1\0...". */
+    uint8_t exec_data[4 + sizeof(ctx->prog_argv_data)];
     uint32_t exec_data_len = 0;
 
     if (ctx->prog_argc > 0) {
         uint32_t argc_be = htonl(ctx->prog_argc);
+        uint32_t argv_data_len = 0;
         memcpy(exec_data, &argc_be, 4);
-        uint32_t cmdline_len = (uint32_t)strlen(ctx->prog_command_line) + 1;
-        memcpy(exec_data + 4, ctx->prog_command_line, cmdline_len);
-        exec_data_len = 4 + cmdline_len;
+        for (uint32_t i = 0; i < ctx->prog_argc; i++)
+            argv_data_len += (uint32_t)strlen(ctx->prog_argv_data + argv_data_len) + 1;
+        memcpy(exec_data + 4, ctx->prog_argv_data, argv_data_len);
+        exec_data_len = 4 + argv_data_len;
     }
 
     /* For v2+ dcload, use uncached address */
@@ -881,7 +884,7 @@ static int network_execute(kostool_context_t *ctx, uint32_t addr,
                addr, console_enabled, cdfs_redir);
 
     if (ctx->prog_argc > 0)
-        printf("args(%u): \"%s\"...", ctx->prog_argc, ctx->prog_command_line);
+        printf("argv(%u, argv0=\"%s\")...", ctx->prog_argc, ctx->prog_argv_data);
 
     if (send_and_wait(ctx, NET_CMD_EXECUTE, addr, flags,
                       exec_data_len ? exec_data : NULL, exec_data_len,
