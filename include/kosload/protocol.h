@@ -110,6 +110,7 @@
 #define KOSLOAD_CAP_GDB        (1 << 2)
 #define KOSLOAD_CAP_DHCP       (1 << 3)
 #define KOSLOAD_CAP_CDFS_REDIR (1 << 4)
+#define KOSLOAD_CAP_ARGV       (1 << 5)
 
 #define KOSLOAD_EXCEPTION_TAG "EXPT"    /* Exception frame marker (both serial and network) */
 

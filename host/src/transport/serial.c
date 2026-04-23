@@ -25,6 +25,7 @@
 static HEAP_ALLOC(wrkmem, LZO1X_1_MEM_COMPRESS);
 
 static bool serial_remote_supports_capabilities(const kostool_context_t *ctx);
+static bool serial_remote_supports_argv(const kostool_context_t *ctx);
 
 /* ===== Low-level serial helpers ===== */
 
@@ -404,6 +405,10 @@ static bool serial_remote_supports_capabilities(const kostool_context_t *ctx) {
            strncmp(ctx->remote_version_string, "gc-load-serial ", 15) == 0;
 }
 
+static bool serial_remote_supports_argv(const kostool_context_t *ctx) {
+    return (ctx->remote_capabilities & KOSLOAD_CAP_ARGV) != 0;
+}
+
 /*
  * Execute at address on DC.
  * Serial protocol: optionally send 'H' for CDFS redir, then send 'A' + addr + console.
@@ -411,6 +416,7 @@ static bool serial_remote_supports_capabilities(const kostool_context_t *ctx) {
 static int serial_execute(kostool_context_t *ctx, uint32_t addr,
                           int console_enabled, int cdfs_redir) {
     uint8_t c;
+    bool send_argv = (ctx->prog_argc > 0) && serial_remote_supports_argv(ctx);
 
     if (cdfs_redir) {
         c = SERIAL_CMD_CDFS_REDIR;
@@ -419,8 +425,10 @@ static int serial_execute(kostool_context_t *ctx, uint32_t addr,
     }
 
     printf("Sending execute command (0x%08x, console=%d)...", addr, console_enabled);
-    if (ctx->prog_argc > 0)
+    if (send_argv)
         printf("argv(%u, argv0=\"%s\")...", ctx->prog_argc, ctx->prog_argv_data);
+    else if (ctx->prog_argc > 0)
+        fprintf(stderr, "Note: remote loader does not support argv metadata; using legacy execute frame\n");
 
     c = SERIAL_CMD_EXECUTE;
     ctx->serial_ops->write(ctx->serial_handle, &c, 1);
@@ -434,11 +442,11 @@ static int serial_execute(kostool_context_t *ctx, uint32_t addr,
      * truthy (console enabled) — harmless.  Extra bytes are only sent when
      * args are present, so with no args the protocol is identical to legacy. */
     uint32_t console_flags = (uint32_t)console_enabled;
-    if (ctx->prog_argc > 0)
+    if (send_argv)
         console_flags |= (1u << 31);
     send_uint(ctx, console_flags);
 
-    if (ctx->prog_argc > 0) {
+    if (send_argv) {
         send_uint(ctx, ctx->prog_argc);
         uint32_t argv_data_len = 0;
         for (uint32_t i = 0; i < ctx->prog_argc; i++)

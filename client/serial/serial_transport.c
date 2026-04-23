@@ -243,7 +243,7 @@ static int serial_transport_init(void)
     lzo_init();
     wrkmem = 0;
     booted = NOT_BOOTED;
-    kosload_info.capabilities = KOSLOAD_CAP_SERIAL;
+    kosload_info.capabilities = KOSLOAD_CAP_SERIAL | KOSLOAD_CAP_ARGV;
     if (target_get_ops()->cdfs_redir_enable)
         kosload_info.capabilities |= KOSLOAD_CAP_CDFS_REDIR;
     kosload_info.transport = KOSLOAD_TRANSPORT_SERIAL;
