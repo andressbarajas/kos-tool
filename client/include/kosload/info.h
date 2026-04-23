@@ -39,10 +39,10 @@ typedef struct {
     uint32_t transport;       /* KOSLOAD_TRANSPORT_SERIAL or _NETWORK */
 
     /* Network fields (zero for serial builds) */
-    uint32_t dc_ip;           /* DC's IP address (network byte order) */
+    uint32_t console_ip;      /* Console IP address (network byte order) */
     uint32_t host_ip;         /* Host/tool IP address (network byte order) */
     uint16_t host_port;       /* Host UDP port (network byte order) */
-    uint8_t  mac[6];          /* DC's MAC address */
+    uint8_t  mac[6];          /* Console MAC address */
 
     /* Serial fields (zero for network builds) */
     uint32_t baud_rate;       /* Serial baud rate (e.g. 1562500) */

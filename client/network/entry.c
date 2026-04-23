@@ -196,7 +196,7 @@ void disp_info(void)
     }
 
     /* Update info block with current network state */
-    kosload_info.dc_ip = our_ip;
+    kosload_info.console_ip = our_ip;
     kosload_info.host_ip = tool_ip;
     kosload_info.host_port = tool_port;
 
