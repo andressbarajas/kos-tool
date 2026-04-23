@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -852,11 +853,17 @@ static int network_recv_response(kostool_context_t *ctx, uint8_t *buffer,
     return recv_resp(ctx, buffer, buffer_size, timeout_usec);
 }
 
+static bool network_remote_supports_argv(const kostool_context_t *ctx) {
+    return (ctx->remote_capabilities & KOSLOAD_CAP_ARGV) != 0;
+}
+
 static int network_execute(kostool_context_t *ctx, uint32_t addr,
                            int console_enabled, int cdfs_redir) {
     uint8_t buffer[2048];
+    bool send_argv;
 
     prepare_comms(ctx);
+    send_argv = (ctx->prog_argc > 0) && network_remote_supports_argv(ctx);
 
     uint32_t flags = ((uint32_t)cdfs_redir << 1) | (uint32_t)console_enabled;
 
@@ -865,7 +872,7 @@ static int network_execute(kostool_context_t *ctx, uint32_t addr,
     uint8_t exec_data[4 + sizeof(ctx->prog_argv_data)];
     uint32_t exec_data_len = 0;
 
-    if (ctx->prog_argc > 0) {
+    if (send_argv) {
         uint32_t argc_be = htonl(ctx->prog_argc);
         uint32_t argv_data_len = 0;
         memcpy(exec_data, &argc_be, 4);
@@ -883,8 +890,10 @@ static int network_execute(kostool_context_t *ctx, uint32_t addr,
         printf("Sending execute command (0x%08x, console=%d, cdfsredir=%d)...",
                addr, console_enabled, cdfs_redir);
 
-    if (ctx->prog_argc > 0)
+    if (send_argv)
         printf("argv(%u, argv0=\"%s\")...", ctx->prog_argc, ctx->prog_argv_data);
+    else if (ctx->prog_argc > 0)
+        fprintf(stderr, "Note: remote loader does not support argv metadata; using legacy EXEC payload\n");
 
     if (send_and_wait(ctx, NET_CMD_EXECUTE, addr, flags,
                       exec_data_len ? exec_data : NULL, exec_data_len,
