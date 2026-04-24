@@ -9,6 +9,8 @@
 #include <string.h>
 #include <time.h>
 
+#include "time-compat.h"
+
 #if defined(_WIN32)
 #include <direct.h>
 #else
@@ -160,11 +162,10 @@ static void dcdisc_release_date(char out[9])
     time_t now = time(NULL);
     struct tm tm_now;
 
-#if defined(_WIN32)
-    tm_now = *localtime(&now);
-#else
-    localtime_r(&now, &tm_now);
-#endif
+    if (now == (time_t)-1 || tool_localtime_compat(now, &tm_now) != 0) {
+        snprintf(out, 9, "%s", "19700101");
+        return;
+    }
 
     snprintf(out, 9, "%04d%02d%02d",
              tm_now.tm_year + 1900, tm_now.tm_mon + 1, tm_now.tm_mday);
