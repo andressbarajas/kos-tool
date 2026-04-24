@@ -23,16 +23,13 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include <kosload/file_compat.h>
 #include <kosload/version.h>
 #include <kosload/protocol.h>
 #include <kostool/firmware.h>
 #include <kostool/transport.h>
 #include <kostool/platform.h>
 #include <kostool/discover.h>
-
-#ifndef O_BINARY
-#define O_BINARY 0
-#endif
 
 /* ===== Firmware data stubs (when not embedded at build time) ===== */
 

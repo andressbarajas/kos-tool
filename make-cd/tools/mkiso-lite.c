@@ -9,7 +9,7 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#include <kosload/strutil.h>
+#include "../../include/kosload/strutil.h"
 
 #if defined(_WIN32)
 #ifndef WIN32_LEAN_AND_MEAN

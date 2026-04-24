@@ -35,6 +35,7 @@ static inline int link(const char *oldpath, const char *newpath) {
 }
 #endif
 
+#include <kosload/file_compat.h>
 #include <kosload/protocol.h>
 #include <kosload/strutil.h>
 #include <kosload/types.h>
@@ -43,10 +44,6 @@ static inline int link(const char *oldpath, const char *newpath) {
 #include <kostool/gdb.h>
 #include <kostool/cdfs.h>
 #include "minilzo.h"
-
-#ifndef O_BINARY
-#define O_BINARY 0
-#endif
 
 #define MAX_PATH_LEN 4096
 #define MAX_SYSCALL_SIZE (32 * 1024 * 1024)  /* 32MB sanity cap for remote malloc */
