@@ -14,6 +14,7 @@ CC      := $(DC_TOOLCHAIN)/$(PREFIX)gcc
 AR      := $(DC_TOOLCHAIN)/$(PREFIX)ar
 OBJCOPY := $(DC_TOOLCHAIN)/$(PREFIX)objcopy
 SIZE    := $(DC_TOOLCHAIN)/$(PREFIX)size
+HOSTCC  ?= cc
 
 # ---------- Directories ----------
 
@@ -21,6 +22,7 @@ BUILDDIR    := build
 COMMONDIR   := $(BUILDDIR)/common
 SERIALDIR   := $(BUILDDIR)/serial
 IPDIR       := $(BUILDDIR)/ip
+HOSTDIR     := $(BUILDDIR)/host
 MINILZO_DIR := $(ROOT)/third_party/minilzo
 MINILZO_A   := $(MINILZO_DIR)/build-dc/minilzo.a
 
@@ -346,6 +348,7 @@ $(MINILZO_A):
 
 EXDIR   := $(CLIENTDIR)/examples
 EXBUILD := $(BUILDDIR)/examples
+MKISO_LITE := $(HOSTDIR)/mkiso-lite
 
 # All examples with a main.c that compile for DC
 DC_EXAMPLES := \
@@ -360,18 +363,24 @@ $(EXBUILD)/%.elf: $(EXDIR)/%/main.c $(EXDIR)/dc-example.ld | $(EXBUILD)
 	@$(CC) $(ARCH_CFLAGS) -O2 -ffreestanding -fno-zero-initialized-in-bss -nostdlib \
 	    -T $(EXDIR)/dc-example.ld $< -o $@
 
-# Test ISO for cdfs-test (requires mkisofs/genisoimage)
-MKISOFS ?= $(shell command -v mkisofs 2>/dev/null || command -v genisoimage 2>/dev/null)
+# Host helper for the cdfs-test ISO
+$(MKISO_LITE): $(ROOT)/make-cd/tools/mkiso-lite.c \
+               $(ROOT)/make-cd/tools/iso9660-lite.c \
+               $(ROOT)/make-cd/tools/iso9660-lite.h | $(HOSTDIR)
+	@echo "  HOSTCC  $@"
+	@$(HOSTCC) -std=c11 -O2 -Wall -Wextra -o $@ \
+	    $(ROOT)/make-cd/tools/mkiso-lite.c \
+	    $(ROOT)/make-cd/tools/iso9660-lite.c
+
 CDFS_TEST_ISO := $(EXBUILD)/cdfs-test.iso
 
-$(CDFS_TEST_ISO): | $(EXBUILD)
-ifneq ($(MKISOFS),)
+$(CDFS_TEST_ISO): $(MKISO_LITE) | $(EXBUILD)
 	@echo "  ISO     $@"
 	@mkdir -p $(EXBUILD)/cdfs-test-data
 	@echo "kosload cdfs-test" > $(EXBUILD)/cdfs-test-data/readme.txt
-	@$(MKISOFS) -quiet -V "CDFS_TEST" -R -o $@ $(EXBUILD)/cdfs-test-data/
+	@$(MKISO_LITE) --quiet --output $@ \
+	    --source-dir $(EXBUILD)/cdfs-test-data --volume-id CDFS_TEST
 	@rm -rf $(EXBUILD)/cdfs-test-data
-endif
 
 examples: $(DC_EXAMPLE_ELFS) $(CDFS_TEST_ISO)
 
@@ -390,7 +399,7 @@ ip: $(IP_ELF) $(IP_BIN)
 	@$(SIZE) $(IP_ELF)
 
 # Directory creation
-$(COMMONDIR) $(SERIALDIR) $(IPDIR) $(EXBUILD):
+$(COMMONDIR) $(SERIALDIR) $(IPDIR) $(HOSTDIR) $(EXBUILD):
 	@mkdir -p $@
 
 clean:

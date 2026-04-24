@@ -4,6 +4,7 @@ build/
 *.a
 *.elf
 *.bin
+!make-cd/tools/IP.BIN
 *.cdi
 *.dol
 *.lzo

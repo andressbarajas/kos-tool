@@ -60,7 +60,7 @@
 
 ### Build System
 * **Simple Makefiles** — no CMake dependency; just `make` with the cross-compiler toolchains in PATH
-* **Disc image generation** — `make disc` produces bootable CDI (Dreamcast) and ISO (GameCube) disc images
+* **Disc image generation** — `make disc` produces bootable CDI (Dreamcast) and ISO (GameCube) disc images using in-tree image builders
 * **Example programs** — freestanding test programs (console, rainbow, syscall, CDFS, exception, maple, etc.) built automatically
 
 ## Features
@@ -111,6 +111,8 @@ make dc      # Dreamcast firmware + examples + rebuild kos-tool
 make gc      # GameCube firmware + examples + rebuild kos-tool
 make host    # Host tool only (embeds whatever firmware bins exist)
 make disc    # Bootable disc images (CDI for DC, ISO for GC)
+make disc-dc # Dreamcast-only bootable CDI images
+make disc-gc # GameCube-only bootable ISO images
 ```
 
 ### Platform-Specific Notes
