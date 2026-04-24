@@ -1737,9 +1737,9 @@ static int do_serial_console(kostool_context_t *ctx) {
             perror(ctx->iso_filename);
     }
 
-    if (ctx->use_chroot && ctx->chroot_path) {
-        ctx->fs_ops->chroot(ctx->chroot_path);
-    }
+    // if (ctx->use_chroot && ctx->chroot_path) {
+    //     ctx->fs_ops->chroot(ctx->chroot_path);
+    // }
 
     while (1) {
         fflush(stdout);
@@ -1804,10 +1804,6 @@ static int do_network_console(kostool_context_t *ctx) {
         ctx->cdfs_fd = open(ctx->iso_filename, O_RDONLY | O_BINARY);
         if (ctx->cdfs_fd < 0)
             perror(ctx->iso_filename);
-    }
-
-    if (ctx->use_chroot && ctx->chroot_path) {
-        ctx->fs_ops->chroot(ctx->chroot_path);
     }
 
     while (1) {

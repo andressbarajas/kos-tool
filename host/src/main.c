@@ -169,7 +169,7 @@ static void usage(void) {
     printf("  -n           Disable console/fileserver\n");
     printf("  -p           Dumb terminal mode\n");
     printf("  -q           Quiet mode\n");
-    printf("  -c <path>    Chroot to <path>\n");
+    printf("  -c <path>    Disabled (use -m <path> instead)\n");
     printf("  -m <path>    Map /pc/ to <path>\n");
     printf("  -i <iso>     Enable CDFS redirection with <iso>\n");
     printf("  -g           Start GDB server on port %d\n", NET_GDB_PORT);
@@ -276,8 +276,11 @@ int main(int argc, char *argv[]) {
             break;
         case 'c':
             if (++i < argc) {
-                ctx.chroot_path = argv[i];
-                ctx.use_chroot = 1;
+                // ctx.chroot_path = argv[i];
+                // ctx.use_chroot = 1;
+                fprintf(stderr,
+                        "Warning: -c is disabled; ignoring <%s>. Use -m <path> instead.\n",
+                        argv[i]);
             }
             break;
         case 'm':
@@ -428,8 +431,8 @@ int main(int argc, char *argv[]) {
 
     if (ctx.console_enabled)
         printf("Console enabled\n");
-    if (ctx.use_chroot && ctx.chroot_path)
-        printf("Chrooting to <%s>\n", ctx.chroot_path);
+    // if (ctx.use_chroot && ctx.chroot_path)
+    //     printf("Chrooting to <%s>\n", ctx.chroot_path);
 
     /* Sync RTC if requested — works standalone or with any command.
      * The DC BIOS expects local time in the AICA RTC, not UTC,

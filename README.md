@@ -184,7 +184,7 @@ Options:
   -n           Disable console/fileserver
   -p           Dumb terminal mode
   -q           Quiet mode
-  -c <path>    Chroot to <path>
+  -c <path>    Disabled (use -m <path> instead)
   -m <path>    Map /pc/ to <path>
   -i <iso>     Enable CDFS redirection with <iso>
   -g           Start GDB server on port 2159
