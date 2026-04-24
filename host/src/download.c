@@ -5,12 +5,9 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include <kosload/file_compat.h>
 #include <kostool/transport.h>
 #include <kostool/platform.h>
-
-#ifndef O_BINARY
-#define O_BINARY 0
-#endif
 
 int download(kostool_context_t *ctx, const char *filename,
              uint32_t address, uint32_t size) {

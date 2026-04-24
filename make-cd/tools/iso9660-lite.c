@@ -7,7 +7,7 @@
 #include <string.h>
 #include <time.h>
 
-#include <kosload/strutil.h>
+#include "../../include/kosload/strutil.h"
 
 #include "time-compat.h"
 

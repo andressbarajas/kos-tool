@@ -18,6 +18,61 @@ typedef struct {
     HANDLE hComm;
 } win_serial_t;
 
+static int win_serial_set_timeouts(HANDLE hComm)
+{
+    COMMTIMEOUTS timeouts;
+
+    memset(&timeouts, 0, sizeof(timeouts));
+
+    /* Match the transport's blocking-read expectations:
+     * ReadFile waits until the requested byte count is available. */
+    timeouts.ReadIntervalTimeout = 0;
+    timeouts.ReadTotalTimeoutMultiplier = 0;
+    timeouts.ReadTotalTimeoutConstant = 0;
+    timeouts.WriteTotalTimeoutMultiplier = 0;
+    timeouts.WriteTotalTimeoutConstant = 0;
+
+    return SetCommTimeouts(hComm, &timeouts) ? 0 : -1;
+}
+
+static int win_serial_configure_port(HANDLE hComm, uint32_t baud)
+{
+    DCB dcb;
+
+    memset(&dcb, 0, sizeof(dcb));
+    dcb.DCBlength = sizeof(dcb);
+
+    if (!GetCommState(hComm, &dcb))
+        return -1;
+
+    dcb.BaudRate = baud;
+    dcb.ByteSize = DATA_BITS;
+    dcb.Parity = PARITY_SET;
+    dcb.StopBits = STOP_BITS;
+
+    /* Use raw 8N1 with hardware flow control, matching the POSIX backends. */
+    dcb.fBinary = TRUE;
+    dcb.fParity = FALSE;
+    dcb.fOutxCtsFlow = TRUE;
+    dcb.fOutxDsrFlow = FALSE;
+    dcb.fDtrControl = DTR_CONTROL_ENABLE;
+    dcb.fDsrSensitivity = FALSE;
+    dcb.fTXContinueOnXoff = FALSE;
+    dcb.fOutX = FALSE;
+    dcb.fInX = FALSE;
+    dcb.fErrorChar = FALSE;
+    dcb.fNull = FALSE;
+    dcb.fRtsControl = RTS_CONTROL_ENABLE;
+    dcb.fAbortOnError = FALSE;
+
+    if (!SetCommState(hComm, &dcb))
+        return -1;
+
+    return PurgeComm(hComm,
+                     PURGE_RXABORT | PURGE_RXCLEAR |
+                     PURGE_TXABORT | PURGE_TXCLEAR) ? 0 : -1;
+}
+
 static void *win_serial_open(const char *device, uint32_t initial_baud) {
     win_serial_t *s = calloc(1, sizeof(*s));
     if (!s) return NULL;
@@ -30,32 +85,22 @@ static void *win_serial_open(const char *device, uint32_t initial_baud) {
         return NULL;
     }
 
-    /* Set timeouts */
-    COMMTIMEOUTS timeouts;
-    timeouts.ReadIntervalTimeout = MAXDWORD;
-    timeouts.ReadTotalTimeoutMultiplier = MAXDWORD;
-    timeouts.ReadTotalTimeoutConstant = MAXDWORD;
-    timeouts.WriteTotalTimeoutMultiplier = 0;
-    timeouts.WriteTotalTimeoutConstant = 0;
-    SetCommTimeouts(s->hComm, &timeouts);
-
-    /* Configure port */
-    DCB dcb;
-    dcb.DCBlength = sizeof(DCB);
-    if (!GetCommState(s->hComm, &dcb)) {
-        fprintf(stderr, "Error getting serial port state\n");
+    if (!SetupComm(s->hComm, 4096, 4096)) {
+        fprintf(stderr, "Error setting serial queue sizes\n");
         CloseHandle(s->hComm);
         free(s);
         return NULL;
     }
 
-    dcb.BaudRate = initial_baud;
-    dcb.ByteSize = DATA_BITS;
-    dcb.Parity = PARITY_SET;
-    dcb.StopBits = STOP_BITS;
+    if (win_serial_set_timeouts(s->hComm) != 0) {
+        fprintf(stderr, "Error setting serial port timeouts\n");
+        CloseHandle(s->hComm);
+        free(s);
+        return NULL;
+    }
 
-    if (!SetCommState(s->hComm, &dcb)) {
-        fprintf(stderr, "Error setting serial port state\n");
+    if (win_serial_configure_port(s->hComm, initial_baud) != 0) {
+        fprintf(stderr, "Error configuring serial port state\n");
         CloseHandle(s->hComm);
         free(s);
         return NULL;
@@ -101,12 +146,8 @@ static int win_serial_bytes_available(void *handle) {
 
 static int win_serial_set_speed(void *handle, uint32_t baud) {
     win_serial_t *s = handle;
-    DCB dcb;
-    dcb.DCBlength = sizeof(DCB);
-    if (!GetCommState(s->hComm, &dcb)) return -1;
-    dcb.BaudRate = baud;
-    if (!SetCommState(s->hComm, &dcb)) return -1;
-    return 0;
+
+    return win_serial_configure_port(s->hComm, baud);
 }
 
 static void win_serial_flush(void *handle) {
