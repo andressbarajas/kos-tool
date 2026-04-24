@@ -689,9 +689,9 @@ int iso_lite_write_stream(FILE *output, const iso_lite_config_t *config,
 
     for (i = 0; i < file_count; i++) {
         if (iso_lite_write_padded(output, layout[i].data, layout[i].size) < 0) {
-            free(layout);
             iso_lite_set_error(error_buf, error_buf_size,
                                "failed to write file %s", layout[i].iso_name);
+            free(layout);
             return -1;
         }
     }
