@@ -266,6 +266,11 @@ IP_OBJS := \
 
 IP_ELF := $(IPDIR)/gc-load-ip.elf
 IP_BIN := $(IPDIR)/gc-load-ip.bin
+IP_CONFIG_STAMP := $(IPDIR)/ip-config.stamp
+
+$(IP_CONFIG_STAMP): | $(IPDIR)
+	@printf '%s\n' 'STATICIP=$(if $(STATICIP),$(STATICIP),DHCP)' > $@.tmp
+	@if ! cmp -s $@.tmp $@ 2>/dev/null; then mv $@.tmp $@; echo "  GEN     $@"; else rm $@.tmp; fi
 
 # IP C object rules
 $(IPDIR)/main.o: $(CLIENTDIR)/common/main.c $(VERSION_H) | $(IPDIR)
@@ -277,7 +282,7 @@ $(IPDIR)/commands.o: $(CLIENTDIR)/common/commands.c $(VERSION_H) | $(IPDIR)
 $(IPDIR)/entry.o: $(CLIENTDIR)/network/entry.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/network_transport.o: $(CLIENTDIR)/network/network_transport.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/network_transport.o: $(CLIENTDIR)/network/network_transport.c $(VERSION_H) $(IP_CONFIG_STAMP) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
 $(IPDIR)/network_syscalls.o: $(CLIENTDIR)/network/network_syscalls.c $(VERSION_H) | $(IPDIR)
