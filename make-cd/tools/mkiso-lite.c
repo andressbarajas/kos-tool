@@ -9,6 +9,8 @@
 #include <string.h>
 #include <sys/stat.h>
 
+#include "../../include/kosload/strutil.h"
+
 #if defined(_WIN32)
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -27,6 +29,45 @@ typedef struct {
     void *owned_data;
     char iso_name[ISO_LITE_FILE_NAME_SIZE];
 } mkiso_input_file_t;
+
+static void mkiso_set_path_error(char *error_buf, size_t error_buf_size,
+                                 const char *prefix, const char *path)
+{
+    size_t prefix_len;
+    size_t available;
+    size_t path_len;
+
+    if (!error_buf || error_buf_size == 0)
+        return;
+
+    if (!prefix)
+        prefix = "";
+    if (!path)
+        path = "(null)";
+
+    prefix_len = compat_str_copy(error_buf, error_buf_size, prefix);
+    if (prefix_len + 1 >= error_buf_size)
+        return;
+    available = error_buf_size - prefix_len - 1;
+    path_len = strlen(path);
+
+    if (path_len <= available) {
+        memcpy(error_buf + prefix_len, path, path_len);
+        error_buf[prefix_len + path_len] = '\0';
+        return;
+    }
+
+    if (available > 3) {
+        size_t tail_len = available - 3;
+        memcpy(error_buf + prefix_len, "...", 3);
+        memcpy(error_buf + prefix_len + 3, path + path_len - tail_len, tail_len);
+        error_buf[prefix_len + available] = '\0';
+        return;
+    }
+
+    memcpy(error_buf + prefix_len, path + path_len - available, available);
+    error_buf[prefix_len + available] = '\0';
+}
 
 static void mkiso_free_files(mkiso_input_file_t *files, size_t count)
 {
@@ -55,32 +96,6 @@ static const char *mkiso_path_basename(const char *path)
         return backslash[1] ? backslash + 1 : backslash;
 
     return base;
-}
-
-static void mkiso_join_path(char *out, size_t out_size, const char *dir,
-                            const char *name)
-{
-    size_t len;
-
-    if (!out_size)
-        return;
-
-    len = snprintf(out, out_size, "%s", dir ? dir : "");
-    if (len >= out_size)
-        return;
-
-    if (len > 0 && out[len - 1] != '/' && out[len - 1] != '\\') {
-#if defined(_WIN32)
-        if (len + 1 < out_size)
-            out[len++] = '\\';
-#else
-        if (len + 1 < out_size)
-            out[len++] = '/';
-#endif
-        out[len] = '\0';
-    }
-
-    snprintf(out + len, out_size - len, "%s", name ? name : "");
 }
 
 static void mkiso_usage(const char *program)
@@ -174,7 +189,8 @@ static int mkiso_add_file(const char *full_path, const char *entry_name,
     }
 
     if (mkiso_load_file(full_path, &data, &size) < 0) {
-        snprintf(error_buf, error_buf_size, "failed to read %s", full_path);
+        mkiso_set_path_error(error_buf, error_buf_size, "failed to read ",
+                             full_path);
         return -1;
     }
 
@@ -203,10 +219,11 @@ static int mkiso_collect_files(const char *source_dir, mkiso_input_file_t **file
     WIN32_FIND_DATAA find_data;
     HANDLE handle;
 
-    mkiso_join_path(pattern, sizeof(pattern), source_dir, "*");
+    compat_path_join(pattern, sizeof(pattern), source_dir, "*");
     handle = FindFirstFileA(pattern, &find_data);
     if (handle == INVALID_HANDLE_VALUE) {
-        snprintf(error_buf, error_buf_size, "failed to open %s", source_dir);
+        mkiso_set_path_error(error_buf, error_buf_size, "failed to open ",
+                             source_dir);
         return -1;
     }
 
@@ -219,8 +236,8 @@ static int mkiso_collect_files(const char *source_dir, mkiso_input_file_t **file
         if (find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
             continue;
 
-        mkiso_join_path(full_path, sizeof(full_path), source_dir,
-                        find_data.cFileName);
+        compat_path_join(full_path, sizeof(full_path), source_dir,
+                         find_data.cFileName);
         if (mkiso_add_file(full_path, find_data.cFileName, &files, &count,
                            &capacity, error_buf, error_buf_size) < 0) {
             FindClose(handle);
@@ -236,7 +253,8 @@ static int mkiso_collect_files(const char *source_dir, mkiso_input_file_t **file
 
     dir = opendir(source_dir);
     if (!dir) {
-        snprintf(error_buf, error_buf_size, "failed to open %s", source_dir);
+        mkiso_set_path_error(error_buf, error_buf_size, "failed to open ",
+                             source_dir);
         return -1;
     }
 
@@ -247,7 +265,7 @@ static int mkiso_collect_files(const char *source_dir, mkiso_input_file_t **file
         if (entry->d_name[0] == '.')
             continue;
 
-        mkiso_join_path(full_path, sizeof(full_path), source_dir, entry->d_name);
+        compat_path_join(full_path, sizeof(full_path), source_dir, entry->d_name);
         if (stat(full_path, &st) < 0)
             continue;
 
@@ -267,7 +285,8 @@ static int mkiso_collect_files(const char *source_dir, mkiso_input_file_t **file
 
     if (!count) {
         free(files);
-        snprintf(error_buf, error_buf_size, "no regular files found in %s", source_dir);
+        mkiso_set_path_error(error_buf, error_buf_size,
+                             "no regular files found in ", source_dir);
         return -1;
     }
 

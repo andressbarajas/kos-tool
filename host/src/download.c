@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include <kosload/file_compat.h>
 #include <kostool/transport.h>
 #include <kostool/platform.h>
 
@@ -29,7 +30,7 @@ int download(kostool_context_t *ctx, const char *filename,
 
     uint64_t elapsed = ctx->time_ops->time_usec() - start;
 
-    int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    int fd = open(filename, O_BINARY | O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (fd < 0) {
         perror(filename);
         free(data);

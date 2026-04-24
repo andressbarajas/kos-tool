@@ -33,10 +33,11 @@
 static inline int link(const char *oldpath, const char *newpath) {
     return CreateHardLinkA(newpath, oldpath, NULL) ? 0 : -1;
 }
-#define mkdir(path, mode) _mkdir(path)
 #endif
 
+#include <kosload/file_compat.h>
 #include <kosload/protocol.h>
+#include <kosload/strutil.h>
 #include <kosload/types.h>
 #include <kostool/transport.h>
 #include <kostool/platform.h>
@@ -44,13 +45,18 @@ static inline int link(const char *oldpath, const char *newpath) {
 #include <kostool/cdfs.h>
 #include "minilzo.h"
 
-#ifndef O_BINARY
-#define O_BINARY 0
-#endif
-
 #define MAX_PATH_LEN 4096
 #define MAX_SYSCALL_SIZE (32 * 1024 * 1024)  /* 32MB sanity cap for remote malloc */
 #define SERIAL_EXIT_CODE_PROBE_USEC 100000
+
+static int host_mkdir(const char *path, int mode) {
+#ifdef _WIN32
+    (void)mode;
+    return _mkdir(path);
+#else
+    return mkdir(path, mode);
+#endif
+}
 
 /* Check if a file starts with ELF magic (\x7fELF).
  * addr2line only works on ELF files, so skip it for .bin/.dol/etc. */
@@ -141,8 +147,7 @@ static void decode_address(const char *addr2line_cmd, const char *elf_path,
     /* Check cache */
     for (i = 0; i < addr_cache_count; i++) {
         if (addr_cache[i].addr == addr) {
-            strncpy(out, addr_cache[i].decoded, out_size);
-            out[out_size - 1] = '\0';
+            compat_str_copy(out, out_size, addr_cache[i].decoded);
             return;
         }
     }
@@ -178,8 +183,8 @@ static void decode_address(const char *addr2line_cmd, const char *elf_path,
     /* Cache result */
     if (addr_cache_count < ADDR2LINE_CACHE_SIZE) {
         addr_cache[addr_cache_count].addr = addr;
-        strncpy(addr_cache[addr_cache_count].decoded, out, 256);
-        addr_cache[addr_cache_count].decoded[255] = '\0';
+        compat_str_copy(addr_cache[addr_cache_count].decoded,
+                        sizeof(addr_cache[addr_cache_count].decoded), out);
         addr_cache_count++;
     }
 }
@@ -246,16 +251,21 @@ static void console_write_line(const char *addr2line_cmd, const char *elf_path,
                 /* Build annotated line in one buffer, one write */
                 char outbuf[512];
                 size_t trim = len;
+                size_t out_len;
 
                 while (trim > 0 && (line[trim - 1] == '\n' ||
                        line[trim - 1] == '\r'))
                     trim--;
 
-                int n = snprintf(outbuf, sizeof(outbuf), "%.*s   %s\n",
-                                 (int)trim, line, decoded);
-                if (n > (int)sizeof(outbuf))
-                    n = (int)sizeof(outbuf);
-                write(fd, outbuf, n);
+                out_len = compat_str_append_bytes(outbuf, sizeof(outbuf), 0,
+                                                  line, trim);
+                out_len = compat_str_append_bytes(outbuf, sizeof(outbuf), out_len,
+                                                  "   ", 3);
+                out_len = compat_str_append(outbuf, sizeof(outbuf), out_len,
+                                            decoded);
+                out_len = compat_str_append_bytes(outbuf, sizeof(outbuf), out_len,
+                                                  "\n", 1);
+                write(fd, outbuf, out_len);
                 return;
             }
         }
@@ -979,7 +989,7 @@ static void ser_syscall_mkdir(kostool_context_t *ctx) {
     int mode = ser_recv_uint(ctx);
     char buf[MAX_PATH_LEN];
     const char *resolved = resolve_path(ctx, pathname, buf, sizeof(buf));
-    int ret = mkdir(resolved, mode);
+    int ret = host_mkdir(resolved, mode);
     ser_send_uint(ctx, ret);
     free(pathname);
 }
@@ -1478,7 +1488,7 @@ static void net_syscall_mkdir(kostool_context_t *ctx, uint8_t *pkt) {
     net_command_int_string_t *cmd = (net_command_int_string_t *)pkt;
     char buf[MAX_PATH_LEN];
     const char *resolved = resolve_path(ctx, cmd->string, buf, sizeof(buf));
-    int ret = mkdir(resolved, ntohl(cmd->value0));
+    int ret = host_mkdir(resolved, ntohl(cmd->value0));
     net_send_cmd(ctx, NET_CMD_RETVAL, ret, ret, NULL, 0);
 }
 
@@ -1591,7 +1601,7 @@ static void net_syscall_readdir(kostool_context_t *ctx, uint8_t *pkt) {
         dd.d_reclen = target_order32(ctx, de->d_reclen);
         dd.d_type = de->d_type;
 #endif
-        strncpy(dd.d_name, de->d_name, sizeof(dd.d_name) - 1);
+        compat_str_copy(dd.d_name, sizeof(dd.d_name), de->d_name);
         ctx->transport->send_data(ctx, (uint8_t *)&dd, addr, sz);
         net_send_cmd(ctx, NET_CMD_RETVAL, 1, 1, NULL, 0);
     } else {

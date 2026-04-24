@@ -2,7 +2,7 @@
 /*
    DC "Lan Adapter" driver for dc-load-ip
 
-   Copyright (C)2002,2003 Dan Potter (NEW BSD LICENSE)
+   Copyright (C)2002,2003 Megan Potter (NEW BSD LICENSE)
 
    Copied from dcload-ip: dcload-ip/target-src/dcload/lan_adapter.c
  */

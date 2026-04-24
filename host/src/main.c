@@ -119,6 +119,39 @@ static const char *program_basename(const char *path) {
     return base;
 }
 
+static time_t host_local_rtc_time(time_t now) {
+    struct tm local_tm;
+    struct tm gm_tm;
+    time_t local_secs;
+    time_t gm_secs;
+
+#if defined(_WIN32)
+    struct tm *tm_ptr;
+
+    tm_ptr = localtime(&now);
+    if (!tm_ptr)
+        return now;
+    local_tm = *tm_ptr;
+
+    tm_ptr = gmtime(&now);
+    if (!tm_ptr)
+        return now;
+    gm_tm = *tm_ptr;
+#else
+    if (!localtime_r(&now, &local_tm))
+        return now;
+    if (!gmtime_r(&now, &gm_tm))
+        return now;
+#endif
+
+    local_secs = mktime(&local_tm);
+    gm_secs = mktime(&gm_tm);
+    if (local_secs == (time_t)-1 || gm_secs == (time_t)-1)
+        return now;
+
+    return now + (local_secs - gm_secs);
+}
+
 static void usage(void) {
     printf("\nkostool %s — Unified console loader\n\n", KOSLOAD_VERSION_STRING);
     printf("Usage: kostool [options] -t <device|ip|auto>\n\n");
@@ -400,11 +433,10 @@ int main(int argc, char *argv[]) {
 
     /* Sync RTC if requested — works standalone or with any command.
      * The DC BIOS expects local time in the AICA RTC, not UTC,
-     * so add the host's UTC offset (tm_gmtoff) to the timestamp. */
+     * so add the host's UTC offset to the timestamp. */
     if (ctx.rtc_sync && transport_can_set_rtc(ctx.transport)) {
         time_t now = time(NULL);
-        struct tm *lt = localtime(&now);
-        time_t local_time = now + lt->tm_gmtoff;
+        time_t local_time = host_local_rtc_time(now);
         phase_start = ctx.time_ops->time_usec();
         ctx.transport->set_rtc(&ctx, (uint32_t)local_time);
         diag_phase(&ctx, "RTC sync", ctx.time_ops->time_usec() - phase_start);
