@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
+#include <kosload/file_compat.h>
 #include <kostool/binary.h>
 
 static int raw_probe(const char *filename) {
@@ -18,7 +19,7 @@ static int raw_probe(const char *filename) {
 
 static int raw_load(const char *filename, uint32_t *entry_addr,
                     binary_section_cb callback, void *user_data) {
-    int fd = open(filename, O_RDONLY);
+    int fd = open(filename, O_RDONLY | O_BINARY);
     if (fd < 0) {
         perror(filename);
         return -1;

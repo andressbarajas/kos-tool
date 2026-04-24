@@ -21,11 +21,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <stdint.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
 
+#include <kosload/file_compat.h>
 #include <kostool/binary.h>
 
 #define DOL_HEADER_SIZE     256
@@ -88,7 +90,7 @@ static int dol_probe(const char *filename)
     if (stat(filename, &st) != 0 || st.st_size < DOL_HEADER_SIZE)
         return 0;
 
-    fd = open(filename, O_RDONLY);
+    fd = open(filename, O_RDONLY | O_BINARY);
     if (fd < 0)
         return 0;
     if (read(fd, raw, DOL_HEADER_SIZE) != DOL_HEADER_SIZE) {
@@ -144,7 +146,7 @@ static int dol_load(const char *filename, uint32_t *entry_addr,
     off_t file_size;
     int i, ret;
 
-    fd = open(filename, O_RDONLY);
+    fd = open(filename, O_RDONLY | O_BINARY);
     if (fd < 0) {
         perror(filename);
         return -1;

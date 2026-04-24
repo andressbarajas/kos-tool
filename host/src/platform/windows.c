@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #include <kosload/protocol.h>
+#include <kosload/strutil.h>
 #include <kostool/platform.h>
 
 #ifdef _WIN32
@@ -123,8 +124,11 @@ static int win_translate_flags(int kos_flags) {
 
 static const char *win_resolve_path(const char *dc_path, const char *map_root,
                                     char *out, size_t out_size) {
+    size_t len;
+
     if (!map_root) return dc_path;
-    snprintf(out, out_size, "%s%s", map_root, dc_path);
+    len = compat_str_copy(out, out_size, map_root);
+    compat_str_append(out, out_size, len, dc_path);
     return out;
 }
 

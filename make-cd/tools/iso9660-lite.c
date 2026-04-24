@@ -7,6 +7,10 @@
 #include <string.h>
 #include <time.h>
 
+#include "../../include/kosload/strutil.h"
+
+#include "time-compat.h"
+
 typedef struct {
     char iso_name[ISO_LITE_FILE_NAME_SIZE];
     const uint8_t *data;
@@ -106,22 +110,34 @@ static int iso_lite_write_padded(FILE *output, const uint8_t *data, size_t size)
     return iso_lite_write_zeros(output, padded - size);
 }
 
-static void iso_lite_fill_dir_time(uint8_t out[7])
+static int iso_lite_get_current_times(struct tm *local_tm, struct tm *gm_tm)
 {
     time_t now = time(NULL);
+
+    if (now == (time_t)-1)
+        return -1;
+
+    if (tool_localtime_compat(now, local_tm) != 0)
+        return -1;
+
+    if (tool_gmtime_compat(now, gm_tm) != 0)
+        return -1;
+
+    return 0;
+}
+
+static void iso_lite_fill_dir_time(uint8_t out[7])
+{
     struct tm local_tm;
     struct tm gm_tm;
     time_t local_secs;
     time_t gm_secs;
     long offset_minutes;
 
-#if defined(_WIN32)
-    local_tm = *localtime(&now);
-    gm_tm = *gmtime(&now);
-#else
-    localtime_r(&now, &local_tm);
-    gmtime_r(&now, &gm_tm);
-#endif
+    if (iso_lite_get_current_times(&local_tm, &gm_tm) != 0) {
+        memset(out, 0, 7);
+        return;
+    }
 
     local_secs = mktime(&local_tm);
     gm_secs = mktime(&gm_tm);
@@ -138,28 +154,24 @@ static void iso_lite_fill_dir_time(uint8_t out[7])
 
 static void iso_lite_fill_volume_time(uint8_t out[17])
 {
-    time_t now = time(NULL);
     struct tm local_tm;
     time_t local_secs;
     struct tm gm_tm;
     time_t gm_secs;
     long offset_minutes;
 
-#if defined(_WIN32)
-    local_tm = *localtime(&now);
-    gm_tm = *gmtime(&now);
-#else
-    localtime_r(&now, &local_tm);
-    gmtime_r(&now, &gm_tm);
-#endif
+    if (iso_lite_get_current_times(&local_tm, &gm_tm) != 0) {
+        tool_set_default_iso9660_volume_time(out);
+        return;
+    }
 
     local_secs = mktime(&local_tm);
     gm_secs = mktime(&gm_tm);
     offset_minutes = (long)((local_secs - gm_secs) / 60);
 
-    snprintf((char *)out, 17, "%04d%02d%02d%02d%02d%02d00",
-             local_tm.tm_year + 1900, local_tm.tm_mon + 1, local_tm.tm_mday,
-             local_tm.tm_hour, local_tm.tm_min, local_tm.tm_sec);
+    if (tool_format_iso9660_volume_time(out, &local_tm) != 0)
+        return;
+
     out[16] = (int8_t)(offset_minutes / 15);
 }
 
@@ -266,10 +278,13 @@ void iso_lite_normalize_file_name(const char *input, char *output, size_t output
         }
     }
 
-    if (ext[0])
-        snprintf(output, output_size, "%s.%s;1", base, ext);
-    else
-        snprintf(output, output_size, "%s;1", base);
+    output[0] = '\0';
+    i = compat_str_append(output, output_size, 0, base);
+    if (ext[0]) {
+        i = compat_str_append(output, output_size, i, ".");
+        i = compat_str_append(output, output_size, i, ext);
+    }
+    compat_str_append(output, output_size, i, ";1");
 }
 
 void iso_lite_normalize_volume_id(const char *input, char *output, size_t output_size)
@@ -282,7 +297,7 @@ void iso_lite_normalize_volume_id(const char *input, char *output, size_t output
     memset(output, 0, output_size);
 
     if (!input || !input[0]) {
-        snprintf(output, output_size, "KOSLOAD");
+        compat_str_append(output, output_size, 0, "KOSLOAD");
         return;
     }
 
@@ -298,7 +313,7 @@ void iso_lite_normalize_volume_id(const char *input, char *output, size_t output
     }
 
     if (!output[0])
-        snprintf(output, output_size, "KOSLOAD");
+        compat_str_append(output, output_size, 0, "KOSLOAD");
 }
 
 int iso_lite_write_stream(FILE *output, const iso_lite_config_t *config,
@@ -364,8 +379,8 @@ int iso_lite_write_stream(FILE *output, const iso_lite_config_t *config,
             return -1;
         }
 
-        snprintf(layout[i].iso_name, sizeof(layout[i].iso_name), "%s",
-                 files[i].iso_name);
+        compat_str_copy(layout[i].iso_name, sizeof(layout[i].iso_name),
+                        files[i].iso_name);
         layout[i].data = files[i].data;
         layout[i].size = (uint32_t)files[i].size;
     }
@@ -674,9 +689,9 @@ int iso_lite_write_stream(FILE *output, const iso_lite_config_t *config,
 
     for (i = 0; i < file_count; i++) {
         if (iso_lite_write_padded(output, layout[i].data, layout[i].size) < 0) {
-            free(layout);
             iso_lite_set_error(error_buf, error_buf_size,
                                "failed to write file %s", layout[i].iso_name);
+            free(layout);
             return -1;
         }
     }

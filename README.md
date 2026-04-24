@@ -118,8 +118,8 @@ make disc-gc # GameCube-only bootable ISO images
 ### Platform-Specific Notes
 
 ```bash
-# Linux
-sudo apt-get install libelf-dev
+# Debian / Ubuntu
+sudo apt-get install build-essential pkg-config libelf-dev
 
 # macOS
 brew install libelf
@@ -127,6 +127,14 @@ brew install libelf
 # Windows (MSYS2 MINGW64)
 pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-libelf make
 ```
+
+On Windows, build from the `MSYS2 MinGW x64` shell, not the plain `MSYS` shell.
+The host build expects the MinGW toolchain (`/mingw64/bin/gcc`) to be on `PATH`,
+which is set up automatically in `MINGW64`.
+
+USB serial adapters used with Dreamcast coders cables should appear in Device
+Manager as `COMx` ports. Pass that `COM` name directly to `kos-tool` with
+`-t`, for example `-t COM3`.
 
 ### VGA-Only (Naomi / System SP)
 
@@ -190,7 +198,7 @@ kos-tool -t /dev/ttyUSB0 -x program.elf
 kos-tool -t /dev/cu.usbserial-A50285BI -b 1500000 -x program.elf
 
 # Dreamcast serial — Windows
-kos-tool -t COM4 -b 500000 -x program.elf
+kos-tool.exe -t COM4 -b 500000 -x program.elf
 
 # Dreamcast network — upload and run
 kos-tool -t 192.168.1.100 -x program.elf
@@ -273,12 +281,11 @@ kos-tool is derived from the original dcload by Andrew Kieschnick (ADK/Napalm), 
 
 * **Andrew Kieschnick** (ADK/Napalm) — original dcload author
 * **Marcus Comstedt** — `video.s`, `maple.c`/`maple.h`
-* **Megan Potter** — RTL8139 driver base
+* **Megan Potter** — RTL8139 driver base, macOS fixes
 * **Moopthehedgehog** — LAN Adapter overhaul, DHCP, perf counters, performance work (dcload-ip)
 * **Mickaël Cardoso** (SiZiOUS) — extensive fixes and maintenance
 * **Florian Schulze** (Proff) — Win32 porting
 * **Paul Boese** (Axlen) — serial protocol endian fixes
-* **Dan Potter** — macOS fixes
 * **Eric Fradella** (darcagn) — DHCP retry
 * **Lawrence Sebald**, **Donald Haase**, **Falco Girgis** — KallistiOS team contributions
 * **Andy Barajas** — kos-tool unification, GameCube support

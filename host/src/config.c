@@ -9,7 +9,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
+#include <kosload/strutil.h>
 #include <kostool/context.h>
 #include <kostool/config.h>
 
@@ -41,10 +43,8 @@ static int get_executable_dir(char *buf, size_t size)
         return -1;
     /* Resolve symlinks */
     char resolved[4096];
-    if (realpath(buf, resolved)) {
-        strncpy(buf, resolved, size);
-        buf[size - 1] = '\0';
-    }
+    if (realpath(buf, resolved))
+        compat_str_copy(buf, size, resolved);
 #elif defined(__linux__)
     ssize_t len = readlink("/proc/self/exe", buf, size - 1);
     if (len < 0) return -1;
@@ -88,11 +88,9 @@ static void apply_config_value(struct kostool_context *ctx,
                                const char *key, const char *value)
 {
     if (strcmp(key, "sh4_addr2line") == 0) {
-        strncpy(ctx->sh4_addr2line, value, sizeof(ctx->sh4_addr2line) - 1);
-        ctx->sh4_addr2line[sizeof(ctx->sh4_addr2line) - 1] = '\0';
+        compat_str_copy(ctx->sh4_addr2line, sizeof(ctx->sh4_addr2line), value);
     } else if (strcmp(key, "ppc_addr2line") == 0) {
-        strncpy(ctx->ppc_addr2line, value, sizeof(ctx->ppc_addr2line) - 1);
-        ctx->ppc_addr2line[sizeof(ctx->ppc_addr2line) - 1] = '\0';
+        compat_str_copy(ctx->ppc_addr2line, sizeof(ctx->ppc_addr2line), value);
     }
     /* Unknown keys are silently ignored for forward compat */
 }
@@ -103,13 +101,15 @@ void config_load(struct kostool_context *ctx)
     char path[4096];
 
     /* Set defaults first (full paths) */
-    strncpy(ctx->sh4_addr2line, "/opt/toolchains/dc/sh-elf/bin/sh-elf-addr2line", sizeof(ctx->sh4_addr2line));
-    strncpy(ctx->ppc_addr2line, "/opt/toolchains/gc/powerpc-eabi/bin/powerpc-eabi-addr2line", sizeof(ctx->ppc_addr2line));
+    compat_str_copy(ctx->sh4_addr2line, sizeof(ctx->sh4_addr2line),
+                    "/opt/toolchains/dc/sh-elf/bin/sh-elf-addr2line");
+    compat_str_copy(ctx->ppc_addr2line, sizeof(ctx->ppc_addr2line),
+                    "/opt/toolchains/gc/powerpc-eabi/bin/powerpc-eabi-addr2line");
 
     if (get_executable_dir(dir, sizeof(dir)) != 0)
         return;
 
-    snprintf(path, sizeof(path), "%s/%s", dir, CONFIG_FILENAME);
+    compat_path_join(path, sizeof(path), dir, CONFIG_FILENAME);
 
     FILE *fp = fopen(path, "r");
     if (!fp) {

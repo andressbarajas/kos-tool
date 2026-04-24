@@ -18,6 +18,17 @@ ROOT ?= $(CURDIR)/..
 
 include $(ROOT)/mk/memory.mk
 
+UNAME_S := $(shell uname -s)
+HOST_CC_DEFAULT := cc
+
+ifneq (,$(findstring MINGW,$(UNAME_S)))
+  HOST_CC_DEFAULT := gcc
+else ifneq (,$(findstring MSYS,$(UNAME_S)))
+  HOST_CC_DEFAULT := gcc
+else ifneq (,$(findstring CYGWIN,$(UNAME_S)))
+  HOST_CC_DEFAULT := gcc
+endif
+
 # ---------- Output directory (same as main build) ----------
 
 BUILDDIR := $(ROOT)/build
@@ -41,7 +52,8 @@ GC_ASFLAGS := -mcpu=750 -meabi -Wa,-mregnames
 
 # ---------- Host toolchain ----------
 
-HOSTCC ?= cc
+HOSTCC ?= $(HOST_CC_DEFAULT)
+HOST_CFLAGS ?= -D_GNU_SOURCE -std=c11 -O2 -Wall -Wextra
 
 # GC loader memory layout (from mk/memory.mk)
 GC_LOADER_BASE := $(shell printf '0x%08x' $$(($(GC_MEM1_TOP) - $(GC_LOADER_SIZE))))
@@ -193,16 +205,16 @@ dc-ip: $(MKCDI_LITE) $(DC_IP_1ST_READ) $(DC_IP_1ST_BIN) | $(BUILDDIR)
 
 $(ELF2DOL): tools/elf2dol.c | $(LOCALDIR)
 	@echo "  HOSTCC  $@"
-	@$(HOSTCC) -std=c11 -O2 -Wall -Wextra -o $@ $<
+	@$(HOSTCC) $(HOST_CFLAGS) -I$(ROOT)/include -o $@ $<
 
-$(MKISO_LITE): tools/mkiso-lite.c tools/iso9660-lite.c tools/iso9660-lite.h | $(LOCALDIR)
+$(MKISO_LITE): tools/mkiso-lite.c tools/iso9660-lite.c tools/iso9660-lite.h tools/time-compat.h $(ROOT)/include/kosload/strutil.h | $(LOCALDIR)
 	@echo "  HOSTCC  $@"
-	@$(HOSTCC) -std=c11 -O2 -Wall -Wextra -o $@ \
+	@$(HOSTCC) $(HOST_CFLAGS) -I$(ROOT)/include -o $@ \
 	    tools/mkiso-lite.c tools/iso9660-lite.c
 
-$(MKCDI_LITE): tools/mkcdi-lite.c tools/iso9660-lite.c tools/iso9660-lite.h tools/IP.BIN | $(LOCALDIR)
+$(MKCDI_LITE): tools/mkcdi-lite.c tools/iso9660-lite.c tools/iso9660-lite.h tools/time-compat.h tools/IP.BIN $(ROOT)/include/kosload/strutil.h | $(LOCALDIR)
 	@echo "  HOSTCC  $@"
-	@$(HOSTCC) -std=c11 -O2 -Wall -Wextra \
+	@$(HOSTCC) $(HOST_CFLAGS) -I$(ROOT)/include \
 	    -DMKCDI_LITE_IP_TEMPLATE=\"$(CURDIR)/tools/IP.BIN\" \
 	    -o $@ tools/mkcdi-lite.c tools/iso9660-lite.c
 

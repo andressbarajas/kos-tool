@@ -17,10 +17,11 @@
 #include <unistd.h>
 #include <libelf.h>
 
+#include <kosload/file_compat.h>
 #include <kostool/binary.h>
 
 static int elf_probe(const char *filename) {
-    int fd = open(filename, O_RDONLY);
+    int fd = open(filename, O_RDONLY | O_BINARY);
     if (fd < 0) return 0;
 
     unsigned char magic[4];
@@ -39,7 +40,7 @@ static int elf_load(const char *filename, uint32_t *entry_addr,
         return -1;
     }
 
-    int fd = open(filename, O_RDONLY);
+    int fd = open(filename, O_RDONLY | O_BINARY);
     if (fd < 0) {
         perror(filename);
         return -1;

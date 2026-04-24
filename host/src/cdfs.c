@@ -12,11 +12,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include <kosload/file_compat.h>
 #include <kostool/cdfs.h>
-
-#ifndef O_BINARY
-#define O_BINARY 0
-#endif
 
 int cdfs_open(kostool_context_t *ctx, const char *iso_filename) {
     int fd = open(iso_filename, O_RDONLY | O_BINARY);
