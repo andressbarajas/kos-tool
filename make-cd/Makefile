@@ -1,22 +1,18 @@
 # make-cd/Makefile — Build disc images for Dreamcast (CDI) and GameCube (ISO/DOL)
 #
 # Dreamcast: Assembles a 1st_read bootstrap that embeds the kosload firmware,
-#            then optionally creates a CDI image using mkdcdisc.
+#            objcopies it to a boot binary, then creates a repo-local CDI.
 #
 # GameCube:  Assembles a bootstrap that embeds the kosload firmware,
-#            converts to DOL, then optionally creates an ISO image.
+#            converts to DOL, then creates a repo-local ISO image.
 #            The bootstrap loads at 0x80003100 (valid for apploader)
 #            and copies the firmware to GC_LOADER_BASE at top of MEM1.
 #
 # Usage:
-#   make dc          Build Dreamcast 1st_read ELFs + CDIs (if mkdcdisc available)
-#   make gc          Build GameCube DOLs + ISOs (if mkisofs available)
+#   make dc          Build Dreamcast 1st_read ELFs/BINs + CDIs
+#   make gc          Build GameCube DOLs + ISOs
 #   make all         Build both
 #   make clean       Remove all build artifacts
-#
-# Tool configuration (override on command line or via environment):
-#   MKDCDISC=<path>  Path to mkdcdisc (Dreamcast CDI creator)
-#   MKISOFS=<path>   Path to mkisofs/genisoimage (ISO creator)
 
 ROOT ?= $(CURDIR)/..
 
@@ -43,18 +39,12 @@ GC_CC        := $(GC_TOOLCHAIN)/$(GC_PREFIX)gcc
 
 GC_ASFLAGS := -mcpu=750 -meabi -Wa,-mregnames
 
+# ---------- Host toolchain ----------
+
+HOSTCC ?= cc
+
 # GC loader memory layout (from mk/memory.mk)
 GC_LOADER_BASE := $(shell printf '0x%08x' $$(($(GC_MEM1_TOP) - $(GC_LOADER_SIZE))))
-
-# ---------- External tool auto-detection ----------
-# Users can override these by setting MKDCDISC= or MKISOFS= on the command line.
-# When empty, disc images are skipped and the needed command is printed instead.
-
-MKDCDISC ?= $(shell command -v mkdcdisc 2>/dev/null || \
-             (test -x /opt/toolchains/dc-utils/mkdcdisc && echo /opt/toolchains/dc-utils/mkdcdisc) || \
-             (test -x /opt/toolchains/dc/bin/mkdcdisc && echo /opt/toolchains/dc/bin/mkdcdisc))
-
-MKISOFS ?= $(shell command -v mkisofs 2>/dev/null || command -v genisoimage 2>/dev/null)
 
 # ---------- Local build directory ----------
 
@@ -82,11 +72,15 @@ DC_EXCEPTION_BIN := $(LOCALDIR)/exception.bin
 
 DC_SER_1ST_READ := $(LOCALDIR)/1st_read-serial.elf
 DC_IP_1ST_READ  := $(LOCALDIR)/1st_read-ip.elf
+DC_SER_1ST_BIN  := $(LOCALDIR)/1st_read-serial.bin
+DC_IP_1ST_BIN   := $(LOCALDIR)/1st_read-ip.bin
 
 GC_SER_BOOTSTRAP := $(LOCALDIR)/gc-bootstrap-serial.elf
 GC_IP_BOOTSTRAP  := $(LOCALDIR)/gc-bootstrap-ip.elf
 
 ELF2DOL := $(LOCALDIR)/elf2dol
+MKISO_LITE := $(LOCALDIR)/mkiso-lite
+MKCDI_LITE := $(LOCALDIR)/mkcdi-lite
 GBI_HDR := tools/gbi.hdr
 
 # ---------- Final outputs ----------
@@ -172,38 +166,26 @@ $(DC_IP_1ST_READ): $(DC_LOADER_S) $(DC_DISABLE_S) $(LOCALDIR)/dc-ip/kosload.bin 
 	    $(DC_LOADER_S) $(DC_DISABLE_S) -o $@
 
 # ============================================================
-# Dreamcast: CDI creation (requires mkdcdisc)
+# Dreamcast: raw boot binary + CDI creation
 # ============================================================
 
-dc-serial: $(DC_SER_1ST_READ) | $(BUILDDIR)
-	@echo "  1ST_READ $(DC_SER_1ST_READ)"
-ifneq ($(MKDCDISC),)
-	@echo "  CDI     $(DC_SER_CDI)"
-	@$(MKDCDISC) -e $< -o $(DC_SER_CDI) -N -n "kosload-serial"
-else
-	@echo ""
-	@echo "  mkdcdisc not found — skipping CDI creation."
-	@echo "  Recommended: https://gitlab.com/simulant/mkdcdisc"
-	@echo ""
-	@echo "  To create the CDI manually:"
-	@echo "    mkdcdisc -e $(DC_SER_1ST_READ) -o $(DC_SER_CDI) -N -n \"kosload-serial\""
-	@echo ""
-endif
+$(DC_SER_1ST_BIN): $(DC_SER_1ST_READ) | $(LOCALDIR)
+	@echo "  OBJCOPY $@"
+	@$(DC_OBJCOPY) -O binary -j .text -j .rodata $< $@
 
-dc-ip: $(DC_IP_1ST_READ) | $(BUILDDIR)
+$(DC_IP_1ST_BIN): $(DC_IP_1ST_READ) | $(LOCALDIR)
+	@echo "  OBJCOPY $@"
+	@$(DC_OBJCOPY) -O binary -j .text -j .rodata $< $@
+
+dc-serial: $(MKCDI_LITE) $(DC_SER_1ST_READ) $(DC_SER_1ST_BIN) | $(BUILDDIR)
+	@echo "  1ST_READ $(DC_SER_1ST_READ)"
+	@echo "  CDI     $(DC_SER_CDI)"
+	@$(MKCDI_LITE) --input-bin $(DC_SER_1ST_BIN) --output $(DC_SER_CDI) --name "kosload-serial"
+
+dc-ip: $(MKCDI_LITE) $(DC_IP_1ST_READ) $(DC_IP_1ST_BIN) | $(BUILDDIR)
 	@echo "  1ST_READ $(DC_IP_1ST_READ)"
-ifneq ($(MKDCDISC),)
 	@echo "  CDI     $(DC_IP_CDI)"
-	@$(MKDCDISC) -e $< -o $(DC_IP_CDI) -N -n "kosload-ip"
-else
-	@echo ""
-	@echo "  mkdcdisc not found — skipping CDI creation."
-	@echo "  Recommended: https://gitlab.com/simulant/mkdcdisc"
-	@echo ""
-	@echo "  To create the CDI manually:"
-	@echo "    mkdcdisc -e $(DC_IP_1ST_READ) -o $(DC_IP_CDI) -N -n \"kosload-ip\""
-	@echo ""
-endif
+	@$(MKCDI_LITE) --input-bin $(DC_IP_1ST_BIN) --output $(DC_IP_CDI) --name "kosload-ip"
 
 # ============================================================
 # GameCube: elf2dol host tool
@@ -211,7 +193,18 @@ endif
 
 $(ELF2DOL): tools/elf2dol.c | $(LOCALDIR)
 	@echo "  HOSTCC  $@"
-	@cc -std=c11 -O2 -Wall -o $@ $<
+	@$(HOSTCC) -std=c11 -O2 -Wall -Wextra -o $@ $<
+
+$(MKISO_LITE): tools/mkiso-lite.c tools/iso9660-lite.c tools/iso9660-lite.h | $(LOCALDIR)
+	@echo "  HOSTCC  $@"
+	@$(HOSTCC) -std=c11 -O2 -Wall -Wextra -o $@ \
+	    tools/mkiso-lite.c tools/iso9660-lite.c
+
+$(MKCDI_LITE): tools/mkcdi-lite.c tools/iso9660-lite.c tools/iso9660-lite.h tools/IP.BIN | $(LOCALDIR)
+	@echo "  HOSTCC  $@"
+	@$(HOSTCC) -std=c11 -O2 -Wall -Wextra \
+	    -DMKCDI_LITE_IP_TEMPLATE=\"$(CURDIR)/tools/IP.BIN\" \
+	    -o $@ tools/mkcdi-lite.c tools/iso9660-lite.c
 
 # ============================================================
 # GameCube: Bootstrap (embeds firmware, copies to high memory)
@@ -262,7 +255,7 @@ $(GC_IP_DOL): $(ELF2DOL) $(GC_IP_BOOTSTRAP) | $(BUILDDIR)
 	@$(ELF2DOL) $(GC_IP_BOOTSTRAP) $@
 
 # ============================================================
-# GameCube: ISO creation (requires mkisofs/genisoimage)
+# GameCube: ISO creation
 #
 # Uses gbi.hdr (GameCube Boot Image header with El Torito
 # apploader) at sector 0 so the GameCube IPL recognizes the disc.
@@ -273,44 +266,26 @@ $(GC_IP_DOL): $(ELF2DOL) $(GC_IP_BOOTSTRAP) | $(BUILDDIR)
 $(LOCALDIR)/gc-serial-disc $(LOCALDIR)/gc-ip-disc:
 	@mkdir -p $@
 
-# Stage DOLs as bootldr.dol for mkisofs
+# Stage DOLs as bootldr.dol for mkiso-lite
 $(LOCALDIR)/gc-serial-disc/bootldr.dol: $(GC_SER_DOL) | $(LOCALDIR)/gc-serial-disc
 	@cp $< $@
 
 $(LOCALDIR)/gc-ip-disc/bootldr.dol: $(GC_IP_DOL) | $(LOCALDIR)/gc-ip-disc
 	@cp $< $@
 
-gc-serial: $(LOCALDIR)/gc-serial-disc/bootldr.dol $(GBI_HDR) | $(BUILDDIR)
-ifneq ($(MKISOFS),)
+gc-serial: $(MKISO_LITE) $(LOCALDIR)/gc-serial-disc/bootldr.dol $(GBI_HDR) | $(BUILDDIR)
 	@echo "  ISO     $(GC_SER_ISO)"
-	@$(MKISOFS) -quiet -R -J -G $(GBI_HDR) -no-emul-boot \
-	    -b bootldr.dol -o $(GC_SER_ISO) $(LOCALDIR)/gc-serial-disc/
-else
-	@echo ""
-	@echo "  mkisofs not found — skipping ISO creation."
-	@echo "  Install: brew install cdrtools  (macOS)"
-	@echo "           apt install genisoimage  (Debian/Ubuntu)"
-	@echo ""
-	@echo "  To create the ISO manually:"
-	@echo "    mkisofs -R -J -G $(GBI_HDR) -no-emul-boot -b bootldr.dol -o $(GC_SER_ISO) <dir-with-dol>/"
-	@echo ""
-endif
+	@$(MKISO_LITE) --quiet --output $(GC_SER_ISO) \
+	    --source-dir $(LOCALDIR)/gc-serial-disc \
+	    --system-area $(GBI_HDR) --eltorito-boot bootldr.dol \
+	    --volume-id KOSLOAD_SER
 
-gc-ip: $(LOCALDIR)/gc-ip-disc/bootldr.dol $(GBI_HDR) | $(BUILDDIR)
-ifneq ($(MKISOFS),)
+gc-ip: $(MKISO_LITE) $(LOCALDIR)/gc-ip-disc/bootldr.dol $(GBI_HDR) | $(BUILDDIR)
 	@echo "  ISO     $(GC_IP_ISO)"
-	@$(MKISOFS) -quiet -R -J -G $(GBI_HDR) -no-emul-boot \
-	    -b bootldr.dol -o $(GC_IP_ISO) $(LOCALDIR)/gc-ip-disc/
-else
-	@echo ""
-	@echo "  mkisofs not found — skipping ISO creation."
-	@echo "  Install: brew install cdrtools  (macOS)"
-	@echo "           apt install genisoimage  (Debian/Ubuntu)"
-	@echo ""
-	@echo "  To create the ISO manually:"
-	@echo "    mkisofs -R -J -G $(GBI_HDR) -no-emul-boot -b bootldr.dol -o $(GC_IP_ISO) <dir-with-dol>/"
-	@echo ""
-endif
+	@$(MKISO_LITE) --quiet --output $(GC_IP_ISO) \
+	    --source-dir $(LOCALDIR)/gc-ip-disc \
+	    --system-area $(GBI_HDR) --eltorito-boot bootldr.dol \
+	    --volume-id KOSLOAD_IP
 
 # ============================================================
 # Clean

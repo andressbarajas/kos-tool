@@ -26,9 +26,50 @@ BUILDDIR := build
 $(BUILDDIR):
 	@mkdir -p $@
 
+# ---------- Toolchain checks ----------
+
+DC_TOOLCHAIN ?= /opt/toolchains/dc/sh-elf/bin
+DC_PREFIX    := sh-elf-
+DC_CC        := $(DC_TOOLCHAIN)/$(DC_PREFIX)gcc
+DC_AR        := $(DC_TOOLCHAIN)/$(DC_PREFIX)ar
+DC_OBJCOPY   := $(DC_TOOLCHAIN)/$(DC_PREFIX)objcopy
+DC_SIZE      := $(DC_TOOLCHAIN)/$(DC_PREFIX)size
+
+GC_TOOLCHAIN ?= /opt/toolchains/gc/powerpc-eabi/bin
+GC_PREFIX    := powerpc-eabi-
+GC_CC        := $(GC_TOOLCHAIN)/$(GC_PREFIX)gcc
+GC_AR        := $(GC_TOOLCHAIN)/$(GC_PREFIX)ar
+GC_OBJCOPY   := $(GC_TOOLCHAIN)/$(GC_PREFIX)objcopy
+GC_SIZE      := $(GC_TOOLCHAIN)/$(GC_PREFIX)size
+
+define require_host_tool
+	@if [ ! -x "$(1)" ] && [ ! -x "$(1).exe" ]; then \
+		echo "Error: missing $(2): $(1)"; \
+		echo "Hint: install the $(3) toolchain or pass $(4)=<toolchain-bin-dir>."; \
+		exit 1; \
+	fi
+endef
+
+define has_host_tool
+( [ -x "$(1)" ] || [ -x "$(1).exe" ] )
+endef
+
 # ---------- Targets ----------
 
-.PHONY: all host dc gc disc disc-dc disc-gc clean
+.PHONY: all host dc gc disc disc-dc disc-gc disc-auto-dc disc-auto-gc clean \
+        check-dc-toolchain check-gc-toolchain
+
+check-dc-toolchain:
+	$(call require_host_tool,$(DC_CC),Dreamcast compiler (sh-elf-gcc),Dreamcast,DC_TOOLCHAIN)
+	$(call require_host_tool,$(DC_AR),Dreamcast archiver (sh-elf-ar),Dreamcast,DC_TOOLCHAIN)
+	$(call require_host_tool,$(DC_OBJCOPY),Dreamcast objcopy (sh-elf-objcopy),Dreamcast,DC_TOOLCHAIN)
+	$(call require_host_tool,$(DC_SIZE),Dreamcast size tool (sh-elf-size),Dreamcast,DC_TOOLCHAIN)
+
+check-gc-toolchain:
+	$(call require_host_tool,$(GC_CC),GameCube compiler (powerpc-eabi-gcc),GameCube,GC_TOOLCHAIN)
+	$(call require_host_tool,$(GC_AR),GameCube archiver (powerpc-eabi-ar),GameCube,GC_TOOLCHAIN)
+	$(call require_host_tool,$(GC_OBJCOPY),GameCube objcopy (powerpc-eabi-objcopy),GameCube,GC_TOOLCHAIN)
+	$(call require_host_tool,$(GC_SIZE),GameCube size tool (powerpc-eabi-size),GameCube,GC_TOOLCHAIN)
 
 all: dc gc host
 
@@ -37,8 +78,8 @@ host: $(VERSION_H) | $(BUILDDIR)
 	@cp host/build/kos-tool $(BUILDDIR)/
 	@echo "  COPY    $(BUILDDIR)/kos-tool"
 
-dc: $(VERSION_H) | $(BUILDDIR)
-	$(MAKE) -C client dc ROOT=$(ROOT)
+dc: check-dc-toolchain $(VERSION_H) | $(BUILDDIR)
+	$(MAKE) -C client/dreamcast ROOT=$(ROOT) all
 	@cp client/dreamcast/build/serial/dc-load-ser.elf $(BUILDDIR)/
 	@cp client/dreamcast/build/serial/dc-load-ser.bin $(BUILDDIR)/
 	@cp client/dreamcast/build/ip/dc-load-ip.elf $(BUILDDIR)/
@@ -52,8 +93,8 @@ dc: $(VERSION_H) | $(BUILDDIR)
 	@echo "  COPY    $(BUILDDIR)/examples/dc/"
 	$(MAKE) host
 
-gc: $(VERSION_H) | $(BUILDDIR)
-	$(MAKE) -C client gc ROOT=$(ROOT)
+gc: check-gc-toolchain $(VERSION_H) | $(BUILDDIR)
+	$(MAKE) -C client/gamecube ROOT=$(ROOT) all
 	@cp client/gamecube/build/serial/gc-load-ser.elf $(BUILDDIR)/
 	@cp client/gamecube/build/serial/gc-load-ser.bin $(BUILDDIR)/
 	@cp client/gamecube/build/ip/gc-load-ip.elf $(BUILDDIR)/
@@ -66,12 +107,32 @@ gc: $(VERSION_H) | $(BUILDDIR)
 
 # ---------- Disc image targets ----------
 
-disc: disc-dc disc-gc
+disc: disc-auto-dc disc-auto-gc
 
-disc-dc: dc
+disc-auto-dc:
+	@if $(call has_host_tool,$(DC_CC)) && \
+	    $(call has_host_tool,$(DC_AR)) && \
+	    $(call has_host_tool,$(DC_OBJCOPY)) && \
+	    $(call has_host_tool,$(DC_SIZE)); then \
+		$(MAKE) disc-dc; \
+	else \
+		echo "  SKIP    Dreamcast disc images (toolchain not found)"; \
+	fi
+
+disc-auto-gc:
+	@if $(call has_host_tool,$(GC_CC)) && \
+	    $(call has_host_tool,$(GC_AR)) && \
+	    $(call has_host_tool,$(GC_OBJCOPY)) && \
+	    $(call has_host_tool,$(GC_SIZE)); then \
+		$(MAKE) disc-gc; \
+	else \
+		echo "  SKIP    GameCube disc images (toolchain not found)"; \
+	fi
+
+disc-dc: check-dc-toolchain dc
 	$(MAKE) -C make-cd dc ROOT=$(ROOT)
 
-disc-gc: gc
+disc-gc: check-gc-toolchain gc
 	$(MAKE) -C make-cd gc ROOT=$(ROOT)
 
 # ---------- Clean ----------
