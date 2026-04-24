@@ -118,8 +118,8 @@ make disc-gc # GameCube-only bootable ISO images
 ### Platform-Specific Notes
 
 ```bash
-# Linux
-sudo apt-get install libelf-dev
+# Debian / Ubuntu
+sudo apt-get install build-essential pkg-config libelf-dev
 
 # macOS
 brew install libelf

@@ -7,6 +7,8 @@
 #include <string.h>
 #include <time.h>
 
+#include "time-compat.h"
+
 typedef struct {
     char iso_name[ISO_LITE_FILE_NAME_SIZE];
     const uint8_t *data;
@@ -106,22 +108,34 @@ static int iso_lite_write_padded(FILE *output, const uint8_t *data, size_t size)
     return iso_lite_write_zeros(output, padded - size);
 }
 
-static void iso_lite_fill_dir_time(uint8_t out[7])
+static int iso_lite_get_current_times(struct tm *local_tm, struct tm *gm_tm)
 {
     time_t now = time(NULL);
+
+    if (now == (time_t)-1)
+        return -1;
+
+    if (tool_localtime_compat(now, local_tm) != 0)
+        return -1;
+
+    if (tool_gmtime_compat(now, gm_tm) != 0)
+        return -1;
+
+    return 0;
+}
+
+static void iso_lite_fill_dir_time(uint8_t out[7])
+{
     struct tm local_tm;
     struct tm gm_tm;
     time_t local_secs;
     time_t gm_secs;
     long offset_minutes;
 
-#if defined(_WIN32)
-    local_tm = *localtime(&now);
-    gm_tm = *gmtime(&now);
-#else
-    localtime_r(&now, &local_tm);
-    gmtime_r(&now, &gm_tm);
-#endif
+    if (iso_lite_get_current_times(&local_tm, &gm_tm) != 0) {
+        memset(out, 0, 7);
+        return;
+    }
 
     local_secs = mktime(&local_tm);
     gm_secs = mktime(&gm_tm);
@@ -138,20 +152,17 @@ static void iso_lite_fill_dir_time(uint8_t out[7])
 
 static void iso_lite_fill_volume_time(uint8_t out[17])
 {
-    time_t now = time(NULL);
     struct tm local_tm;
     time_t local_secs;
     struct tm gm_tm;
     time_t gm_secs;
     long offset_minutes;
 
-#if defined(_WIN32)
-    local_tm = *localtime(&now);
-    gm_tm = *gmtime(&now);
-#else
-    localtime_r(&now, &local_tm);
-    gmtime_r(&now, &gm_tm);
-#endif
+    if (iso_lite_get_current_times(&local_tm, &gm_tm) != 0) {
+        memcpy(out, "1970010100000000", 16);
+        out[16] = 0;
+        return;
+    }
 
     local_secs = mktime(&local_tm);
     gm_secs = mktime(&gm_tm);
