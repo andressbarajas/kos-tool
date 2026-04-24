@@ -194,16 +194,16 @@ dc-ip: $(MKCDI_LITE) $(DC_IP_1ST_READ) $(DC_IP_1ST_BIN) | $(BUILDDIR)
 
 $(ELF2DOL): tools/elf2dol.c | $(LOCALDIR)
 	@echo "  HOSTCC  $@"
-	@$(HOSTCC) $(HOST_CFLAGS) -o $@ $<
+	@$(HOSTCC) $(HOST_CFLAGS) -I$(ROOT)/include -o $@ $<
 
-$(MKISO_LITE): tools/mkiso-lite.c tools/iso9660-lite.c tools/iso9660-lite.h tools/time-compat.h | $(LOCALDIR)
+$(MKISO_LITE): tools/mkiso-lite.c tools/iso9660-lite.c tools/iso9660-lite.h tools/time-compat.h $(ROOT)/include/kosload/strutil.h | $(LOCALDIR)
 	@echo "  HOSTCC  $@"
-	@$(HOSTCC) $(HOST_CFLAGS) -o $@ \
+	@$(HOSTCC) $(HOST_CFLAGS) -I$(ROOT)/include -o $@ \
 	    tools/mkiso-lite.c tools/iso9660-lite.c
 
-$(MKCDI_LITE): tools/mkcdi-lite.c tools/iso9660-lite.c tools/iso9660-lite.h tools/time-compat.h tools/IP.BIN | $(LOCALDIR)
+$(MKCDI_LITE): tools/mkcdi-lite.c tools/iso9660-lite.c tools/iso9660-lite.h tools/time-compat.h tools/IP.BIN $(ROOT)/include/kosload/strutil.h | $(LOCALDIR)
 	@echo "  HOSTCC  $@"
-	@$(HOSTCC) $(HOST_CFLAGS) \
+	@$(HOSTCC) $(HOST_CFLAGS) -I$(ROOT)/include \
 	    -DMKCDI_LITE_IP_TEMPLATE=\"$(CURDIR)/tools/IP.BIN\" \
 	    -o $@ tools/mkcdi-lite.c tools/iso9660-lite.c
 
