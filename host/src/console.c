@@ -33,7 +33,6 @@
 static inline int link(const char *oldpath, const char *newpath) {
     return CreateHardLinkA(newpath, oldpath, NULL) ? 0 : -1;
 }
-#define mkdir(path, mode) _mkdir(path)
 #endif
 
 #include <kosload/protocol.h>
@@ -52,6 +51,15 @@ static inline int link(const char *oldpath, const char *newpath) {
 #define MAX_PATH_LEN 4096
 #define MAX_SYSCALL_SIZE (32 * 1024 * 1024)  /* 32MB sanity cap for remote malloc */
 #define SERIAL_EXIT_CODE_PROBE_USEC 100000
+
+static int host_mkdir(const char *path, int mode) {
+#ifdef _WIN32
+    (void)mode;
+    return _mkdir(path);
+#else
+    return mkdir(path, mode);
+#endif
+}
 
 /* Check if a file starts with ELF magic (\x7fELF).
  * addr2line only works on ELF files, so skip it for .bin/.dol/etc. */
@@ -984,7 +992,7 @@ static void ser_syscall_mkdir(kostool_context_t *ctx) {
     int mode = ser_recv_uint(ctx);
     char buf[MAX_PATH_LEN];
     const char *resolved = resolve_path(ctx, pathname, buf, sizeof(buf));
-    int ret = mkdir(resolved, mode);
+    int ret = host_mkdir(resolved, mode);
     ser_send_uint(ctx, ret);
     free(pathname);
 }
@@ -1483,7 +1491,7 @@ static void net_syscall_mkdir(kostool_context_t *ctx, uint8_t *pkt) {
     net_command_int_string_t *cmd = (net_command_int_string_t *)pkt;
     char buf[MAX_PATH_LEN];
     const char *resolved = resolve_path(ctx, cmd->string, buf, sizeof(buf));
-    int ret = mkdir(resolved, ntohl(cmd->value0));
+    int ret = host_mkdir(resolved, ntohl(cmd->value0));
     net_send_cmd(ctx, NET_CMD_RETVAL, ret, ret, NULL, 0);
 }
 
