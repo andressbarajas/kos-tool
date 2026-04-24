@@ -10,6 +10,7 @@ MINILZO_A   := $(MINILZO_DIR)/build-host/minilzo.a
 # ---------- Platform detection ----------
 
 UNAME_S := $(shell uname -s)
+HOST_CC_DEFAULT := cc
 
 ifeq ($(UNAME_S),Darwin)
   PLATFORM_SRCS := src/platform/posix.c src/platform/macos_serial.c
@@ -33,11 +34,17 @@ else
   LIBELF_LDFLAGS := -lelf
   EXTRA_DEFS     :=
   EXTRA_LDLIBS   := -lws2_32 -liphlpapi
+  HOST_CC_DEFAULT := gcc
 endif
 
 # ---------- Compiler flags ----------
 
-CC      ?= cc
+ifeq ($(origin CC),default)
+CC      := $(HOST_CC_DEFAULT)
+else ifeq ($(origin CC),undefined)
+CC      := $(HOST_CC_DEFAULT)
+endif
+
 CFLAGS  := -O2 -Wall -Wextra -std=c11 \
     -Iinclude \
     -I$(ROOT)/include \

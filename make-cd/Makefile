@@ -18,6 +18,17 @@ ROOT ?= $(CURDIR)/..
 
 include $(ROOT)/mk/memory.mk
 
+UNAME_S := $(shell uname -s)
+HOST_CC_DEFAULT := cc
+
+ifneq (,$(findstring MINGW,$(UNAME_S)))
+  HOST_CC_DEFAULT := gcc
+else ifneq (,$(findstring MSYS,$(UNAME_S)))
+  HOST_CC_DEFAULT := gcc
+else ifneq (,$(findstring CYGWIN,$(UNAME_S)))
+  HOST_CC_DEFAULT := gcc
+endif
+
 # ---------- Output directory (same as main build) ----------
 
 BUILDDIR := $(ROOT)/build
@@ -41,7 +52,7 @@ GC_ASFLAGS := -mcpu=750 -meabi -Wa,-mregnames
 
 # ---------- Host toolchain ----------
 
-HOSTCC ?= cc
+HOSTCC ?= $(HOST_CC_DEFAULT)
 HOST_CFLAGS ?= -D_GNU_SOURCE -std=c11 -O2 -Wall -Wextra
 
 # GC loader memory layout (from mk/memory.mk)

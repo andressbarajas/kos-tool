@@ -128,6 +128,14 @@ brew install libelf
 pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-libelf make
 ```
 
+On Windows, build from the `MSYS2 MinGW x64` shell, not the plain `MSYS` shell.
+The host build expects the MinGW toolchain (`/mingw64/bin/gcc`) to be on `PATH`,
+which is set up automatically in `MINGW64`.
+
+USB serial adapters used with Dreamcast coders cables should appear in Device
+Manager as `COMx` ports. Pass that `COM` name directly to `kos-tool` with
+`-t`, for example `-t COM3`.
+
 ### VGA-Only (Naomi / System SP)
 
 Arcade boards like Naomi and System SP don't have standard A/V cable detect wiring. To build Dreamcast firmware that forces VGA output and skips cable detection:
@@ -190,7 +198,7 @@ kos-tool -t /dev/ttyUSB0 -x program.elf
 kos-tool -t /dev/cu.usbserial-A50285BI -b 1500000 -x program.elf
 
 # Dreamcast serial — Windows
-kos-tool -t COM4 -b 500000 -x program.elf
+kos-tool.exe -t COM4 -b 500000 -x program.elf
 
 # Dreamcast network — upload and run
 kos-tool -t 192.168.1.100 -x program.elf

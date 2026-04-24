@@ -8,6 +8,10 @@
 #include <kostool/transport.h>
 #include <kostool/platform.h>
 
+#ifndef O_BINARY
+#define O_BINARY 0
+#endif
+
 int download(kostool_context_t *ctx, const char *filename,
              uint32_t address, uint32_t size) {
     printf("Download %u bytes at 0x%08x to <%s>\n", size, address, filename);
@@ -29,7 +33,7 @@ int download(kostool_context_t *ctx, const char *filename,
 
     uint64_t elapsed = ctx->time_ops->time_usec() - start;
 
-    int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    int fd = open(filename, O_BINARY | O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (fd < 0) {
         perror(filename);
         free(data);
