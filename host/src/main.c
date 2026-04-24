@@ -460,6 +460,8 @@ int main(int argc, char *argv[]) {
         phase_start = ctx.time_ops->time_usec();
         ret = execute_command(&ctx, ctx.load_address);
         diag_phase(&ctx, "execute command", ctx.time_ops->time_usec() - phase_start);
+        if (ret == 0)
+            ctx.program_executed = 1;
         if (ret == 0 && (ctx.console_enabled || ctx.dumb_terminal)) {
             if (ctx.diagnostics_enabled)
                 printf("[diag] entering console at %.3f ms\n",

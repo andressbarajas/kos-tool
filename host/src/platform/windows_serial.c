@@ -18,6 +18,13 @@ typedef struct {
     HANDLE hComm;
 } win_serial_t;
 
+static int win_serial_purge(HANDLE hComm)
+{
+    return PurgeComm(hComm,
+                     PURGE_RXABORT | PURGE_RXCLEAR |
+                     PURGE_TXABORT | PURGE_TXCLEAR) ? 0 : -1;
+}
+
 static int win_serial_set_timeouts(HANDLE hComm)
 {
     COMMTIMEOUTS timeouts;
@@ -68,9 +75,7 @@ static int win_serial_configure_port(HANDLE hComm, uint32_t baud)
     if (!SetCommState(hComm, &dcb))
         return -1;
 
-    return PurgeComm(hComm,
-                     PURGE_RXABORT | PURGE_RXCLEAR |
-                     PURGE_TXABORT | PURGE_TXCLEAR) ? 0 : -1;
+    return win_serial_purge(hComm);
 }
 
 static void *win_serial_open(const char *device, uint32_t initial_baud) {
@@ -112,7 +117,10 @@ static void *win_serial_open(const char *device, uint32_t initial_baud) {
 static void win_serial_close(void *handle) {
     win_serial_t *s = handle;
     if (!s) return;
-    FlushFileBuffers(s->hComm);
+    /* Match the POSIX backends: discard queued I/O on close instead of
+     * blocking until the peer drains every byte. This keeps `-n` from
+     * hanging after EXEC on Windows serial links with hardware flow control. */
+    (void)win_serial_purge(s->hComm);
     CloseHandle(s->hComm);
     free(s);
 }
@@ -152,7 +160,9 @@ static int win_serial_set_speed(void *handle, uint32_t baud) {
 
 static void win_serial_flush(void *handle) {
     win_serial_t *s = handle;
-    FlushFileBuffers(s->hComm);
+    /* POSIX flush discards queued serial I/O; use PurgeComm for the same
+     * non-blocking behavior on Windows. */
+    (void)win_serial_purge(s->hComm);
 }
 
 static void win_serial_drain(void *handle) {

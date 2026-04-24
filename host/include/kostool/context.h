@@ -105,6 +105,9 @@ typedef struct kostool_context {
     /* RTC sync */
     int rtc_sync;
 
+    /* Program execution state */
+    int program_executed;
+
     /* addr2line (configured via kos-tool.cfg) */
     const char *loaded_binary_path;
     char sh4_addr2line[512];        /* Full path to SH4 addr2line (from config) */

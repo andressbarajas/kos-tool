@@ -290,10 +290,15 @@ static int serial_init(kostool_context_t *ctx) {
 }
 
 static void serial_shutdown(kostool_context_t *ctx) {
+    int launched_without_console = ctx->program_executed &&
+                                   !ctx->console_enabled &&
+                                   !ctx->dumb_terminal;
+
     if (!ctx->serial_handle) return;
 
     /* Restore initial speed if we changed it */
-    if (ctx->current_speed != SERIAL_DEFAULT_SPEED) {
+    if (ctx->current_speed != SERIAL_DEFAULT_SPEED &&
+        !launched_without_console) {
         /* Try to change back - but don't fail if it doesn't work */
         uint8_t c = SERIAL_CMD_SPEED;
         ctx->serial_ops->write(ctx->serial_handle, &c, 1);
@@ -307,6 +312,11 @@ static void serial_shutdown(kostool_context_t *ctx) {
             send_uint(ctx, rv);
             recv_uint(ctx);
         }
+    } else if (launched_without_console) {
+        /* After EXEC with -n there is no console/progexit loop keeping the
+         * loader protocol alive, so waiting for a baud-reset handshake here
+         * can block forever. Close the port as-is and let the next session
+         * renegotiate from the default boot speed. */
     }
 
     /* Close GDB socket if started */
