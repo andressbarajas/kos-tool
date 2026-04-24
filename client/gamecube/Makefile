@@ -5,10 +5,9 @@ CLIENTDIR := $(CURDIR)/..
 
 include $(ROOT)/mk/version.mk
 include $(ROOT)/mk/memory.mk
+include $(ROOT)/mk/toolchains.mk
 
 # ---------- Toolchain ----------
-
-GC_TOOLCHAIN ?= /opt/toolchains/gc/powerpc-eabi/bin
 
 PREFIX  := powerpc-eabi-
 CC      := $(GC_TOOLCHAIN)/$(PREFIX)gcc

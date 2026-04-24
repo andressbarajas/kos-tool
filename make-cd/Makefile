@@ -17,6 +17,7 @@
 ROOT ?= $(CURDIR)/..
 
 include $(ROOT)/mk/memory.mk
+include $(ROOT)/mk/toolchains.mk
 
 UNAME_S := $(shell uname -s)
 HOST_CC_DEFAULT := cc
@@ -35,7 +36,6 @@ BUILDDIR := $(ROOT)/build
 
 # ---------- Dreamcast toolchain ----------
 
-DC_TOOLCHAIN ?= /opt/toolchains/dc/sh-elf/bin
 DC_PREFIX    := sh-elf-
 DC_CC        := $(DC_TOOLCHAIN)/$(DC_PREFIX)gcc
 DC_OBJCOPY   := $(DC_TOOLCHAIN)/$(DC_PREFIX)objcopy
@@ -44,7 +44,6 @@ DC_ASFLAGS := -ml -m4-single-only
 
 # ---------- GameCube toolchain ----------
 
-GC_TOOLCHAIN ?= /opt/toolchains/gc/powerpc-eabi/bin
 GC_PREFIX    := powerpc-eabi-
 GC_CC        := $(GC_TOOLCHAIN)/$(GC_PREFIX)gcc
 

@@ -4,10 +4,9 @@ ROOT      ?= $(CURDIR)/../..
 CLIENTDIR := $(CURDIR)/..
 
 include $(ROOT)/mk/version.mk
+include $(ROOT)/mk/toolchains.mk
 
 # ---------- Toolchain ----------
-
-DC_TOOLCHAIN ?= /opt/toolchains/dc/sh-elf/bin
 
 PREFIX  := sh-elf-
 CC      := $(DC_TOOLCHAIN)/$(PREFIX)gcc

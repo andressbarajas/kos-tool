@@ -3,8 +3,8 @@
 # Build all kosload targets.
 #
 # Requirements:
-#   - DC: SH-ELF cross-compiler (set DC_TOOLCHAIN env var)
-#   - GC: PPC cross-compiler (set GC_TOOLCHAIN env var)
+#   - DC: SH-ELF cross-compiler (set DC_TOOLCHAIN env var or edit mk/toolchains.mk)
+#   - GC: PPC cross-compiler (set GC_TOOLCHAIN env var or edit mk/toolchains.mk)
 #   - libelf development headers (for host build)
 #
 # Usage:
@@ -14,9 +14,6 @@
 #   ./build.sh --gc-only               # GC clients only
 #   ./build.sh --disc                  # All clients + disc images (CDI/DOL/ISO)
 #
-DC_TOOLCHAIN="/opt/toolchains/dc/sh-elf/bin"
-GC_TOOLCHAIN="/opt/toolchains/gc/powerpc-eabi/bin"
-
 set -e
 
 HOST_ONLY=0

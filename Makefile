@@ -2,6 +2,7 @@
 
 ROOT := $(CURDIR)
 include mk/version.mk
+include mk/toolchains.mk
 
 # Default target
 .DEFAULT_GOAL := all
@@ -28,14 +29,12 @@ $(BUILDDIR):
 
 # ---------- Toolchain checks ----------
 
-DC_TOOLCHAIN ?= /opt/toolchains/dc/sh-elf/bin
 DC_PREFIX    := sh-elf-
 DC_CC        := $(DC_TOOLCHAIN)/$(DC_PREFIX)gcc
 DC_AR        := $(DC_TOOLCHAIN)/$(DC_PREFIX)ar
 DC_OBJCOPY   := $(DC_TOOLCHAIN)/$(DC_PREFIX)objcopy
 DC_SIZE      := $(DC_TOOLCHAIN)/$(DC_PREFIX)size
 
-GC_TOOLCHAIN ?= /opt/toolchains/gc/powerpc-eabi/bin
 GC_PREFIX    := powerpc-eabi-
 GC_CC        := $(GC_TOOLCHAIN)/$(GC_PREFIX)gcc
 GC_AR        := $(GC_TOOLCHAIN)/$(GC_PREFIX)ar

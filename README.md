@@ -85,6 +85,10 @@
   * Dreamcast: `sh-elf-gcc`
   * GameCube: `powerpc-eabi-gcc`
 
+Toolchain locations are configured in [`mk/toolchains.mk`](mk/toolchains.mk).
+If your Dreamcast or GameCube toolchains are not installed under the default
+paths, edit that file before running `make dc`, `make gc`, or `./build.sh`.
+
 ### Build Everything
 
 ```bash
@@ -113,6 +117,13 @@ make host    # Host tool only (embeds whatever firmware bins exist)
 make disc    # Bootable disc images (CDI for DC, ISO for GC)
 make disc-dc # Dreamcast-only bootable CDI images
 make disc-gc # GameCube-only bootable ISO images
+```
+
+You can also override toolchains per invocation:
+
+```bash
+make gc GC_TOOLCHAIN=/path/to/powerpc-eabi/bin
+make dc DC_TOOLCHAIN=/path/to/sh-elf/bin
 ```
 
 ### Platform-Specific Notes
