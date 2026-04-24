@@ -273,12 +273,11 @@ kos-tool is derived from the original dcload by Andrew Kieschnick (ADK/Napalm), 
 
 * **Andrew Kieschnick** (ADK/Napalm) — original dcload author
 * **Marcus Comstedt** — `video.s`, `maple.c`/`maple.h`
-* **Megan Potter** — RTL8139 driver base
+* **Megan Potter** — RTL8139 driver base, macOS fixes
 * **Moopthehedgehog** — LAN Adapter overhaul, DHCP, perf counters, performance work (dcload-ip)
 * **Mickaël Cardoso** (SiZiOUS) — extensive fixes and maintenance
 * **Florian Schulze** (Proff) — Win32 porting
 * **Paul Boese** (Axlen) — serial protocol endian fixes
-* **Dan Potter** — macOS fixes
 * **Eric Fradella** (darcagn) — DHCP retry
 * **Lawrence Sebald**, **Donald Haase**, **Falco Girgis** — KallistiOS team contributions
 * **Andy Barajas** — kos-tool unification, GameCube support
