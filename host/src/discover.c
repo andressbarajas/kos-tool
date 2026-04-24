@@ -60,9 +60,17 @@ static void build_vers_cmd(uint8_t buf[12]) {
 const char *discover_network_device(void) {
 #ifdef _WIN32
     static char ip_str[INET_ADDRSTRLEN];
+    const char *result = NULL;
+    WSADATA wsa_data;
+
+    if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != NO_ERROR)
+        return NULL;
 
     SOCKET sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (sock == INVALID_SOCKET) return NULL;
+    if (sock == INVALID_SOCKET) {
+        WSACleanup();
+        return NULL;
+    }
 
     BOOL enable = TRUE;
     setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (const char *)&enable, sizeof(enable));
@@ -102,9 +110,9 @@ const char *discover_network_device(void) {
                               (struct sockaddr *)&from, &fromlen);
             if (rv >= 12 && memcmp(buffer, NET_CMD_VERSION, 4) == 0 &&
                 is_valid_unicast(from.sin_addr.s_addr)) {
-                closesocket(sock);
                 inet_ntop(AF_INET, &from.sin_addr, ip_str, sizeof(ip_str));
-                return ip_str;
+                result = ip_str;
+                goto cleanup;
             }
 
             QueryPerformanceCounter(&now);
@@ -117,7 +125,8 @@ const char *discover_network_device(void) {
     {
         ULONG buf_size = 15000;
         PIP_ADAPTER_ADDRESSES addrs = (PIP_ADAPTER_ADDRESSES)malloc(buf_size);
-        if (!addrs) { closesocket(sock); return NULL; }
+        if (!addrs)
+            goto cleanup;
 
         ULONG ret = GetAdaptersAddresses(AF_INET,
             GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST |
@@ -128,7 +137,10 @@ const char *discover_network_device(void) {
                 GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST |
                 GAA_FLAG_SKIP_DNS_SERVER, NULL, addrs, &buf_size);
         }
-        if (ret != NO_ERROR) { free(addrs); closesocket(sock); return NULL; }
+        if (ret != NO_ERROR) {
+            free(addrs);
+            goto cleanup;
+        }
 
         for (PIP_ADAPTER_ADDRESSES aa = addrs; aa; aa = aa->Next) {
             if (aa->OperStatus != IfOperStatusUp) continue;
@@ -179,9 +191,9 @@ const char *discover_network_device(void) {
                               (struct sockaddr *)&from, &fromlen);
             if (rv >= 12 && memcmp(buffer, NET_CMD_VERSION, 4) == 0 &&
                 is_valid_unicast(from.sin_addr.s_addr)) {
-                closesocket(sock);
                 inet_ntop(AF_INET, &from.sin_addr, ip_str, sizeof(ip_str));
-                return ip_str;
+                result = ip_str;
+                goto cleanup;
             }
 
             QueryPerformanceCounter(&now2);
@@ -190,8 +202,10 @@ const char *discover_network_device(void) {
         }
     }
 
+cleanup:
     closesocket(sock);
-    return NULL;
+    WSACleanup();
+    return result;
 #else
     static char ip_str[INET_ADDRSTRLEN];
 
