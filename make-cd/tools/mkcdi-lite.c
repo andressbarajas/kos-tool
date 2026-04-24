@@ -9,6 +9,8 @@
 #include <string.h>
 #include <time.h>
 
+#include <kosload/strutil.h>
+
 #include "time-compat.h"
 
 #if defined(_WIN32)
@@ -163,12 +165,11 @@ static void dcdisc_release_date(char out[9])
     struct tm tm_now;
 
     if (now == (time_t)-1 || tool_localtime_compat(now, &tm_now) != 0) {
-        snprintf(out, 9, "%s", "19700101");
+        tool_set_default_date(out);
         return;
     }
 
-    snprintf(out, 9, "%04d%02d%02d",
-             tm_now.tm_year + 1900, tm_now.tm_mon + 1, tm_now.tm_mday);
+    tool_format_date_yyyymmdd(out, &tm_now);
 }
 
 static void dcdisc_patch_ip_template(uint8_t *buffer, const char *disc_name)
@@ -178,7 +179,7 @@ static void dcdisc_patch_ip_template(uint8_t *buffer, const char *disc_name)
 
     memset(title, ' ', sizeof(title));
     title[sizeof(title) - 1] = '\0';
-    snprintf(title, sizeof(title), "%s", disc_name);
+    compat_str_copy(title, sizeof(title), disc_name);
     dcdisc_release_date(release_date);
 
     dcdisc_patch_field(buffer, 0x00, 0x10, "SEGA SEGAKATANA");
@@ -560,7 +561,7 @@ static void dcdisc_output_path(const char *output_path, char *resolved,
     int is_absolute = 0;
 
     if (!output_path || !output_path[0]) {
-        snprintf(resolved, resolved_size, "%s", "");
+        compat_str_copy(resolved, resolved_size, "");
         return;
     }
 
@@ -574,7 +575,7 @@ static void dcdisc_output_path(const char *output_path, char *resolved,
 #endif
 
     if (is_absolute) {
-        snprintf(resolved, resolved_size, "%s", output_path);
+        compat_str_copy(resolved, resolved_size, output_path);
         return;
     }
 
@@ -583,20 +584,27 @@ static void dcdisc_output_path(const char *output_path, char *resolved,
 #else
     if (!getcwd(resolved, resolved_size)) {
 #endif
-        snprintf(resolved, resolved_size, "%s", output_path);
+        compat_str_copy(resolved, resolved_size, output_path);
         return;
     }
 
     len = strlen(resolved);
     if (len > 0 && resolved[len - 1] != '/' && resolved[len - 1] != '\\') {
 #if defined(_WIN32)
-        snprintf(resolved + len, resolved_size - len, "\\%s", output_path);
+        if (len + 1 < resolved_size) {
+            resolved[len++] = '\\';
+            resolved[len] = '\0';
+        }
 #else
-        snprintf(resolved + len, resolved_size - len, "/%s", output_path);
+        if (len + 1 < resolved_size) {
+            resolved[len++] = '/';
+            resolved[len] = '\0';
+        }
 #endif
-    } else {
-        snprintf(resolved + len, resolved_size - len, "%s", output_path);
     }
+
+    if (len < resolved_size)
+        compat_str_copy(resolved + len, resolved_size - len, output_path);
 }
 
 int main(int argc, char **argv)

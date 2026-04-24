@@ -20,6 +20,7 @@
 #endif
 
 #include <kosload/protocol.h>
+#include <kosload/strutil.h>
 #include <kostool/gdb.h>
 #include <kostool/transport.h>
 #include <kostool/platform.h>
@@ -226,6 +227,7 @@ static int prepare_comms(kostool_context_t *ctx) {
     uint32_t encoded_ver = make_encoded_version(ctx->force_legacy);
     uint8_t buffer[2048];
     int flip = 0;
+    int recv_len;
 
     /* Start with v2 socket unless forcing legacy */
     if (ctx->force_legacy)
@@ -236,7 +238,8 @@ static int prepare_comms(kostool_context_t *ctx) {
     /* Send version command, alternating between v2 and legacy sockets */
     do {
         send_cmd(ctx, NET_CMD_VERSION, encoded_ver, 0, NULL, 0);
-        if (recv_resp(ctx, buffer, sizeof(buffer), NET_PACKET_TIMEOUT_USEC) != -1)
+        recv_len = recv_resp(ctx, buffer, sizeof(buffer), NET_PACKET_TIMEOUT_USEC);
+        if (recv_len != -1)
             break;
         /* Try the other socket */
         flip ^= 1;
@@ -249,7 +252,8 @@ static int prepare_comms(kostool_context_t *ctx) {
             flip ^= 1;
             ctx->global_socket = flip ? ctx->socket_legacy : ctx->socket_fd;
             send_cmd(ctx, NET_CMD_VERSION, encoded_ver, 0, NULL, 0);
-        } while (recv_resp(ctx, buffer, sizeof(buffer), NET_PACKET_TIMEOUT_USEC) == -1);
+            recv_len = recv_resp(ctx, buffer, sizeof(buffer), NET_PACKET_TIMEOUT_USEC);
+        } while (recv_len == -1);
     }
 
     /* Close the socket we don't need */
@@ -268,8 +272,14 @@ static int prepare_comms(kostool_context_t *ctx) {
     ctx->remote_capabilities = 0;
 
     /* Store version string for firmware update decisions */
-    snprintf(ctx->remote_version_string,
-             sizeof(ctx->remote_version_string), "%s", (char *)cmd->data);
+    if (recv_len > NET_COMMAND_LEN) {
+        compat_str_copy_bytes(ctx->remote_version_string,
+                              sizeof(ctx->remote_version_string),
+                              cmd->data,
+                              (size_t)(recv_len - NET_COMMAND_LEN));
+    } else {
+        ctx->remote_version_string[0] = '\0';
+    }
 
     /* Modern network loaders can answer a dedicated capability query.
      * Legacy dcload-ip does not advertise CAPS, so only probe loaders

@@ -7,6 +7,8 @@
 #include <string.h>
 #include <time.h>
 
+#include <kosload/strutil.h>
+
 #include "time-compat.h"
 
 typedef struct {
@@ -159,8 +161,7 @@ static void iso_lite_fill_volume_time(uint8_t out[17])
     long offset_minutes;
 
     if (iso_lite_get_current_times(&local_tm, &gm_tm) != 0) {
-        memcpy(out, "1970010100000000", 16);
-        out[16] = 0;
+        tool_set_default_iso9660_volume_time(out);
         return;
     }
 
@@ -168,9 +169,9 @@ static void iso_lite_fill_volume_time(uint8_t out[17])
     gm_secs = mktime(&gm_tm);
     offset_minutes = (long)((local_secs - gm_secs) / 60);
 
-    snprintf((char *)out, 17, "%04d%02d%02d%02d%02d%02d00",
-             local_tm.tm_year + 1900, local_tm.tm_mon + 1, local_tm.tm_mday,
-             local_tm.tm_hour, local_tm.tm_min, local_tm.tm_sec);
+    if (tool_format_iso9660_volume_time(out, &local_tm) != 0)
+        return;
+
     out[16] = (int8_t)(offset_minutes / 15);
 }
 
@@ -277,10 +278,13 @@ void iso_lite_normalize_file_name(const char *input, char *output, size_t output
         }
     }
 
-    if (ext[0])
-        snprintf(output, output_size, "%s.%s;1", base, ext);
-    else
-        snprintf(output, output_size, "%s;1", base);
+    output[0] = '\0';
+    i = compat_str_append(output, output_size, 0, base);
+    if (ext[0]) {
+        i = compat_str_append(output, output_size, i, ".");
+        i = compat_str_append(output, output_size, i, ext);
+    }
+    compat_str_append(output, output_size, i, ";1");
 }
 
 void iso_lite_normalize_volume_id(const char *input, char *output, size_t output_size)
@@ -293,7 +297,7 @@ void iso_lite_normalize_volume_id(const char *input, char *output, size_t output
     memset(output, 0, output_size);
 
     if (!input || !input[0]) {
-        snprintf(output, output_size, "KOSLOAD");
+        compat_str_append(output, output_size, 0, "KOSLOAD");
         return;
     }
 
@@ -309,7 +313,7 @@ void iso_lite_normalize_volume_id(const char *input, char *output, size_t output
     }
 
     if (!output[0])
-        snprintf(output, output_size, "KOSLOAD");
+        compat_str_append(output, output_size, 0, "KOSLOAD");
 }
 
 int iso_lite_write_stream(FILE *output, const iso_lite_config_t *config,
@@ -375,8 +379,8 @@ int iso_lite_write_stream(FILE *output, const iso_lite_config_t *config,
             return -1;
         }
 
-        snprintf(layout[i].iso_name, sizeof(layout[i].iso_name), "%s",
-                 files[i].iso_name);
+        compat_str_copy(layout[i].iso_name, sizeof(layout[i].iso_name),
+                        files[i].iso_name);
         layout[i].data = files[i].data;
         layout[i].size = (uint32_t)files[i].size;
     }
