@@ -143,6 +143,13 @@ On Windows, build from the `MSYS2 MinGW x64` shell, not the plain `MSYS` shell.
 The host build expects the MinGW toolchain (`/mingw64/bin/gcc`) to be on `PATH`,
 which is set up automatically in `MINGW64`.
 
+Embedding client firmware into `kos-tool` also requires `xxd`, which is provided
+by the MSYS2 `vim` package:
+
+```bash
+pacman -S vim
+```
+
 USB serial adapters used with Dreamcast coders cables should appear in Device
 Manager as `COMx` ports. Pass that `COM` name directly to `kos-tool` with
 `-t`, for example `-t COM3`.
