@@ -7,26 +7,32 @@
 
 static inline int tool_localtime_compat(time_t now, struct tm *out)
 {
+    const struct tm *tm_now;
+
     if (!out)
         return -1;
 
-#if defined(_WIN32)
-    return localtime_s(out, &now) == 0 ? 0 : -1;
-#else
-    return localtime_r(&now, out) ? 0 : -1;
-#endif
+    tm_now = localtime(&now);
+    if (!tm_now)
+        return -1;
+
+    *out = *tm_now;
+    return 0;
 }
 
 static inline int tool_gmtime_compat(time_t now, struct tm *out)
 {
+    const struct tm *tm_now;
+
     if (!out)
         return -1;
 
-#if defined(_WIN32)
-    return gmtime_s(out, &now) == 0 ? 0 : -1;
-#else
-    return gmtime_r(&now, out) ? 0 : -1;
-#endif
+    tm_now = gmtime(&now);
+    if (!tm_now)
+        return -1;
+
+    *out = *tm_now;
+    return 0;
 }
 
 static inline int tool_tm_fields_valid(const struct tm *tm_value)

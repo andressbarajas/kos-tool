@@ -122,11 +122,9 @@ static const char *program_basename(const char *path) {
 static time_t host_local_rtc_time(time_t now) {
     struct tm local_tm;
     struct tm gm_tm;
+    struct tm *tm_ptr;
     time_t local_secs;
     time_t gm_secs;
-
-#if defined(_WIN32)
-    struct tm *tm_ptr;
 
     tm_ptr = localtime(&now);
     if (!tm_ptr)
@@ -137,12 +135,6 @@ static time_t host_local_rtc_time(time_t now) {
     if (!tm_ptr)
         return now;
     gm_tm = *tm_ptr;
-#else
-    if (!localtime_r(&now, &local_tm))
-        return now;
-    if (!gmtime_r(&now, &gm_tm))
-        return now;
-#endif
 
     local_secs = mktime(&local_tm);
     gm_secs = mktime(&gm_tm);
