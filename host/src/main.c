@@ -96,6 +96,10 @@ static int is_serial_device(const char *name) {
     return 0;
 }
 
+static int is_dhcp_target(const char *name) {
+    return name && strcmp(name, "dhcp") == 0;
+}
+
 static const char *program_basename(const char *path) {
     const char *base = path;
     const char *slash;
@@ -146,7 +150,7 @@ static time_t host_local_rtc_time(time_t now) {
 
 static void usage(void) {
     printf("\nkostool %s — Unified console loader\n\n", KOSLOAD_VERSION_STRING);
-    printf("Usage: kostool [options] -t <device|ip|auto>\n\n");
+    printf("Usage: kostool [options] -t <device|ip|dhcp>\n\n");
     printf("Commands:\n");
     printf("  -x <file>    Upload and execute <file>\n");
     printf("     [-- args] Pass arguments to loaded program (must be last)\n");
@@ -156,7 +160,7 @@ static void usage(void) {
     printf("Options:\n");
     printf("  -a <addr>    Set address (default: 0x8c010000)\n");
     printf("  -s <size>    Set size for download\n");
-    printf("  -t <device>  Serial device, IP address, or 'auto'\n");
+    printf("  -t <device>  Serial device, IP address, or 'dhcp'\n");
     printf("  -b <baud>    Serial baud rate (default: %d)\n", SERIAL_DEFAULT_SPEED);
     printf("  -n           Disable console/fileserver\n");
     printf("  -p           Dumb terminal mode\n");
@@ -359,8 +363,8 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    /* Handle -t auto: broadcast VERS to discover dcload/kosload on the network */
-    if (ctx.device_name && strcmp(ctx.device_name, "auto") == 0) {
+    /* Handle -t dhcp: broadcast VERS to discover dcload/kosload on the network */
+    if (is_dhcp_target(ctx.device_name)) {
         ctx.device_name = NULL;
         ctx.hostname = NULL;
 
@@ -382,7 +386,7 @@ int main(int argc, char *argv[]) {
     } else if (ctx.hostname) {
         ctx.transport = &network_transport_ops;
     } else {
-        fprintf(stderr, "Error: specify -t <device|ip|auto>\n");
+        fprintf(stderr, "Error: specify -t <device|ip|dhcp>\n");
         return 1;
     }
 

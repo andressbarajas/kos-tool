@@ -437,8 +437,6 @@ static int serial_execute(kostool_context_t *ctx, uint32_t addr,
     printf("Sending execute command (0x%08x, console=%d)...", addr, console_enabled);
     if (send_argv)
         printf("argv(%u, argv0=\"%s\")...", ctx->prog_argc, ctx->prog_argv_data);
-    else if (ctx->prog_argc > 0)
-        fprintf(stderr, "Note: remote loader does not support argv metadata; using legacy execute frame\n");
 
     c = SERIAL_CMD_EXECUTE;
     ctx->serial_ops->write(ctx->serial_handle, &c, 1);

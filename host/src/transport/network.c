@@ -942,8 +942,6 @@ static int network_execute(kostool_context_t *ctx, uint32_t addr,
 
     if (send_argv)
         printf("argv(%u, argv0=\"%s\")...", ctx->prog_argc, ctx->prog_argv_data);
-    else if (ctx->prog_argc > 0)
-        fprintf(stderr, "Note: remote loader does not support argv metadata; using legacy EXEC payload\n");
 
     if (send_and_wait(ctx, NET_CMD_EXECUTE, addr, flags,
                       exec_data_len ? exec_data : NULL, exec_data_len,

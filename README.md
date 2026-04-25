@@ -45,8 +45,8 @@
 * **DHCP support** — GameCube network firmware supports DHCP, same as Dreamcast
 
 ### Host Tool Enhancements
-* **Automatic transport detection** — `kos-tool` infers serial vs network from `-t <device|ip|auto>`
-* **Network auto-discovery** — `-t auto` broadcasts on the LAN to find consoles (tries both legacy port 31313 and new port 53535)
+* **Automatic transport detection** — `kos-tool` infers serial vs network from `-t <device|ip|dhcp>`
+* **Network DHCP discovery** — `-t dhcp` broadcasts on the LAN to find consoles (tries both legacy port 31313 and new port 53535)
 * **Automatic addr2line integration** — when the uploaded file is an ELF and `kos-tool.cfg` points at valid `addr2line` binaries, console stack addresses are annotated automatically for SH4 or PPC
 * **RTC sync** — `-w` flag sets the console's real-time clock to the host's local time
 * **Program arguments** — `-- arg1 arg2` passes arguments to the loaded program
@@ -70,7 +70,7 @@
 * Dreamcast CDFS redirection — redirect GD-ROM reads to an ISO image on the host
 * GDB remote debugging via GDB-over-dcload
 * Exception handler with full register dump
-* Auto-discovery of network devices (`-t auto`)
+* DHCP/network discovery (`-t dhcp`)
 * Network firmware supports BBA/LAN/W5500 on Dreamcast and BBA/ENC28J60/W5500 on GameCube
 * Runtime baud rate negotiation up to 1.5Mbaud (Dreamcast serial)
 * Cross-platform host tool: Linux, macOS, Windows (MSYS2)
@@ -167,7 +167,7 @@ make gc STATICIP=192.168.1.100
 ## Usage
 
 ```
-kos-tool [options] -t <device|ip|auto>
+kos-tool [options] -t <device|ip|dhcp>
 
 Commands:
   -x <file>    Upload and execute <file>
@@ -179,7 +179,7 @@ Commands:
 Options:
   -a <addr>    Set address (default: 0x8c010000)
   -s <size>    Set size for download
-  -t <device>  Serial device, IP address, or 'auto'
+  -t <device>  Serial device, IP address, or 'dhcp'
   -b <baud>    Serial baud rate (default: 57600)
   -n           Disable console/fileserver
   -p           Dumb terminal mode
@@ -214,8 +214,8 @@ kos-tool.exe -t COM4 -b 500000 -x program.elf
 # Dreamcast network — upload and run
 kos-tool -t 192.168.1.100 -x program.elf
 
-# Dreamcast network — auto-discover device on LAN
-kos-tool -t auto -x program.elf
+# Dreamcast network — discover DHCP device on LAN
+kos-tool -t dhcp -x program.elf
 
 # Dreamcast network — with CDFS redirection
 kos-tool -t 192.168.1.100 -i game.iso -x program.elf
@@ -227,7 +227,7 @@ kos-tool -t /dev/ttyUSB0 -x program.elf
 kos-tool -t 192.168.1.50 -x program.elf
 
 # Enable performance diagnostics
-kos-tool -t auto --diag -x program.elf
+kos-tool -t dhcp --diag -x program.elf
 
 # GDB debugging session
 kos-tool -t /dev/ttyUSB0 -g -x program.elf
