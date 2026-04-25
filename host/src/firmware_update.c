@@ -431,8 +431,22 @@ static int perform_update(kostool_context_t *ctx, const uint8_t *fw_data,
         return -1;
     }
 
-    /* Execute the trampoline (no console, no CDFS) */
-    ret = ctx->transport->execute(ctx, arch->load_addr, 0, 0);
+    /* Execute the trampoline (no console, no CDFS, no user-program argv).
+     * Network loaders may jump away before the host receives the EXEC ack,
+     * so send the trampoline EXEC without waiting for a response. */
+    if (strcmp(ctx->transport->name, "network") == 0) {
+        printf("Sending execute command (0x%08x, console=0, cdfsredir=0)...",
+               arch->load_addr | 0xa0000000);
+        ret = ctx->transport->send_command(ctx, NET_CMD_EXECUTE,
+                                           arch->load_addr, 0, NULL, 0);
+        if (ret == 0)
+            printf("executing\n");
+    } else {
+        uint32_t saved_prog_argc = ctx->prog_argc;
+        ctx->prog_argc = 0;
+        ret = ctx->transport->execute(ctx, arch->load_addr, 0, 0);
+        ctx->prog_argc = saved_prog_argc;
+    }
     if (ret != 0) {
         fprintf(stderr, "Trampoline execute failed\n");
         free(blob);
