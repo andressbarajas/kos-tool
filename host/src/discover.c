@@ -36,6 +36,7 @@
 /* Maximum subnet size to scan (number of host addresses).
  * /22 = 1022 hosts.  Larger subnets are skipped. */
 #define MAX_SCAN_HOSTS  1024
+#define DISCOVERY_TIMEOUT_USEC 10000000U
 
 /* Check if an IP (network byte order) is a usable unicast address */
 static int is_valid_unicast(uint32_t addr_nbo) {
@@ -57,7 +58,25 @@ static void build_vers_cmd(uint8_t buf[12]) {
     memset(buf + 8, 0, 4);
 }
 
-const char *discover_network_device(void) {
+static uint64_t discover_time_usec(void) {
+#ifdef _WIN32
+    static LARGE_INTEGER freq;
+    LARGE_INTEGER now;
+
+    if (freq.QuadPart == 0)
+        QueryPerformanceFrequency(&freq);
+
+    QueryPerformanceCounter(&now);
+    return (uint64_t)now.QuadPart * 1000000 / (uint64_t)freq.QuadPart;
+#else
+    struct timeval tv;
+
+    gettimeofday(&tv, NULL);
+    return (uint64_t)tv.tv_sec * 1000000 + (uint64_t)tv.tv_usec;
+#endif
+}
+
+static const char *discover_network_device_once(void) {
 #ifdef _WIN32
     static char ip_str[INET_ADDRSTRLEN];
     const char *result = NULL;
@@ -330,4 +349,16 @@ cleanup:
     close(sock);
     return NULL;
 #endif
+}
+
+const char *discover_network_device(void) {
+    uint64_t start = discover_time_usec();
+
+    do {
+        const char *found = discover_network_device_once();
+        if (found)
+            return found;
+    } while (discover_time_usec() - start < DISCOVERY_TIMEOUT_USEC);
+
+    return NULL;
 }

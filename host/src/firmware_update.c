@@ -385,6 +385,82 @@ static uint8_t *load_firmware_file(const char *path, uint32_t *out_size) {
 
 /* ===== Core update logic ===== */
 
+static int reconnect_after_update(kostool_context_t *ctx)
+{
+    if (ctx->switch_target) {
+        /* The trampoline replaces the current loader; skip baud restore. */
+        if (strcmp(ctx->transport->name, "serial") == 0)
+            ctx->current_speed = SERIAL_DEFAULT_SPEED;
+
+        /* Drop the old transport before reconnecting to the new loader. */
+        ctx->transport->shutdown(ctx);
+
+        /* Reset the context for the new loader. */
+        ctx->installed_adapter = 0;
+        ctx->legacy_mode = 0;
+        ctx->remote_capabilities = 0;
+        memset(ctx->remote_version_string, 0, sizeof(ctx->remote_version_string));
+
+        if (ctx->switch_target_is_network) {
+            const char *hostname = ctx->switch_target;
+
+            if (ctx->switch_target_is_dhcp) {
+                printf("Scanning the network...\n");
+                hostname = discover_network_device();
+                if (!hostname) {
+                    fprintf(stderr, "No devices found on the network\n");
+                    return -1;
+                }
+                printf("Found at %s\n", hostname);
+            }
+
+            ctx->transport = &network_transport_ops;
+            ctx->device_name = hostname;
+            ctx->hostname = hostname;
+        } else {
+            ctx->transport = &serial_transport_ops;
+            ctx->device_name = ctx->switch_target;
+            ctx->hostname = NULL;
+        }
+
+        /* Give the replacement loader a moment to initialize. */
+        ctx->time_ops->sleep_usec(500000);
+
+        if (ctx->transport->init(ctx) != 0) {
+            fprintf(stderr, "Failed to reconnect after firmware switch\n");
+            return -1;
+        }
+
+        return 0;
+    }
+
+    if (strcmp(ctx->transport->name, "serial") == 0) {
+        /* Serial: console restarts at default baud rate after trampoline.
+         * Must close and reinit to renegotiate speed. */
+        ctx->current_speed = SERIAL_DEFAULT_SPEED;  /* skip speed restore in shutdown */
+        ctx->transport->shutdown(ctx);
+
+        ctx->remote_capabilities = 0;
+        memset(ctx->remote_version_string, 0, sizeof(ctx->remote_version_string));
+
+        if (ctx->transport->init(ctx) != 0) {
+            fprintf(stderr, "Failed to reconnect after firmware update\n");
+            return -1;
+        }
+    } else {
+        /* Network (static IP or DHCP): keep existing socket alive.
+         * Lazy prepare_comms() will reconnect on the next operation.
+         * DHCP servers typically reassign the same IP for the same MAC,
+         * so reusing the original hostname works in practice. */
+        ctx->installed_adapter = 0;
+        ctx->legacy_mode = 0;
+        ctx->remote_capabilities = 0;
+        memset(ctx->remote_version_string, 0, sizeof(ctx->remote_version_string));
+    }
+
+    return 0;
+}
+
 static int perform_update(kostool_context_t *ctx, const uint8_t *fw_data,
                           uint32_t fw_size, const char *patch_ip,
                           const arch_update_params_t *arch) {
@@ -443,31 +519,7 @@ static int perform_update(kostool_context_t *ctx, const uint8_t *fw_data,
     printf("Firmware updated\n");
     printf("Reconnecting...\n");
 
-    if (strcmp(ctx->transport->name, "serial") == 0) {
-        /* Serial: console restarts at default baud rate after trampoline.
-         * Must close and reinit to renegotiate speed. */
-        ctx->current_speed = SERIAL_DEFAULT_SPEED;  /* skip speed restore in shutdown */
-        ctx->transport->shutdown(ctx);
-
-        ctx->remote_capabilities = 0;
-        memset(ctx->remote_version_string, 0, sizeof(ctx->remote_version_string));
-
-        if (ctx->transport->init(ctx) != 0) {
-            fprintf(stderr, "Failed to reconnect after firmware update\n");
-            return -1;
-        }
-    } else {
-        /* Network (static IP or DHCP): keep existing socket alive.
-         * Lazy prepare_comms() will reconnect on the next operation.
-         * DHCP servers typically reassign the same IP for the same MAC,
-         * so reusing the original hostname works in practice. */
-        ctx->installed_adapter = 0;
-        ctx->legacy_mode = 0;
-        ctx->remote_capabilities = 0;
-        memset(ctx->remote_version_string, 0, sizeof(ctx->remote_version_string));
-    }
-
-    return 1;
+    return reconnect_after_update(ctx) == 0 ? 1 : -1;
 }
 
 /* ===== Public API ===== */
@@ -489,10 +541,13 @@ int auto_update_firmware(kostool_context_t *ctx) {
         }
     }
 
-    /* Determine which firmware to use based on transport type and remote loader */
+    /* Determine which firmware to use based on current or requested transport. */
     const uint8_t *fw_data = NULL;
     uint32_t fw_size = 0;
     int is_serial = (strcmp(ctx->transport->name, "serial") == 0);
+    int target_is_serial = ctx->switch_target
+        ? !ctx->switch_target_is_network
+        : is_serial;
 
     /* Detect which console we're talking to */
     console_type_t console = detect_console(remote_name);
@@ -527,9 +582,9 @@ int auto_update_firmware(kostool_context_t *ctx) {
 
     const char *prefix = (console == CONSOLE_DC) ? "dc" : "gc";
 
-    /* Select embedded firmware based on console + transport */
+    /* Select embedded firmware based on console + destination transport. */
     if (console == CONSOLE_DC) {
-        if (is_serial) {
+        if (target_is_serial) {
             fw_data = firmware_dc_serial_data;
             fw_size = firmware_dc_serial_size;
         } else {
@@ -537,7 +592,7 @@ int auto_update_firmware(kostool_context_t *ctx) {
             fw_size = firmware_dc_ip_size;
         }
     } else {
-        if (is_serial) {
+        if (target_is_serial) {
             fw_data = firmware_gc_serial_data;
             fw_size = firmware_gc_serial_size;
         } else {
@@ -560,10 +615,12 @@ int auto_update_firmware(kostool_context_t *ctx) {
      * - Same name and same/newer version: skip */
     char expected_name[32];
     snprintf(expected_name, sizeof(expected_name), "%s-load-%s",
-             prefix, is_serial ? "serial" : "ip");
+             prefix, target_is_serial ? "serial" : "ip");
     int need_update = 0;
 
-    if (strcmp(remote_name, expected_name) != 0) {
+    if (ctx->switch_target) {
+        need_update = 1;
+    } else if (strcmp(remote_name, expected_name) != 0) {
         /* Different name — either dcload → dc-load upgrade,
          * or serial/ip mismatch.  Check if types match. */
         if (is_serial && !is_serial_loader(remote_name)) {
@@ -604,7 +661,10 @@ int auto_update_firmware(kostool_context_t *ctx) {
     const char *patch_ip = NULL;
     int dhcp_reconnect = 0;
 
-    if (!is_serial) {
+    if (ctx->switch_target && !target_is_serial) {
+        patch_ip = ctx->switch_target_is_dhcp ? "0.0.0.0" : ctx->switch_target;
+        dhcp_reconnect = ctx->switch_target_is_dhcp;
+    } else if (!target_is_serial) {
         /* New-style loader with capabilities: check DHCP flag */
         if (ctx->remote_capabilities != 0) {
             if (!(ctx->remote_capabilities & (1 << 3))) {
@@ -668,7 +728,7 @@ int auto_update_firmware(kostool_context_t *ctx) {
     /* Network static IP: print the expected new version and pre-fill
      * remote_version_string so prepare_comms() skips its duplicate printf.
      * Serial and DHCP paths do a full reinit which prints the real version. */
-    if (result > 0 && !dhcp_reconnect && !is_serial) {
+    if (result > 0 && !ctx->switch_target && !dhcp_reconnect && !target_is_serial) {
         snprintf(ctx->remote_version_string,
                  sizeof(ctx->remote_version_string),
                  "%s-load-%s %s%s", prefix, "ip",

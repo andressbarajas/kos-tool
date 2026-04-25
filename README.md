@@ -196,6 +196,8 @@ Options:
   -w           Sync console RTC to host time
   -U <file>    Update firmware from external file
   -F           Enable automatic firmware update
+  --switch-to <device|ip|dhcp>
+               Switch loader transport, then run the command
   -h           Show this help
 ```
 
@@ -216,6 +218,18 @@ kos-tool -t 192.168.1.100 -x program.elf
 
 # Dreamcast network — discover DHCP device on LAN
 kos-tool -t dhcp -x program.elf
+
+# Dreamcast serial to network — install static-IP loader, then run
+kos-tool -t /dev/ttyUSB0 --switch-to 192.168.1.100 -x program.elf
+
+# Dreamcast serial to network — install DHCP loader, wait/discover, then run
+kos-tool -t /dev/ttyUSB0 --switch-to dhcp -x program.elf
+
+# Dreamcast network to serial — install serial loader, then run
+kos-tool -t 192.168.1.100 --switch-to /dev/ttyUSB0 -x program.elf
+
+# Dreamcast DHCP network to serial — discover, install serial loader, then run
+kos-tool -t dhcp --switch-to /dev/ttyUSB0 -x program.elf
 
 # Dreamcast network — with CDFS redirection
 kos-tool -t 192.168.1.100 -i game.iso -x program.elf

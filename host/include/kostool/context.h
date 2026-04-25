@@ -121,6 +121,9 @@ typedef struct kostool_context {
     /* Firmware update */
     int skip_update;
     const char *firmware_path;
+    const char *switch_target;
+    int switch_target_is_network;
+    int switch_target_is_dhcp;
 } kostool_context_t;
 
 #endif /* KOSTOOL_CONTEXT_H */

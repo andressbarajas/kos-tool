@@ -177,6 +177,8 @@ static void usage(void) {
     printf("  -w           Sync console RTC to host time\n");
     printf("  -U <file>    Update firmware from external file\n");
     printf("  -F           Enable automatic firmware update\n");
+    printf("  --switch-to <device|ip|dhcp>\n");
+    printf("               Switch loader transport, then run the command\n");
     printf("  -h           Show this help\n\n");
 }
 
@@ -227,6 +229,15 @@ int main(int argc, char *argv[]) {
             strcmp(argv[i], "--diagnostics") == 0 ||
             strcmp(argv[i], "--perf") == 0) {
             ctx.diagnostics_enabled = 1;
+            continue;
+        }
+        if (strcmp(argv[i], "--switch-to") == 0 ||
+            strcmp(argv[i], "--switch") == 0) {
+            if (++i >= argc) {
+                fprintf(stderr, "Missing argument for --switch-to\n");
+                return 1;
+            }
+            ctx.switch_target = argv[i];
             continue;
         }
         switch (argv[i][1]) {
@@ -331,6 +342,16 @@ int main(int argc, char *argv[]) {
         printf("[diag] performance diagnostics enabled\n");
     }
 
+    if (ctx.switch_target) {
+        if (!ctx.device_name) {
+            fprintf(stderr, "--switch-to requires -t <current device|ip|dhcp>\n");
+            return 1;
+        }
+        ctx.skip_update = 0;
+        ctx.switch_target_is_network = !is_serial_device(ctx.switch_target);
+        ctx.switch_target_is_dhcp = is_dhcp_target(ctx.switch_target);
+    }
+
     /* Build argv data for EXEC: "argv0\0argv1\0...".
      * Always synthesize argv[0] from the uploaded filename so KOS can
      * expose a real argc/argv pair to the loaded program. */
@@ -414,6 +435,11 @@ int main(int argc, char *argv[]) {
         diag_phase(&ctx, "firmware update check", ctx.time_ops->time_usec() - phase_start);
         if (updated < 0) {
             fprintf(stderr, "Firmware update failed\n");
+            ctx.transport->shutdown(&ctx);
+            return 1;
+        }
+        if (ctx.switch_target && updated == 0) {
+            fprintf(stderr, "Firmware switch was requested but no update was performed\n");
             ctx.transport->shutdown(&ctx);
             return 1;
         }
