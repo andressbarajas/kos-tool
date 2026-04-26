@@ -38,7 +38,7 @@ typedef struct {
     char ip[16];     /* dotted-quad string, null-terminated */
 } ip_config_block_t;
 
-static const ip_config_block_t ip_config __attribute__((used)) = {
+static ip_config_block_t ip_config __attribute__((used, section(".data"))) = {
     .magic = {'K','O','S','L','D','_','I','P'},
     .ip = KOSLOAD_IP
 };
