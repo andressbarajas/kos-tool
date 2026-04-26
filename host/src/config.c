@@ -28,6 +28,15 @@
 static const char default_config[] =
     "# kos-tool configuration\n"
     "#\n"
+    "# Target profiles for -T <profile>.\n"
+    "# Uncomment and edit the entries you want to use.\n"
+    "#\n"
+    "# dc_serial = /dev/ttyUSB0\n"
+    "# gc_serial = /dev/ttyUSB1\n"
+    "# dc_ip = 172.16.0.10\n"
+    "# gc_ip = dhcp\n"
+    "# serial_baud = 1562500\n"
+    "\n"
     "# Full paths to addr2line for each target architecture.\n"
     "# Used for exception register decoding and address annotation.\n"
     "\n"
@@ -91,6 +100,18 @@ static void apply_config_value(struct kostool_context *ctx,
         compat_str_copy(ctx->sh4_addr2line, sizeof(ctx->sh4_addr2line), value);
     } else if (strcmp(key, "ppc_addr2line") == 0) {
         compat_str_copy(ctx->ppc_addr2line, sizeof(ctx->ppc_addr2line), value);
+    } else if (strcmp(key, "dc_serial") == 0) {
+        compat_str_copy(ctx->dc_serial, sizeof(ctx->dc_serial), value);
+    } else if (strcmp(key, "gc_serial") == 0) {
+        compat_str_copy(ctx->gc_serial, sizeof(ctx->gc_serial), value);
+    } else if (strcmp(key, "dc_ip") == 0) {
+        compat_str_copy(ctx->dc_ip, sizeof(ctx->dc_ip), value);
+    } else if (strcmp(key, "gc_ip") == 0) {
+        compat_str_copy(ctx->gc_ip, sizeof(ctx->gc_ip), value);
+    } else if (strcmp(key, "serial_baud") == 0) {
+        uint32_t baud = (uint32_t)strtoul(value, NULL, 0);
+        if (baud)
+            ctx->serial_baud = baud;
     }
     /* Unknown keys are silently ignored for forward compat */
 }
@@ -110,6 +131,7 @@ void config_load(struct kostool_context *ctx)
         return;
 
     compat_path_join(path, sizeof(path), dir, CONFIG_FILENAME);
+    compat_str_copy(ctx->config_path, sizeof(ctx->config_path), path);
 
     FILE *fp = fopen(path, "r");
     if (!fp) {

@@ -184,6 +184,7 @@ make gc STATICIP=192.168.1.100
 
 ```
 kos-tool [options] -t <device|ip|dhcp>
+kos-tool [options] -T <profile>
 
 Commands:
   -x <file>    Upload and execute <file>
@@ -196,6 +197,7 @@ Options:
   -a <addr>    Set address (default: 0x8c010000)
   -s <size>    Set size for download
   -t <device>  Serial device, IP address, or 'dhcp'
+  -T <profile> Use configured target profile (dc_serial, gc_serial, dc_ip, gc_ip)
   -b <baud>    Serial baud rate (default: 57600)
   -n           Disable console/fileserver
   -p           Dumb terminal mode
@@ -214,6 +216,30 @@ Options:
   -F           Enable automatic firmware update
   -h           Show this help
 ```
+
+### Configured Targets
+
+`kos-tool.cfg` is created next to the `kos-tool` binary. You can add target
+profiles there and select them with `-T`:
+
+```cfg
+# Target profiles
+dc_serial = /dev/ttyUSB0
+gc_serial = /dev/ttyUSB1
+dc_ip = 172.16.0.10
+gc_ip = dhcp
+serial_baud = 1562500
+```
+
+Then run:
+
+```bash
+kos-tool -T dc_serial -x program.elf
+kos-tool -T gc_ip -x program.elf
+```
+
+`-t` overrides `-T` when both are present. `serial_baud` is used only for
+serial targets, and `-b` overrides it.
 
 ### Examples
 

@@ -123,6 +123,36 @@ static const char *program_basename(const char *path) {
     return base;
 }
 
+static int apply_target_profile(kostool_context_t *ctx, const char *profile)
+{
+    const char *target = NULL;
+
+    if (strcmp(profile, "dc_serial") == 0) {
+        target = ctx->dc_serial;
+    } else if (strcmp(profile, "gc_serial") == 0) {
+        target = ctx->gc_serial;
+    } else if (strcmp(profile, "dc_ip") == 0) {
+        target = ctx->dc_ip;
+    } else if (strcmp(profile, "gc_ip") == 0) {
+        target = ctx->gc_ip;
+    } else {
+        fprintf(stderr, "Unknown target profile: %s\n", profile);
+        fprintf(stderr, "Valid profiles: dc_serial, gc_serial, dc_ip, gc_ip\n");
+        return -1;
+    }
+
+    if (!target || target[0] == '\0') {
+        fprintf(stderr, "Target profile '%s' is not configured in %s\n",
+                profile,
+                ctx->config_path[0] ? ctx->config_path : "kos-tool.cfg");
+        return -1;
+    }
+
+    ctx->device_name = target;
+    ctx->hostname = target;
+    return 0;
+}
+
 static time_t host_local_rtc_time(time_t now) {
     struct tm local_tm;
     struct tm gm_tm;
@@ -150,7 +180,8 @@ static time_t host_local_rtc_time(time_t now) {
 
 static void usage(void) {
     printf("\nkostool %s — Unified console loader\n\n", KOSLOAD_VERSION_STRING);
-    printf("Usage: kostool [options] -t <device|ip|dhcp>\n\n");
+    printf("Usage: kostool [options] -t <device|ip|dhcp>\n");
+    printf("       kostool [options] -T <profile>\n\n");
     printf("Commands:\n");
     printf("  -x <file>    Upload and execute <file>\n");
     printf("     [-- args] Pass arguments to loaded program (must be last)\n");
@@ -161,6 +192,7 @@ static void usage(void) {
     printf("  -a <addr>    Set address (default: 0x8c010000)\n");
     printf("  -s <size>    Set size for download\n");
     printf("  -t <device>  Serial device, IP address, or 'dhcp'\n");
+    printf("  -T <profile> Use configured target profile (dc_serial, gc_serial, dc_ip, gc_ip)\n");
     printf("  -b <baud>    Serial baud rate (default: %d)\n", SERIAL_DEFAULT_SPEED);
     printf("  -n           Disable console/fileserver\n");
     printf("  -p           Dumb terminal mode\n");
@@ -208,6 +240,9 @@ int main(int argc, char *argv[]) {
 
     char command = 0;
     const char *filename = NULL;
+    const char *target_profile = NULL;
+    int explicit_target = 0;
+    int explicit_baud = 0;
 
     if (argc < 2) {
         usage();
@@ -255,10 +290,17 @@ int main(int argc, char *argv[]) {
             if (++i < argc) {
                 ctx.device_name = argv[i];
                 ctx.hostname = argv[i];
+                explicit_target = 1;
             }
             break;
+        case 'T':
+            if (++i < argc) target_profile = argv[i];
+            break;
         case 'b':
-            if (++i < argc) ctx.initial_speed = strtoul(argv[i], NULL, 0);
+            if (++i < argc) {
+                ctx.initial_speed = strtoul(argv[i], NULL, 0);
+                explicit_baud = 1;
+            }
             break;
         case 'n':
             ctx.console_enabled = 0;
@@ -326,6 +368,11 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    if (!explicit_target && target_profile) {
+        if (apply_target_profile(&ctx, target_profile) != 0)
+            return 1;
+    }
+
     if (ctx.diagnostics_enabled) {
         ctx.diagnostics_start_usec = diagnostics_start_usec;
         printf("[diag] performance diagnostics enabled\n");
@@ -379,6 +426,9 @@ int main(int argc, char *argv[]) {
             return 1;
         }
     }
+
+    if (!explicit_baud && ctx.serial_baud && is_serial_device(ctx.device_name))
+        ctx.initial_speed = ctx.serial_baud;
 
     /* Select transport */
     if (is_serial_device(ctx.device_name)) {

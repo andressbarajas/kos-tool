@@ -113,6 +113,14 @@ typedef struct kostool_context {
     char sh4_addr2line[512];        /* Full path to SH4 addr2line (from config) */
     char ppc_addr2line[512];        /* Full path to PPC addr2line (from config) */
 
+    /* Target profiles (configured via kos-tool.cfg) */
+    char config_path[512];
+    char dc_serial[128];
+    char gc_serial[128];
+    char dc_ip[64];
+    char gc_ip[64];
+    uint32_t serial_baud;
+
     /* Remote loader info (populated during transport init/handshake) */
     char     remote_version_string[128];
     uint32_t remote_capabilities;
