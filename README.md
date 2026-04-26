@@ -339,7 +339,8 @@ kos-tool is derived from the original dcload by Andrew Kieschnick (ADK/Napalm), 
 * **Paul Boese** (Axlen) — serial protocol endian fixes
 * **Eric Fradella** (darcagn) — DHCP retry
 * **Lawrence Sebald**, **Donald Haase**, **Falco Girgis** — KallistiOS team contributions
-* **Andy Barajas** — kos-tool unification, GameCube support
+* **Andy Barajas** (BBHoodsta) — kos-tool unification, GameCube support
+* **Paul Cercueil** (pcercuei) - Testing, feedback, bug fixes
 
 See the legacy [dcload-serial](https://github.com/KallistiOS/dcload-serial) and [dcload-ip](https://github.com/KallistiOS/dcload-ip) repositories for the full history of contributors.
 
