@@ -45,6 +45,7 @@
 /* Retry limits to prevent infinite loops on persistent failures */
 #define MAX_CMD_RETRIES       20   /* max retries for command ack (LOADBIN, DONEBIN, etc.) */
 #define MAX_RECV_REREQUESTS   10   /* max full passes over recv bitmap */
+#define NET_HANDSHAKE_TIMEOUT_USEC 10000000  /* 10s to find loader at static IP */
 
 /* Drain delay after a LOADBIN retry to let stale in-flight PARTBINs expire.
  * This mitigates silent data corruption from attempt N-1's packets arriving
@@ -226,8 +227,9 @@ static int prepare_comms(kostool_context_t *ctx) {
 
     uint32_t encoded_ver = make_encoded_version(ctx->force_legacy);
     uint8_t buffer[2048];
+    uint64_t start = ctx->time_ops->time_usec();
     int flip = 0;
-    int recv_len;
+    int recv_len = -1;
 
     /* Start with v2 socket unless forcing legacy */
     if (ctx->force_legacy)
@@ -235,27 +237,22 @@ static int prepare_comms(kostool_context_t *ctx) {
     else
         ctx->global_socket = ctx->socket_fd;
 
-    /* Send version command, alternating between v2 and legacy sockets */
-    do {
+    /* Send version commands, alternating between v2 and legacy sockets. */
+    while ((ctx->time_ops->time_usec() - start) < NET_HANDSHAKE_TIMEOUT_USEC) {
         send_cmd(ctx, NET_CMD_VERSION, encoded_ver, 0, NULL, 0);
         recv_len = recv_resp(ctx, buffer, sizeof(buffer), NET_PACKET_TIMEOUT_USEC);
-        if (recv_len != -1)
-            break;
+        if (recv_len > 0 && memcmp(buffer, NET_CMD_VERSION, 4) == 0)
+            goto got_version;
+
         /* Try the other socket */
         flip ^= 1;
         ctx->global_socket = flip ? ctx->socket_legacy : ctx->socket_fd;
-    } while (1);
-
-    /* Keep trying until we get a VERSION response */
-    while (memcmp(buffer, NET_CMD_VERSION, 4) != 0) {
-        do {
-            flip ^= 1;
-            ctx->global_socket = flip ? ctx->socket_legacy : ctx->socket_fd;
-            send_cmd(ctx, NET_CMD_VERSION, encoded_ver, 0, NULL, 0);
-            recv_len = recv_resp(ctx, buffer, sizeof(buffer), NET_PACKET_TIMEOUT_USEC);
-        } while (recv_len == -1);
     }
 
+    fprintf(stderr, "No network loader response from %s\n", ctx->hostname);
+    return -1;
+
+got_version:
     /* Close the socket we don't need */
     if (ctx->global_socket == ctx->socket_fd) {
         ctx->socket_ops->close(ctx->socket_legacy);
@@ -403,7 +400,10 @@ static int network_init(kostool_context_t *ctx) {
 
     /* Run VERS handshake now so remote_version_string and
      * remote_capabilities are available for auto-update. */
-    prepare_comms(ctx);
+    printf("Connecting to %s...\n", ctx->hostname);
+    fflush(stdout);
+    if (prepare_comms(ctx) != 0)
+        return -1;
 
     return 0;
 }
