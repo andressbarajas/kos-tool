@@ -546,6 +546,13 @@ static int enc_probe(int channel, int device)
 {
     unsigned int id;
 
+    /* EXT bit guard: Skip empty memory card slots to avoid sending 
+     * enc28j60 reset/read commands to unrelated devices. */
+    if (device == 0 && channel < 2) {
+        if (!(exi_get_status(channel) & EXI_STATUS_EXT))
+            return 0;
+    }
+
     /* Fast path: works on fresh power-on */
     id = exi_get_id(channel, device);
     if (id == ENC28J60_EXI_ID)

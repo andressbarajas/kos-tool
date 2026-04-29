@@ -129,6 +129,13 @@ static int w5500_probe_exi(int channel, int device)
     unsigned char cmd[4];
     unsigned char ver;
 
+    /* EXT bit guard: Skip empty memory card slots to avoid sending 
+     * W5500 reset/read commands to unrelated devices. */
+    if (device == 0 && channel < 2) {
+        if (!(exi_get_status(channel) & EXI_STATUS_EXT))
+            return 0;
+    }
+
     /* Select at 1 MHz for safe probing */
     exi_select(channel, device, EXI_CLK_1MHZ);
 
