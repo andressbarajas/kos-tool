@@ -222,9 +222,15 @@ static void xfb_set_pixel_pair(int x, int y,
 
 void gc_video_init(void)
 {
+    /* VICLK = 0 means 27 MHz; VICLK = 1 means 54 MHz and is used for progressive mode. */
+    VI_VICLK = 0x0000;   /* 27 MHz video clock. */
+
+    /* Wait for the raster beam to enter the vertical blanking region. */
+    while(VI_DPV > 20)
+        ;
+
     /* Configure VI for NTSC 480i */
     VI_VTR  = 0x0F06;         /* ACV=240, EQU=6 */
-    VI_DCR  = 0x0001;         /* NTSC, interlaced, enable */
     VI_HTR0 = 0x476901AD;     /* HCS=0x47, HCE=0x69, HLW=0x01AD */
     VI_HTR1 = 0x02EA5140;     /* HBS=0x02EA, HBE+HSY */
     VI_VTO  = 0x00030018;     /* PSB_odd=3, PRB_odd=24 */
@@ -254,9 +260,11 @@ void gc_video_init(void)
     VI_FCT5 = 0x13130F08;
     VI_FCT6 = 0x00080C0F;
 
-    VI_VICLK = 0x0000;        /* 27MHz clock (NTSC) */
     VI_VISEL = 0x0000;
     VI_SRCWID = 0x0280;       /* Source width: 640 pixels */
+
+    /* Select NTSC interlaced output and enable the VI. */
+    VI_DCR = 0x0001;
 
     /* Clear the framebuffer to black */
     gc_video_clear(0);
