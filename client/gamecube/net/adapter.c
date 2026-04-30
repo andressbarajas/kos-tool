@@ -134,6 +134,6 @@ detected:
 
 void adapter_start_static_ip(void)
 {
-    if (bb == &adapter_enc28j60)
+    if (bb == &adapter_enc28j60 || bb == &adapter_bba)
         bb->start();
 }

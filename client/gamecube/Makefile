@@ -339,7 +339,7 @@ EXBUILD := $(BUILDDIR)/examples
 
 # All examples with a main.c that compile for GC (maple-test is DC-only)
 GC_EXAMPLES := \
-    console-test download-test exception-test exception-frame-test \
+    bba-test console-test download-test exception-test exception-frame-test \
     enc28j60-reset-test exit-test exi-probe file-test gdb-test \
     font-test rainbow-test syscall-test
 
