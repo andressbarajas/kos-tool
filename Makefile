@@ -1,4 +1,14 @@
 # Makefile — kosload top-level build dispatcher
+#
+# Usage:
+#   make all           Build host tool + DC + GC firmware
+#   make dc            Build Dreamcast firmware
+#   make gc            Build GameCube firmware
+#   make disc          Build all disc images (CDI + ISO)
+#   make disc-dc       Build Dreamcast CDI images
+#   make disc-gc       Build GameCube ISO images
+#   make gc-dol        Build GameCube DOL files only (no ISO)
+#   make clean         Remove all build artifacts
 
 ROOT := $(CURDIR)
 include mk/version.mk
@@ -55,7 +65,7 @@ endef
 
 # ---------- Targets ----------
 
-.PHONY: all host dc gc disc disc-dc disc-gc disc-auto-dc disc-auto-gc clean \
+.PHONY: all host dc gc gc-dol disc disc-dc disc-gc disc-auto-dc disc-auto-gc clean \
         check-dc-toolchain check-gc-toolchain
 
 check-dc-toolchain:
@@ -133,6 +143,9 @@ disc-dc: check-dc-toolchain dc
 
 disc-gc: check-gc-toolchain gc
 	$(MAKE) -C make-cd gc ROOT=$(ROOT)
+
+gc-dol: check-gc-toolchain gc
+	$(MAKE) -C make-cd gc-dol ROOT=$(ROOT)
 
 # ---------- Clean ----------
 

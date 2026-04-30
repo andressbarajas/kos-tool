@@ -111,12 +111,13 @@ build/
 ### Individual Targets
 
 ```bash
-make dc      # Dreamcast firmware + examples + rebuild kos-tool
-make gc      # GameCube firmware + examples + rebuild kos-tool
-make host    # Host tool only (embeds whatever firmware bins exist)
-make disc    # Bootable disc images (CDI for DC, ISO for GC)
-make disc-dc # Dreamcast-only bootable CDI images
-make disc-gc # GameCube-only bootable ISO images
+make dc       # Dreamcast firmware + examples + rebuild kos-tool
+make gc       # GameCube firmware + examples + rebuild kos-tool
+make host     # Host tool only (embeds whatever firmware bins exist)
+make disc     # Bootable disc images (CDI for DC, ISO for GC)
+make disc-dc  # Dreamcast-only bootable CDI images
+make disc-gc  # GameCube-only bootable ISO images
+make gc-dol   # GameCube DOL files only (no ISO)
 ```
 
 You can also override toolchains per invocation:

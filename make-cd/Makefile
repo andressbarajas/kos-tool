@@ -109,13 +109,15 @@ GC_IP_ISO  := $(BUILDDIR)/gc-load-ip.iso
 # ============================================================
 
 .DEFAULT_GOAL := all
-.PHONY: all dc gc dc-serial dc-ip gc-serial gc-ip clean
+.PHONY: all dc gc dc-serial dc-ip gc-serial gc-ip gc-dol clean
 
 all: dc gc
 
 dc: dc-serial dc-ip
 
 gc: gc-serial gc-ip
+
+gc-dol: $(GC_SER_DOL) $(GC_IP_DOL)
 
 # ============================================================
 # Directory creation
