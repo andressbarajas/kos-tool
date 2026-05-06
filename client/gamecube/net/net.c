@@ -145,8 +145,13 @@ static void process_udp(ether_header_t *ether, ip_header_t *ip, udp_header_t *ud
 	{
 		command_t *command = (command_t *)udp->data;
 
-		/* Wake screensaver on dcload command packets */
-		screensaver_wake();
+		/* Only host-directed command traffic should wake the screensaver.
+		 * Broadcast discovery/DHCP and stray LAN chatter are still handled,
+		 * but they should not dismiss the saver. */
+		unsigned short dest_port = ntohs(udp->dest);
+		if ((dest_port == NET_LEGACY_PORT || dest_port == NET_DEFAULT_PORT) &&
+		    memcmp(ether->dest, bb->mac, 6) == 0)
+			screensaver_wake();
 
 		unsigned int pkt_match_id = *(unsigned int *)command->id;
 
