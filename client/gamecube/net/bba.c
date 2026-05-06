@@ -34,7 +34,7 @@
 #include "../cache.h"
 
 adapter_t adapter_bba = {
-    "Broadband Adapter (GC BBA)",
+    "Broadband Adapter (DOL-015)",
     { 0 },      /* MAC address */
     { 0 },      /* 2-byte alignment pad */
     bba_detect,

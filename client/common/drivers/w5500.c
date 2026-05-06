@@ -50,7 +50,7 @@ static void w5500_deactivate(void)
 /* ===== Adapter instance ===== */
 
 adapter_t adapter_w5500 = {
-    "WIZnet W5500",
+    "Broadband Adapter (W5500)",
     { 0 },      /* MAC address (set in init) */
     { 0 },      /* 2-byte alignment pad */
     w5500_detect,

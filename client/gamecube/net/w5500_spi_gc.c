@@ -111,6 +111,12 @@ const w5500_spi_ops_t gc_w5500_spi_ops = {
     gc_w5500_spi_read_data,
 };
 
+void w5500_get_exi_location(int *channel, int *device)
+{
+    *channel = w5500_channel;
+    *device = w5500_device;
+}
+
 /* ===== EXI-level W5500 Detection =====
  *
  * The W5500 doesn't have a standard EXI device ID like the BBA or ENC28J60.

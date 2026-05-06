@@ -6,6 +6,8 @@
 
 extern const w5500_spi_ops_t gc_w5500_spi_ops;
 
+void w5500_get_exi_location(int *channel, int *device);
+
 /* Probe all EXI locations for a W5500. Returns 1 if found, 0 if not. */
 int w5500_probe_exi_all(void);
 

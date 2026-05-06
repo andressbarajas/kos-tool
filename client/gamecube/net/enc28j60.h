@@ -276,6 +276,7 @@
 /* ===== Adapter driver functions ===== */
 
 int  enc28j60_detect(void);
+void enc28j60_get_exi_location(int *channel, int *device);
 int  enc28j60_init(void);
 void enc28j60_start(void);
 void enc28j60_stop(void);

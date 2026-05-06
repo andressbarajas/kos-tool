@@ -13,6 +13,8 @@
 #include "enc28j60.h"
 #include "w5500_spi_gc.h"
 
+#define ADAPTER_DISPLAY_NAME_SIZE 48
+
 /* Loop escape flag, used by all drivers */
 volatile unsigned char escape_loop = 0;
 int timeout_loop = 0;
@@ -25,6 +27,48 @@ adapter_t *bb;
 __attribute__((aligned(32))) unsigned char raw_current_pkt[RAW_RX_PKT_BUF_SIZE];
 /* Offset by 2 for command->data alignment (same trick as DC) */
 __attribute__((aligned(2))) unsigned char *current_pkt = &(raw_current_pkt[2]);
+
+static char adapter_display_name[ADAPTER_DISPLAY_NAME_SIZE];
+
+static const char *exi_location_name(int channel, int device)
+{
+    if (channel == 0 && device == 0)
+        return "Slot A";
+    if (channel == 1 && device == 0)
+        return "Slot B";
+    if (channel == 0 && device == 2)
+        return "Serial Port 1";
+    if (channel == 2 && device == 0)
+        return "Serial Port 2";
+    return "unknown port";
+}
+
+static void set_adapter_display_name(const char *model, int channel, int device)
+{
+    const char prefix[] = "Broadband Adapter (";
+    const char separator[] = ", ";
+    const char suffix[] = ")";
+    const char *location = exi_location_name(channel, device);
+    char *out = adapter_display_name;
+    int remaining = ADAPTER_DISPLAY_NAME_SIZE;
+
+#define APPEND_LITERAL(s) do { \
+        const char *src_ = (s); \
+        while (*src_ && remaining > 1) { \
+            *out++ = *src_++; \
+            remaining--; \
+        } \
+    } while (0)
+
+    APPEND_LITERAL(prefix);
+    APPEND_LITERAL(model);
+    APPEND_LITERAL(separator);
+    APPEND_LITERAL(location);
+    APPEND_LITERAL(suffix);
+    *out = '\0';
+
+#undef APPEND_LITERAL
+}
 
 /*
  * Generate a MAC address for W5500 on GameCube.
@@ -100,8 +144,14 @@ static void w5500_gc_generate_mac(unsigned char *mac)
 
 int adapter_detect(void)
 {
+    int channel;
+    int device;
+
     /* Try ENC28J60 first (most common SPI adapter) */
     if (adapter_enc28j60.detect() >= 0) {
+        enc28j60_get_exi_location(&channel, &device);
+        set_adapter_display_name("ENC28J60", channel, device);
+        adapter_enc28j60.name = adapter_display_name;
         bb = &adapter_enc28j60;
     } else {
         /* Try W5500 on all EXI locations */
@@ -110,6 +160,9 @@ int adapter_detect(void)
             w5500_gc_generate_mac(adapter_w5500.mac);
 
             if (adapter_w5500.detect() >= 0) {
+                w5500_get_exi_location(&channel, &device);
+                set_adapter_display_name("W5500", channel, device);
+                adapter_w5500.name = adapter_display_name;
                 bb = &adapter_w5500;
                 goto detected;
             }
@@ -117,6 +170,9 @@ int adapter_detect(void)
 
         /* Try BBA last */
         if (adapter_bba.detect() >= 0) {
+            set_adapter_display_name("DOL-015", GCBBA_EXI_CHANNEL,
+                                     GCBBA_EXI_DEVICE);
+            adapter_bba.name = adapter_display_name;
             bb = &adapter_bba;
         } else {
             return -1;

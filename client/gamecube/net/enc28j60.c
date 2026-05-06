@@ -31,7 +31,7 @@
 #include <kosload/screensaver.h>
 
 adapter_t adapter_enc28j60 = {
-    "ENC28J60 (GCNet/ETH2GC)",
+    "Broadband Adapter (ENC28J60)",
     { 0 },      /* MAC address (generated in init) */
     { 0 },      /* 2-byte alignment pad */
     enc28j60_detect,
@@ -45,6 +45,12 @@ adapter_t adapter_enc28j60 = {
 /* Runtime EXI location (set by detection) */
 static int enc_channel;
 static int enc_device;
+
+void enc28j60_get_exi_location(int *channel, int *device)
+{
+    *channel = enc_channel;
+    *device = enc_device;
+}
 
 /* Current register bank */
 static unsigned char current_bank;
