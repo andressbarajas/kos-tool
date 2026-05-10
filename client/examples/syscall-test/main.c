@@ -60,7 +60,10 @@
 #ifdef PS2_KOSLOAD_BASE
 #define KOSLOAD_BASE    PS2_KOSLOAD_BASE
 #else
-#define KOSLOAD_BASE    0x80000280
+/* crt0 layout: j(+0) nop(+4) magic(+8) syscall_ptr(+12).
+ * DC/GC pattern needs BASE+4=magic, BASE+8=syscall, so PS2 base
+ * is _start+4 (0x80000280+4), not the real entry. */
+#define KOSLOAD_BASE    0x80000284
 #endif
 #else
 #error "Unsupported architecture"

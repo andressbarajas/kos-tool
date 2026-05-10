@@ -36,18 +36,19 @@ _start:
     j       realstart
     nop
 
-# Magic value for detecting kosload (at entry+0x04).
-# Also serves as console flag: ps2_set_console_enabled() overwrites
-# this to 0xdeadbeef (enabled) or 0xfeedface (disabled).
-# Layout matches DC/GC: magic at base+4, syscall ptr at base+8.
+# Magic value for detecting kosload (at entry+0x08).
+# The nop delay slot at entry+0x04 is the console-flag word toggled by
+# ps2_set_console_enabled() between 0xdeadbeef and 0xfeedface.
+# KOSLOAD_BASE = entry+0x04, so loaded programs see BASE+4=magic, BASE+8=syscall,
+# matching the DC/GC layout.
 ps2loadmagic:
     .word   0xdeadbeef
 
-# Syscall entry pointer (at entry+0x08)
+# Syscall entry pointer (at entry+0x0C)
 kosloadsyscall_ptr:
     .word   kosloadsyscall
 
-# Function pointers for exception handler (at entry+0x0C, +0x10, +0x14, +0x18, +0x1C)
+# Function pointers for exception handler (at entry+0x10, +0x14, +0x18, +0x1C, +0x20)
 setup_video_ptr:
     .word   setup_video
 clear_screen_ptr:
@@ -59,7 +60,7 @@ uint_to_string_ptr:
 exc_to_string_ptr:
     .word   exception_code_to_string
 
-# Pointer to kosload info block (at entry+0x20)
+# Pointer to kosload info block (at entry+0x24)
 kosload_info_ptr:
     .word   kosload_info
 

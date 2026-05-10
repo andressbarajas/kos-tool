@@ -224,11 +224,11 @@ void disable_cache(void)
 
 static void ps2_set_console_enabled(bool enabled)
 {
-    /* Write magic value at loader base+4 for loaded program to detect */
+    /* Toggle ps2loadmagic (entry+0x08) between 0xdeadbeef and 0xfeedface */
     if (enabled)
-        *(volatile unsigned int *)(PS2_INNER_LOADER_BASE + 4) = 0xdeadbeef;
+        *(volatile unsigned int *)(PS2_INNER_LOADER_BASE + 8) = 0xdeadbeef;
     else
-        *(volatile unsigned int *)(PS2_INNER_LOADER_BASE + 4) = 0xfeedface;
+        *(volatile unsigned int *)(PS2_INNER_LOADER_BASE + 8) = 0xfeedface;
 }
 
 /* PS2 RTC access is mediated by CDVDMAN on the IOP.  The SMAP IRX owns
