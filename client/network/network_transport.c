@@ -27,11 +27,10 @@
 #define KOSLOAD_IP "0.0.0.0"
 #endif
 
-/*
- * Patchable IP config block.  The host tool scans the firmware binary
- * for the magic marker "KOSLD_IP" and overwrites the ip[] field to
- * convert a DHCP build into a static-IP build (or vice versa) before
- * uploading.  "0.0.0.0" means DHCP; anything else is a static IP.
+/* Patchable IP config block.  The host tool can find "KOSLD_IP" inside the
+ * loader ELF and replace ip[] without rebuilding:
+ *   "0.0.0.0"      -> DHCP
+ *   "172.16.0.10"  -> static IP
  */
 typedef struct {
     char magic[8];   /* "KOSLD_IP" — host searches for this */
@@ -42,6 +41,8 @@ static ip_config_block_t ip_config __attribute__((used, section(".data"))) = {
     .magic = {'K','O','S','L','D','_','I','P'},
     .ip = KOSLOAD_IP
 };
+
+static char network_init_error_msg[96] = "NO ETHERNET ADAPTER DETECTED!";
 
 /* From entry.c */
 extern volatile bool booted;
@@ -84,8 +85,57 @@ static void network_restore_screen(void)
     disp_info();
 }
 
+static void set_network_init_error(const char *msg)
+{
+    size_t i;
+
+    if (msg == 0)
+        msg = "NO ETHERNET ADAPTER DETECTED!";
+
+    for (i = 0; i + 1 < sizeof(network_init_error_msg) && msg[i] != '\0'; i++)
+        network_init_error_msg[i] = msg[i];
+
+    network_init_error_msg[i] = '\0';
+}
+
+static void set_network_init_error_with_phase(const char *msg)
+{
+    const char *phase = adapter_get_phase_status();
+    size_t i = 0;
+
+    if (phase == 0 || phase[0] == '\0') {
+        set_network_init_error(msg);
+        return;
+    }
+
+    if (msg == 0)
+        msg = "NO ETHERNET ADAPTER DETECTED!";
+
+    while (i + 1 < sizeof(network_init_error_msg) && phase[i] != '\0') {
+        network_init_error_msg[i] = phase[i];
+        i++;
+    }
+
+    if (i + 3 < sizeof(network_init_error_msg)) {
+        network_init_error_msg[i++] = ' ';
+        network_init_error_msg[i++] = '|';
+        network_init_error_msg[i++] = ' ';
+    }
+
+    {
+        size_t j = 0;
+        while (i + 1 < sizeof(network_init_error_msg) && msg[j] != '\0')
+            network_init_error_msg[i++] = msg[j++];
+    }
+
+    network_init_error_msg[i] = '\0';
+}
+
 static int network_transport_init(void)
 {
+    if (global_bg_color == 0)
+        global_bg_color = 0x00100530;
+
     /* Reset boot state so display is redrawn (needed after program return) */
     booted = false;
 
@@ -95,8 +145,12 @@ static int network_transport_init(void)
         kosload_info.capabilities |= KOSLOAD_CAP_CDFS_REDIR;
     kosload_info.transport = KOSLOAD_TRANSPORT_NETWORK;
 
-    if (adapter_detect() < 0)
+    set_network_init_error("NO ETHERNET ADAPTER DETECTED!");
+
+    if (adapter_detect() < 0) {
+        set_network_init_error_with_phase(adapter_get_last_error());
         return -1;
+    }
 
     /* Populate info block with adapter MAC */
     memcpy(kosload_info.mac, bb->mac, 6);
@@ -105,14 +159,13 @@ static int network_transport_init(void)
     set_ip_from_string();
     kosload_info.console_ip = our_ip;
 
-    /* Static IP mode is silent at boot.  Let the target adapter layer decide
-     * whether it needs to bring RX online before the first host probe. */
+    /* Static IP skips DHCP, but the adapter may still need to enable RX so
+     * it can answer the host's first VERS packet. */
     if (our_ip != 0)
         adapter_start_static_ip();
 
-    /* Advertise DHCP capability only when no static IP was configured.
-     * This is checked at runtime (not compile time) so the host can
-     * patch ip_config.ip in the firmware binary to switch modes. */
+    /* Advertise DHCP only when the current config says DHCP.  This is runtime
+     * state so a host-patched static ELF reports itself correctly. */
     if (our_ip == 0)
         kosload_info.capabilities |= KOSLOAD_CAP_DHCP;
 
@@ -166,7 +219,7 @@ static void network_transport_start(void)
 
 const client_transport_ops_t client_network_transport_ops = {
     .name = "network",
-    .init_error_msg = "NO ETHERNET ADAPTER DETECTED!",
+    .init_error_msg = network_init_error_msg,
     .init = network_transport_init,
     .loop = network_transport_loop,
     .syscall_send = network_transport_syscall_send,

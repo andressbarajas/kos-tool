@@ -1,12 +1,13 @@
 # kos-tool 3.0.0
 
-**kos-tool** is a unified console loader for the **Sega Dreamcast** and **Nintendo GameCube**, combining the functionality of [dcload-serial](https://github.com/KallistiOS/dcload-serial) and [dcload-ip](https://github.com/KallistiOS/dcload-ip) into a single, clean codebase. It is a derivative of the original **dcload** by [Andrew Kieschnick](http://napalm-x.thegypsy.com/andrewk/dc/) (ADK/Napalm).
+**kos-tool** is a unified console loader for the **Sega Dreamcast**, **Nintendo GameCube**, and **Sony PlayStation 2**, combining the functionality of [dcload-serial](https://github.com/KallistiOS/dcload-serial) and [dcload-ip](https://github.com/KallistiOS/dcload-ip) into a single, clean codebase. It is a derivative of the original **dcload** by [Andrew Kieschnick](http://napalm-x.thegypsy.com/andrewk/dc/) (ADK/Napalm).
 
 **kos-tool** is a set of programs used to send and receive data between your computer and your console. The classic use case is uploading and debugging homebrew programs. It consists of two parts:
 
 * `kos-tool` — the host tool, run on your computer (Linux, macOS, Windows)
 * `dc-load-serial` / `dc-load-ip` — the Dreamcast client firmware
 * `gc-load-serial` / `gc-load-ip` — the GameCube client firmware
+* `ps2-load-ip` — the PlayStation 2 client firmware
 
 ## Supported Hardware
 
@@ -24,16 +25,22 @@
 | Serial | `gc-load-serial` | USB Gecko |
 | Ethernet | `gc-load-ip` | Broadband Adapter (DOL-015), ENC28J60 SPI adapter, or W5500 (EXI-SPI) |
 
+### PlayStation 2
+
+| Connection | Client Firmware | Adapter |
+|---|---|---|
+| Ethernet | `ps2-load-ip` | Network Adapter / Broadband Adapter (DEV9 SMAP) |
+
 ## Improvements over dcload-serial / dcload-ip
 
 ### Unified Codebase
-* **Single host tool** — `kos-tool` replaces both `dc-tool-ser` and `dc-tool-ip` with one binary that handles serial and network transports for both Dreamcast and GameCube
-* **Shared client code** — common client logic (main loop, screensaver, exception handler, CDFS, syscall table) is shared across all four firmware variants via a platform abstraction layer (`target_ops_t`)
-* **Unified build system** — one `make` builds everything: DC firmware, GC firmware, host tool, examples, and disc images
+* **Single host tool** — `kos-tool` replaces both `dc-tool-ser` and `dc-tool-ip` with one binary that handles serial and network transports across supported consoles
+* **Shared client code** — common client logic (main loop, screensaver, exception handler, CDFS, syscall table) is shared across client firmware variants via a platform abstraction layer (`target_ops_t`)
+* **Unified build system** — one `make` builds everything: DC firmware, GC firmware, PS2 firmware, host tool, examples, and disc images
 * **Documented extension points** — see [`docs/architecture.md`](docs/architecture.md) for the console and transport boundaries used by new ports
 
 ### Firmware Update
-* **Embedded firmware** — all four client firmware binaries (DC serial, DC IP, GC serial, GC IP) are embedded directly in the `kos-tool` host binary
+* **Embedded firmware** — Dreamcast and GameCube client firmware binaries (DC serial, DC IP, GC serial, GC IP) are embedded directly in the `kos-tool` host binary
 * **Opt-in auto-update** — with `-F`, when `kos-tool` connects to a console running an older (or legacy dcload) firmware, it uploads and installs the new firmware via architecture-specific trampolines (SH4 and PPC)
 * **IP config preservation** — during network firmware updates, DHCP/static IP settings are detected and patched into the new firmware so the console stays reachable
 * **Legacy dcload compatibility** — auto-update works on consoles still running the original `dcload-serial` or `dcload-ip`, upgrading them in-place
@@ -43,6 +50,11 @@
 * **Full GameCube port** — serial transport via USB Gecko (EXI channel 1), network transport via Broadband Adapter (BBA), ENC28J60 SPI adapter, and W5500 (EXI-SPI)
 * **Shared protocol** — GameCube uses the same serial and network protocols as Dreamcast, so the host tool works identically for both consoles
 * **DHCP support** — GameCube network firmware supports DHCP, same as Dreamcast
+
+### PlayStation 2 Support
+* **PS2 network loader** — Ethernet transport through the official DEV9 SMAP network hardware
+* **Shared protocol** — PS2 uses the same network upload/download command protocol as Dreamcast and GameCube
+* **DHCP and static IP support** — PS2 network firmware can discover an address with DHCP or be built with a fixed IP
 
 ### Host Tool Enhancements
 * **Automatic transport detection** — `kos-tool` infers serial vs network from `-t <device|ip|dhcp>`
@@ -71,7 +83,7 @@
 * GDB remote debugging via GDB-over-dcload
 * Exception handler with full register dump
 * DHCP/network discovery (`-t dhcp`)
-* Network firmware supports BBA/LAN/W5500 on Dreamcast and BBA/ENC28J60/W5500 on GameCube
+* Network firmware supports BBA/LAN/W5500 on Dreamcast, BBA/ENC28J60/W5500 on GameCube, and DEV9 SMAP on PlayStation 2
 * Runtime baud rate negotiation up to 1.5Mbaud (Dreamcast serial)
 * Cross-platform host tool: Linux, macOS, Windows (MSYS2)
 
@@ -84,15 +96,18 @@
 * Cross-compiler toolchains for client builds:
   * Dreamcast: `sh-elf-gcc`
   * GameCube: `powerpc-eabi-gcc`
+  * PlayStation 2 EE: `mips64r5900el-ps2-elf-gcc`
+  * PlayStation 2 IOP: `mipsel-elf-gcc`
 
 Toolchain locations are configured in [`mk/toolchains.mk`](mk/toolchains.mk).
-If your Dreamcast or GameCube toolchains are not installed under the default
-paths, edit that file before running `make dc`, `make gc`, or `./build.sh`.
+If your Dreamcast, GameCube, or PlayStation 2 toolchains are not installed under
+the default paths, edit that file before running `make dc`, `make gc`,
+`make ps2`, or `./build.sh`.
 
 ### Build Everything
 
 ```bash
-make        # builds DC firmware, GC firmware, host tool, and examples
+make        # builds DC firmware, GC firmware, PS2 firmware, host tool, and examples
 ```
 
 Output goes to `build/`:
@@ -103,9 +118,11 @@ build/
 ├── dc-load-ip.{elf,bin}  # Dreamcast network firmware
 ├── gc-load-ser.{elf,bin} # GameCube serial firmware
 ├── gc-load-ip.{elf,bin}  # GameCube network firmware
+├── ps2-load-ip.elf       # PlayStation 2 network firmware
 └── examples/
     ├── dc/               # Dreamcast example ELFs
-    └── gc/               # GameCube example ELFs
+    ├── gc/               # GameCube example ELFs
+    └── ps2/              # PlayStation 2 example ELFs
 ```
 
 ### Individual Targets
@@ -113,6 +130,7 @@ build/
 ```bash
 make dc       # Dreamcast firmware + examples + rebuild kos-tool
 make gc       # GameCube firmware + examples + rebuild kos-tool
+make ps2      # PlayStation 2 firmware + examples + rebuild kos-tool
 make host     # Host tool only (embeds whatever firmware bins exist)
 make disc     # Bootable disc images (CDI for DC, ISO for GC)
 make disc-dc  # Dreamcast-only bootable CDI images
@@ -125,6 +143,7 @@ You can also override toolchains per invocation:
 ```bash
 make gc GC_TOOLCHAIN=/path/to/powerpc-eabi/bin
 make dc DC_TOOLCHAIN=/path/to/sh-elf/bin
+make ps2 PS2_EE_TOOLCHAIN=/path/to/mips64r5900el-ps2-elf/bin PS2_IOP_TOOLCHAIN=/path/to/mipsel-elf/bin
 ```
 
 ### Platform-Specific Notes
@@ -170,13 +189,14 @@ Arcade boards like Naomi and System SP don't have standard A/V cable detect wiri
 make dc VGAONLY=1
 ```
 
-### Static IP (Dreamcast/GameCube)
+### Static IP
 
 By default, network firmware uses DHCP. To build with a static IP:
 
 ```bash
 make dc STATICIP=192.168.1.100
 make gc STATICIP=192.168.1.100
+make ps2 STATICIP=192.168.1.100
 ```
 
 ## Usage
@@ -227,6 +247,7 @@ dc_serial = /dev/ttyUSB0
 gc_serial = /dev/ttyUSB1
 dc_ip = 172.16.0.10
 gc_ip = dhcp
+ps2_ip = dhcp
 serial_baud = 1562500
 ```
 
@@ -235,6 +256,7 @@ Then run:
 ```bash
 kos-tool -T dc_serial -x program.elf
 kos-tool -T gc_ip -x program.elf
+kos-tool -T ps2_ip -x program.elf
 ```
 
 `-t` overrides `-T` when both are present. `serial_baud` is used only for
@@ -266,6 +288,12 @@ kos-tool -t /dev/ttyUSB0 -x program.elf
 
 # GameCube network — upload and run
 kos-tool -t 192.168.1.50 -x program.elf
+
+# PlayStation 2 network — upload and run
+kos-tool -t 172.16.0.10 -x program.elf
+
+# PlayStation 2 network — discover DHCP device on LAN
+kos-tool -t dhcp -x program.elf
 
 # Enable performance diagnostics
 kos-tool -t dhcp --diag -x program.elf
@@ -317,6 +345,7 @@ kos-tool/
 │   ├── include/         # Client headers
 │   ├── dreamcast/       # DC platform (SCIF, video, BBA/LA drivers)
 │   ├── gamecube/        # GC platform (USBGecko, EXI, BBA/ENC28J60/W5500 drivers)
+│   ├── playstation2/    # PS2 platform (DEV9, SMAP, IOP modules, video)
 │   └── examples/        # Freestanding test programs
 ├── host/                # Host tool (kos-tool)
 │   ├── src/             # Main, console, upload/download, discovery
@@ -340,8 +369,9 @@ kos-tool is derived from the original dcload by Andrew Kieschnick (ADK/Napalm), 
 * **Paul Boese** (Axlen) — serial protocol endian fixes
 * **Eric Fradella** (darcagn) — DHCP retry
 * **Lawrence Sebald**, **Donald Haase**, **Falco Girgis** — KallistiOS team contributions
-* **Andy Barajas** (BBHoodsta) — kos-tool unification, GameCube support
+* **Andy Barajas** (BBHoodsta) — kos-tool unification, GameCube and PlayStation 2 support
 * **Paul Cercueil** (pcercuei) - Testing, feedback, bug fixes
+* **Ruslan Rostovtsev** (DC-SWAT) - W5500 driver
 
 See the legacy [dcload-serial](https://github.com/KallistiOS/dcload-serial) and [dcload-ip](https://github.com/KallistiOS/dcload-ip) repositories for the full history of contributors.
 

@@ -25,15 +25,19 @@
 #include <kostool/transport.h>
 #include <kostool/platform.h>
 
-/* FIFO delay constants per adapter type */
-#define BBA_RX_FIFO_DELAY_TIME   1800     /* microseconds */
-#define BBA_RX_FIFO_DELAY_COUNT  10       /* packets per burst */
-#define LAN_RX_FIFO_DELAY_TIME   1250     /* microseconds */
-#define LAN_RX_FIFO_DELAY_COUNT  1        /* packets per burst */
-#define W5500_RX_FIFO_DELAY_TIME 7000     /* microseconds */
-#define W5500_RX_FIFO_DELAY_COUNT 3       /* packets per burst */
-#define W5500_BULK_RX_FIFO_DELAY_TIME 9000 /* microseconds */
-#define W5500_UPLOAD_WINDOW_SIZE (32U * 1024U)
+/* Host-side pacing.  Some adapters drop packets if the host sends a long
+ * burst with no pause.  After N packets, sleep for the matching delay. */
+#define BBA_RX_FIFO_DELAY_TIME         1800    /* microseconds */
+#define BBA_RX_FIFO_DELAY_COUNT        10      /* packets per burst */
+#define LAN_RX_FIFO_DELAY_TIME         1250    /* microseconds */
+#define LAN_RX_FIFO_DELAY_COUNT        1       /* packets per burst */
+#define W5500_RX_FIFO_DELAY_TIME       7000    /* microseconds */
+#define W5500_RX_FIFO_DELAY_COUNT      3       /* packets per burst */
+#define W5500_BULK_RX_FIFO_DELAY_TIME  9000    /* microseconds */
+#define W5500_UPLOAD_WINDOW_SIZE       (32U * 1024U)
+#define PS2_BBA_RX_FIFO_DELAY_TIME     1800    /* microseconds */
+#define PS2_BBA_RX_FIFO_DELAY_COUNT    10      /* packets per burst */
+
 #define DEFAULT_RX_FIFO_DELAY    (NET_PACKET_TIMEOUT_USEC / 51)
 #define DEFAULT_RX_FIFO_COUNT    15
 
@@ -288,7 +292,8 @@ got_version:
      * Old loaders sometimes report octal 0400/0300 as decimal 256/192. */
     int is_bba = (ctx->installed_adapter == LEGACY_BBA_MODEL ||
                   ctx->installed_adapter == ADAPTER_DC_BBA ||
-                  ctx->installed_adapter == ADAPTER_GC_BBA);
+                  ctx->installed_adapter == ADAPTER_GC_BBA ||
+                  ctx->installed_adapter == ADAPTER_PS2_BBA);
     int is_lan = (ctx->installed_adapter == LEGACY_LAN_MODEL ||
                   ctx->installed_adapter == ADAPTER_DC_LAN);
     int is_w5500 = adapter_is_w5500(ctx->installed_adapter);

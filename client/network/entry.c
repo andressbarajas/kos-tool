@@ -34,6 +34,18 @@
 #define KOSLOAD_VERSION_STRING "0.1.0"
 #endif
 
+#ifndef NETWORK_DISPLAY_X
+#define NETWORK_DISPLAY_X 30
+#endif
+
+#ifndef NETWORK_DHCP_ATTEMPTS_Y
+#define NETWORK_DHCP_ATTEMPTS_Y 402
+#endif
+
+#ifndef NETWORK_DHCP_LEASE_Y
+#define NETWORK_DHCP_LEASE_Y 426
+#endif
+
 extern void common_main(const target_ops_t *tgt, const client_transport_ops_t *xport);
 extern const target_ops_t *common_get_target(void);
 
@@ -77,13 +89,22 @@ static volatile bool dont_renew = false;
 static char ip_disp_string[16] = "000.000.000.000";
 static const char *waiting_string = "Waiting For IP...";
 static const char *dhcp_mode_string = " (DHCP Mode)";
-static const char *dhcp_timeout_string = " (DHCP Timed Out!)";
 static const char *dhcp_lease_string = "DHCP Lease Time (sec): ";
 static const char *dhcp_attempts_string = "DHCP Attempts: ";
 static const char *dhcp_next_string = "Next Attempt In... ";
 static char dhcp_lease_time_string[11] = {0};
 static char dhcp_attempts_num[9] = {0};
 static char dhcp_next_counter[9] = {0};
+
+static int runtime_status_y(void)
+{
+    const char *phase_status = adapter_get_phase_status();
+
+    if (phase_status != 0 && phase_status[0] != '\0')
+        return 174;
+
+    return 150;
+}
 
 /* ===== Display helpers ===== */
 
@@ -151,25 +172,25 @@ static void update_ip_display(unsigned int new_ip, const char *mode_string)
     const target_ops_t *t = common_get_target();
     clear_lines(126, 24, global_bg_color);
     ip_to_string(new_ip, ip_disp_string);
-    t->draw_string(30, 126, ip_disp_string, STR_COLOR);
-    t->draw_string(210, 126, mode_string, STR_COLOR);
+    t->draw_string(NETWORK_DISPLAY_X, 126, ip_disp_string, STR_COLOR);
+    t->draw_string(NETWORK_DISPLAY_X + 180, 126, mode_string, STR_COLOR);
 }
 
 static void dhcp_waiting_mode_display(void)
 {
     const target_ops_t *t = common_get_target();
     clear_lines(126, 24, global_bg_color);
-    t->draw_string(30, 126, waiting_string, STR_COLOR);
-    t->draw_string(234, 126, dhcp_mode_string, STR_COLOR);
+    t->draw_string(NETWORK_DISPLAY_X, 126, waiting_string, STR_COLOR);
+    t->draw_string(NETWORK_DISPLAY_X + 204, 126, dhcp_mode_string, STR_COLOR);
 }
 
 static void update_lease_time_display(unsigned int new_time)
 {
     const target_ops_t *t = common_get_target();
     uint_to_string_dec(new_time, dhcp_lease_time_string);
-    clear_lines(402, 48, global_bg_color); /* Clear 48 lines to also clear attempts/retry text */
-    t->draw_string(30, 426, dhcp_lease_string, STR_COLOR);
-    t->draw_string(306, 426, dhcp_lease_time_string, STR_COLOR);
+    clear_lines(NETWORK_DHCP_ATTEMPTS_Y, 48, global_bg_color); /* Clear 48 lines to also clear attempts/retry text */
+    t->draw_string(NETWORK_DISPLAY_X, NETWORK_DHCP_LEASE_Y, dhcp_lease_string, STR_COLOR);
+    t->draw_string(NETWORK_DISPLAY_X + 276, NETWORK_DHCP_LEASE_Y, dhcp_lease_time_string, STR_COLOR);
 }
 
 /* ===== Public display functions ===== */
@@ -179,21 +200,27 @@ void disp_info(void)
     const target_ops_t *t = common_get_target();
     char ip_str[16];
     char mac_str[18];
+    const char *phase_status = adapter_get_phase_status();
 
     t->setup_video(0, 0);
     t->clear_screen(global_bg_color);
-    t->draw_string(30, 54, LOADER_NAME " " KOSLOAD_VERSION_STRING, 0xffff);
+    t->draw_string(NETWORK_DISPLAY_X, 54, LOADER_NAME " " KOSLOAD_VERSION_STRING, 0xffff);
 
     if (bb) {
-        t->draw_string(30, 78, bb->name, 0xffff);
+        t->draw_string(NETWORK_DISPLAY_X, 78, bb->name, 0xffff);
         mac_to_string(bb->mac, mac_str);
-        t->draw_string(30, 102, mac_str, 0xffff);
+        t->draw_string(NETWORK_DISPLAY_X, 102, mac_str, 0xffff);
     }
 
-    if (our_ip) {
+    /* our_ip == 0xffffffff is the "DHCP failed / disabled" sentinel;
+     * don't draw "255.255.255.255" in that case — the row stays blank. */
+    if (our_ip && our_ip != 0xffffffff) {
         ip_to_string(our_ip, ip_str);
-        t->draw_string(30, 126, ip_str, 0xffff);
+        t->draw_string(NETWORK_DISPLAY_X, 126, ip_str, 0xffff);
     }
+
+    if (phase_status != 0 && phase_status[0] != '\0')
+        t->draw_string(NETWORK_DISPLAY_X, 150, phase_status, 0xffff);
 
     /* Update info block with current network state */
     kosload_info.console_ip = our_ip;
@@ -216,26 +243,27 @@ void disp_info(void)
 void disp_status(const char *status)
 {
     const target_ops_t *t = common_get_target();
-    clear_lines(150, 24, global_bg_color);
-    t->draw_string(30, 150, status, 0xffff);
+    int y = runtime_status_y();
+    clear_lines(y, 24, global_bg_color);
+    t->draw_string(NETWORK_DISPLAY_X, y, status, 0xffff);
 }
 
 void disp_dhcp_attempts_count(void)
 {
     const target_ops_t *t = common_get_target();
-    clear_lines(402, 24, global_bg_color);
-    t->draw_string(30, 402, dhcp_attempts_string, STR_COLOR);
+    clear_lines(NETWORK_DHCP_ATTEMPTS_Y, 24, global_bg_color);
+    t->draw_string(NETWORK_DISPLAY_X, NETWORK_DHCP_ATTEMPTS_Y, dhcp_attempts_string, STR_COLOR);
     uint_to_string_dec(dhcp_attempts, dhcp_attempts_num);
-    t->draw_string(210, 402, dhcp_attempts_num, STR_COLOR);
+    t->draw_string(NETWORK_DISPLAY_X + 180, NETWORK_DHCP_ATTEMPTS_Y, dhcp_attempts_num, STR_COLOR);
 }
 
 void disp_dhcp_next_attempt(unsigned int time_left)
 {
     const target_ops_t *t = common_get_target();
-    clear_lines(426, 24, global_bg_color);
-    t->draw_string(30, 426, dhcp_next_string, STR_COLOR);
+    clear_lines(NETWORK_DHCP_LEASE_Y, 24, global_bg_color);
+    t->draw_string(NETWORK_DISPLAY_X, NETWORK_DHCP_LEASE_Y, dhcp_next_string, STR_COLOR);
     uint_to_string_dec(time_left, dhcp_next_counter);
-    t->draw_string(258, 426, dhcp_next_counter, STR_COLOR);
+    t->draw_string(NETWORK_DISPLAY_X + 228, NETWORK_DHCP_LEASE_Y, dhcp_next_counter, STR_COLOR);
 }
 
 /* Resync the tick-based countdown from the absolute RTC expiry.
@@ -289,7 +317,9 @@ void dhcp_poll(void)
             our_ip = 0xffffffff;
             lease_expiry_rtc = 0;
             lease_display_secs = 0;
-            update_ip_display(our_ip, dhcp_timeout_string);
+            /* Skip the "255.255.255.255 DHCP timed out" line — clear
+             * the IP row so nothing is drawn there. */
+            clear_lines(126, 24, global_bg_color);
             update_lease_time_display(0);
             return;
         }
@@ -330,11 +360,13 @@ void dhcp_poll(void)
         int dhcp_result = dhcp_go((unsigned int *)&our_ip);
         if (dhcp_result == -1 || dhcp_nest_counter_maxed)
         {
-            /* Failed: set IP to 255.255.255.255 to disable DHCP */
+            /* Failed: set IP to 255.255.255.255 to disable DHCP.
+             * Skip the visible "255.255.255.255 DHCP timed out" line —
+             * clear the IP row so nothing is drawn there. */
             our_ip = 0xffffffff;
             lease_expiry_rtc = 0;
             lease_display_secs = 0;
-            update_ip_display(our_ip, dhcp_timeout_string);
+            clear_lines(126, 24, global_bg_color);
         }
         else
         {
@@ -356,5 +388,6 @@ int main(void)
 {
     const target_ops_t *t = target_get_ops();
     common_main(t, &client_network_transport_ops);
+
     return 0;
 }

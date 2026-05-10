@@ -153,6 +153,12 @@ static int apply_target_profile(kostool_context_t *ctx, const char *profile)
     return 0;
 }
 
+/* Returns the host wall-clock face expressed as Unix-style seconds (i.e.
+ * seconds since 1970-01-01 of the local calendar, treated as if it were
+ * UTC).  Used for DC/GC, whose firmware stores the RTC as a free-running
+ * counter with on-device timezone bias and so wants "what the user's
+ * clock says" rather than true UTC.  PS2 does NOT use this — its
+ * mechacon driver is fed real Unix UTC and converts to JST internally. */
 static time_t host_local_rtc_time(time_t now) {
     struct tm local_tm;
     struct tm gm_tm;
@@ -207,6 +213,12 @@ static void usage(void) {
     printf("  -f           Fast mode (no FIFO delays)\n");
     printf("  -P, --diag   Print performance diagnostics\n");
     printf("  -w           Sync console RTC to host time\n");
+    printf("                 PS2: writes JST to mechacon (the PS2 hardware\n");
+    printf("                 convention).  The displayed clock = mechacon\n");
+    printf("                 minus the PS2 BIOS Time Zone setting, so the\n");
+    printf("                 BIOS region must match the host's actual\n");
+    printf("                 timezone or the dashboard will display offset.\n");
+    printf("                 Set it via PS2 BIOS > Configuration > Time Zone.\n");
     printf("  -U <file>    Update firmware from external file\n");
     printf("  -F           Enable automatic firmware update\n");
     printf("  -h           Show this help\n\n");
@@ -481,13 +493,25 @@ int main(int argc, char *argv[]) {
     //     printf("Chrooting to <%s>\n", ctx.chroot_path);
 
     /* Sync RTC if requested — works standalone or with any command.
-     * The DC BIOS expects local time in the AICA RTC, not UTC,
-     * so add the host's UTC offset to the timestamp. */
+     *
+     * Per-target convention:
+     *   - DC AICA / GC EXI RTCs: the firmware stores a free-running
+     *     seconds counter with no embedded timezone (DC) or a separate
+     *     SRAM bias (GC).  To make the BIOS dashboard display the user's
+     *     local clock face we send "local time as Unix seconds" — i.e.
+     *     the wall-clock interpreted as if it were UTC.
+     *   - PS2 mechacon RTC: the IOP smap.irx driver expects real Unix
+     *     UTC seconds and converts to JST internally (mechacon stores a
+     *     JST calendar; the PS2 BIOS handles per-region display).  Send
+     *     the raw host UTC timestamp.
+     */
     if (ctx.rtc_sync && transport_can_set_rtc(ctx.transport)) {
         time_t now = time(NULL);
-        time_t local_time = host_local_rtc_time(now);
+        time_t to_send = (ctx.installed_adapter == ADAPTER_PS2_BBA)
+                             ? now
+                             : host_local_rtc_time(now);
         phase_start = ctx.time_ops->time_usec();
-        ctx.transport->set_rtc(&ctx, (uint32_t)local_time);
+        ctx.transport->set_rtc(&ctx, (uint32_t)to_send);
         diag_phase(&ctx, "RTC sync", ctx.time_ops->time_usec() - phase_start);
     }
 

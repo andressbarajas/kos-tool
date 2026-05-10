@@ -188,6 +188,7 @@ typedef struct {
 #define ADAPTER_GC_BBA      0x0015  /* GameCube Broadband Adapter */
 #define ADAPTER_GC_ENC      0x2860  /* GameCube ENC28J60 (EXI-SPI) */
 #define ADAPTER_GC_W5500    0x5501  /* GameCube W5500 (EXI-SPI) */
+#define ADAPTER_PS2_BBA     0x0500  /* PlayStation 2 Broadband Adapter */
 
 /* ===== Serial Constants ===== */
 
@@ -197,13 +198,20 @@ typedef struct {
 /* Default load addresses */
 #define DC_DEFAULT_LOAD_ADDR    0x8c010000
 #define GC_DEFAULT_LOAD_ADDR    0x80003100
+#define PS2_DEFAULT_LOAD_ADDR   0x00100000
 
 /* Memory layout constants */
 #define DC_RAM_TOP          0x8d000000  /* 16 MB SH4 RAM */
 #define GC_RAM_TOP          0x81800000  /* 24 MB MEM1 */
+#define PS2_RAM_TOP         0x02000000  /* 32 MB EE RAM */
+
 #ifndef GC_LOADER_BASE
 #define GC_LOADER_BASE      0x817EC000  /* keep in sync with mk/memory.mk */
 #endif
+#ifndef PS2_LOADER_BASE
+#define PS2_LOADER_BASE     0x00100000  /* keep in sync with mk/memory.mk */
+#endif
+
 #define LZO_WRKMEM_SIZE     0x10000     /* 64 KB — LZO1X_1_MEM_COMPRESS */
 
 /* LZO work memory addresses for serial downloads.

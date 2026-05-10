@@ -27,6 +27,12 @@
 #else
 #define KOSLOAD_BASE    0x817EC000
 #endif
+#elif defined(__mips__) || defined(__mips)
+#ifdef PS2_KOSLOAD_BASE
+#define KOSLOAD_BASE    PS2_KOSLOAD_BASE
+#else
+#define KOSLOAD_BASE    0x80000280
+#endif
 #else
 #error "Unsupported architecture"
 #endif

@@ -55,6 +55,8 @@ typedef struct {
 
 /* Console-specific adapter.c selects and initializes the active driver. */
 int adapter_detect(void);
+const char *adapter_get_last_error(void);
+const char *adapter_get_phase_status(void);
 void adapter_start_static_ip(void);
 
 /* The configured adapter, used by shared network code after init succeeds. */

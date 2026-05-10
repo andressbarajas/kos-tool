@@ -1,9 +1,10 @@
 # Makefile — kosload top-level build dispatcher
 #
 # Usage:
-#   make all           Build host tool + DC + GC firmware
+#   make all           Build host tool + DC + GC + PS2 firmware
 #   make dc            Build Dreamcast firmware
 #   make gc            Build GameCube firmware
+#   make ps2           Build PlayStation 2 firmware
 #   make disc          Build all disc images (CDI + ISO)
 #   make disc-dc       Build Dreamcast CDI images
 #   make disc-gc       Build GameCube ISO images
@@ -51,6 +52,15 @@ GC_AR        := $(GC_TOOLCHAIN)/$(GC_PREFIX)ar
 GC_OBJCOPY   := $(GC_TOOLCHAIN)/$(GC_PREFIX)objcopy
 GC_SIZE      := $(GC_TOOLCHAIN)/$(GC_PREFIX)size
 
+PS2_PREFIX   := mips64r5900el-ps2-elf-
+PS2_CC       := $(PS2_EE_TOOLCHAIN)/$(PS2_PREFIX)gcc
+PS2_AR       := $(PS2_EE_TOOLCHAIN)/$(PS2_PREFIX)ar
+PS2_OBJCOPY  := $(PS2_EE_TOOLCHAIN)/$(PS2_PREFIX)objcopy
+PS2_SIZE     := $(PS2_EE_TOOLCHAIN)/$(PS2_PREFIX)size
+
+PS2_IOP_PREFIX    := mipsel-elf-
+PS2_IOP_CC        := $(PS2_IOP_TOOLCHAIN)/$(PS2_IOP_PREFIX)gcc
+
 define require_host_tool
 	@if [ ! -x "$(1)" ] && [ ! -x "$(1).exe" ]; then \
 		echo "Error: missing $(2): $(1)"; \
@@ -65,8 +75,8 @@ endef
 
 # ---------- Targets ----------
 
-.PHONY: all host dc gc gc-dol disc disc-dc disc-gc disc-auto-dc disc-auto-gc clean \
-        check-dc-toolchain check-gc-toolchain
+.PHONY: all host dc gc ps2 disc disc-dc disc-gc gc-dol disc-auto-dc disc-auto-gc clean \
+        check-dc-toolchain check-gc-toolchain check-ps2-toolchain
 
 check-dc-toolchain:
 	$(call require_host_tool,$(DC_CC),Dreamcast compiler (sh-elf-gcc),Dreamcast,DC_TOOLCHAIN)
@@ -80,7 +90,11 @@ check-gc-toolchain:
 	$(call require_host_tool,$(GC_OBJCOPY),GameCube objcopy (powerpc-eabi-objcopy),GameCube,GC_TOOLCHAIN)
 	$(call require_host_tool,$(GC_SIZE),GameCube size tool (powerpc-eabi-size),GameCube,GC_TOOLCHAIN)
 
-all: dc gc host
+check-ps2-toolchain:
+	$(call require_host_tool,$(PS2_CC),PS2 EE compiler (mips64r5900el-ps2-elf-gcc),PlayStation 2,PS2_EE_TOOLCHAIN)
+	$(call require_host_tool,$(PS2_IOP_CC),PS2 IOP compiler (mipsel-elf-gcc),PlayStation 2,PS2_IOP_TOOLCHAIN)
+
+all: dc gc ps2 host
 
 host: $(VERSION_H) | $(BUILDDIR)
 	$(MAKE) -C host ROOT=$(ROOT)
@@ -112,6 +126,15 @@ gc: check-gc-toolchain $(VERSION_H) | $(BUILDDIR)
 	@mkdir -p $(BUILDDIR)/examples/gc
 	@cp client/gamecube/build/examples/*.elf $(BUILDDIR)/examples/gc/
 	@echo "  COPY    $(BUILDDIR)/examples/gc/*.elf"
+	$(MAKE) host
+
+ps2: check-ps2-toolchain $(VERSION_H) | $(BUILDDIR)
+	$(MAKE) -C client/playstation2 ROOT=$(ROOT) all
+	@cp client/playstation2/build/ip/ps2-load-ip.elf $(BUILDDIR)/
+	@echo "  COPY    $(BUILDDIR)/ps2-load-ip.elf"
+	@mkdir -p $(BUILDDIR)/examples/ps2
+	@cp client/playstation2/build/examples/*.elf $(BUILDDIR)/examples/ps2/
+	@echo "  COPY    $(BUILDDIR)/examples/ps2/*.elf"
 	$(MAKE) host
 
 # ---------- Disc image targets ----------
