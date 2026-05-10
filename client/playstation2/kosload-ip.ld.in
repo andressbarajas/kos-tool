@@ -1,0 +1,129 @@
+/* PS2 EE linker script for kosload-ip (generated from .ld.in) */
+
+OUTPUT_FORMAT("elf32-nlittlemips", "elf32-nbigmips", "elf32-nlittlemips")
+OUTPUT_ARCH(mips:5900)
+ENTRY(_start)
+
+MEMORY
+{
+  /* This template is used twice:
+   *   - inner loader: ORIGIN = PS2_INNER_LOADER_BASE (0x80000280)
+   *   - outer ELF:    ORIGIN = PS2_LOADER_BASE       (0x00100000)
+   *
+   * The outer ELF is what the PS2 launcher loads.  It embeds the inner
+   * loader, copies it to physical 0x280, then jumps to the cached KSEG0
+   * address 0x80000280.  ORIGIN and LENGTH are filled in by the Makefile. */
+  loader (rwx) : ORIGIN = @PS2_LOADER_BASE@, LENGTH = @PS2_LOADER_SIZE@
+}
+
+SECTIONS
+{
+  .text : {
+    *(.text.crt0)
+    *(.text)
+    *(.text.*)
+    *(.stub)
+    *(.gnu.warning)
+    *(.gnu.linkonce.t*)
+  } > loader =0
+  _etext = .;
+  PROVIDE (etext = .);
+
+  .reginfo ALIGN(16) : { *(.reginfo) } > loader
+
+  .rodata ALIGN(16) : { *(.rodata) *(.rodata.*) *(.gnu.linkonce.r*) } > loader
+
+  .data ALIGN(128) : {
+    *(.data)
+    *(.data.*)
+    *(.gnu.linkonce.d*)
+    SORT(CONSTRUCTORS)
+  } > loader
+
+  .ctors ALIGN(16) : {
+    ___ctors = .;
+    KEEP (*crtbegin.o(.ctors))
+    KEEP (*(EXCLUDE_FILE (*crtend.o ) .ctors))
+    KEEP (*(SORT(.ctors.*)))
+    KEEP (*(.ctors))
+    ___ctors_end = .;
+  } > loader
+
+  .dtors ALIGN(16) : {
+    ___dtors = .;
+    KEEP (*crtbegin.o(.dtors))
+    KEEP (*(EXCLUDE_FILE (*crtend.o ) .dtors))
+    KEEP (*(SORT(.dtors.*)))
+    KEEP (*(.dtors))
+    ___dtors_end = .;
+  } > loader
+
+  .got ALIGN(16) : { *(.got.plt) *(.got) } > loader
+
+  /* MIPS global pointer: placed at start of small-data + 0x7ff0 offset
+   * to allow signed 16-bit offsets to cover the small-data sections. */
+  _gp = ALIGN(128) + 0x7ff0;
+
+  .lit4 ALIGN(16) : { *(.lit4) } > loader
+  .lit8 ALIGN(16) : { *(.lit8) } > loader
+
+  /DISCARD/ : {
+    *(.MIPS.abiflags)
+    *(.gnu.attributes)
+  }
+
+  .sdata ALIGN(16) : {
+    *(.sdata)
+    *(.sdata.*)
+    *(.gnu.linkonce.s.*)
+  } > loader
+
+  . = ALIGN(128);
+  _edata = .;
+  PROVIDE (edata = .);
+  _fbss = .;
+  PROVIDE (fbss = .);
+  __bss_start = .;
+
+  .sbss ALIGN(16) : {
+    *(.dynsbss)
+    *(.sbss)
+    *(.sbss.*)
+    *(.scommon)
+  } > loader
+
+  .bss ALIGN(128) : {
+    *(.dynbss)
+    *(.bss)
+    *(.bss.*)
+    *(COMMON)
+    . = ALIGN(4096);
+  } > loader
+  . = ALIGN(4096);
+  _end = .;
+  PROVIDE (end = .);
+
+  /* Debug sections */
+  .debug          0 : { *(.debug) }
+  .line           0 : { *(.line) }
+  .debug_srcinfo  0 : { *(.debug_srcinfo) }
+  .debug_sfnames  0 : { *(.debug_sfnames) }
+  .debug_aranges  0 : { *(.debug_aranges) }
+  .debug_pubnames 0 : { *(.debug_pubnames) }
+  .debug_info     0 : { *(.debug_info) }
+  .debug_abbrev   0 : { *(.debug_abbrev) }
+  .debug_line     0 : { *(.debug_line) }
+  .debug_frame    0 : { *(.debug_frame) }
+  .debug_str      0 : { *(.debug_str) }
+  .debug_loc      0 : { *(.debug_loc) }
+  .debug_macinfo  0 : { *(.debug_macinfo) }
+
+  /* Reserve a private stack region near the top of the loader allocation. */
+  _stack_size = 128 * 1024;
+  _stack = ORIGIN(loader) + LENGTH(loader) - _stack_size;
+  _stack_top = ORIGIN(loader) + LENGTH(loader);
+  _heap_size = -1;
+
+  ASSERT(( (_stack - _end) > 4096 ), "Error: Not enough heap/stack gap: need at least 4096 bytes")
+  ASSERT(( _end <= (ORIGIN(loader) + LENGTH(loader)) ), "Error: Region 'loader' overflowed")
+}

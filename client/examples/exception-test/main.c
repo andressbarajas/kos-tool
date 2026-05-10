@@ -9,6 +9,8 @@
  *        This works regardless of MMU state (kosload runs with MMU off).
  * On GC: triggers a DSI (data storage interrupt) by reading from
  *         an invalid address
+ * On PS2: triggers an Address Error on Load (AdEL, excode=4) by doing a
+ *         misaligned 32-bit read.  Same approach as DC.
  *
  * The expected result is the exception handler displaying register
  * values on the video output, then returning to kosload.
@@ -24,6 +26,12 @@
 #define KOSLOAD_BASE    GC_KOSLOAD_BASE
 #else
 #define KOSLOAD_BASE    0x817EC000
+#endif
+#elif defined(__mips__) || defined(__mips)
+#ifdef PS2_KOSLOAD_BASE
+#define KOSLOAD_BASE    PS2_KOSLOAD_BASE
+#else
+#define KOSLOAD_BASE    0x80000280
 #endif
 #else
 #error "Unsupported architecture"
@@ -76,6 +84,8 @@ void start(void)
     bad_addr = (volatile unsigned int *)0x8c000002;  /* misaligned */
 #elif defined(__PPC__) || defined(__powerpc__)
     bad_addr = (volatile unsigned int *)0xC0000000;
+#elif defined(__mips__) || defined(__mips)
+    bad_addr = (volatile unsigned int *)0x80000002;  /* misaligned 32-bit load → AdEL */
 #endif
 
     /* This read should trigger the exception */

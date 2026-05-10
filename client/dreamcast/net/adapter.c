@@ -33,6 +33,7 @@ adapter_t *bb;
 __attribute__((aligned(32))) unsigned char raw_current_pkt[RAW_RX_PKT_BUF_SIZE];
 /* Offset by 2 for command->data alignment after Ethernet + IP + UDP headers */
 __attribute__((aligned(2))) unsigned char *current_pkt = &(raw_current_pkt[2]);
+static const char *last_error = "NO ETHERNET ADAPTER DETECTED!";
 
 static int dc_hardware_type(void)
 {
@@ -129,16 +130,31 @@ int adapter_detect(void)
         if (adapter_w5500.detect() >= 0) {
             bb = &adapter_w5500;
         } else {
+            last_error = "NO ETHERNET ADAPTER DETECTED!";
             return -1;
         }
     }
 
     /* Initialize the chosen adapter */
-    if (bb->init() < 0)
+    if (bb->init() < 0) {
+        last_error = "NETWORK ADAPTER INIT FAILED!";
         return -1;
+    }
+
+    last_error = "NO ETHERNET ADAPTER DETECTED!";
 
     escape_loop = 0;
 
+    return 0;
+}
+
+const char *adapter_get_last_error(void)
+{
+    return last_error;
+}
+
+const char *adapter_get_phase_status(void)
+{
     return 0;
 }
 
