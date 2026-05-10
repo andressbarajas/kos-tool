@@ -647,10 +647,20 @@ volatile ee_sif_cmd_header_t *ee_sif_poll_packet(uint32_t cid,
 int ee_sif_wait_iop_bootend(void) {
     unsigned int i;
 
-    /* EESYNC publishes BOOTEND on SMFLG after LOADCORE's boot phase 2. */
-    //ee_sif_status("PHASE1: IOP BOOT?");
+    /* IOP readiness can show up two ways:
+     *   1. BIOS EESYNC raises BOOTEND in SMFLG after LOADCORE phase 2.
+     *      Set on real hardware before any user ELF runs.
+     *   2. IOP-side SIFCMD writes its recv-buffer address into SUBADDR
+     *      (SMCOM) when its initialisation completes.  This is the only 
+     *      one PCSX2 reliably sets — its BIOS HLE skips the BOOTEND 
+     *      SMFLG write.
+     * Either is sufficient for our purposes; exit on whichever appears
+     * first.  On real hardware BOOTEND wins on iteration 0; on PCSX2
+     * SUBADDR is already non-zero by the time we get here. */
     for (i = 0; i < POLL_TIMEOUT; i++) {
-        if((uint32_t)ee_sif_get_reg(SIF_REG_SMFLAG) & EE_SIF_STAT_BOOTEND)
+        if ((uint32_t)ee_sif_get_reg(SIF_REG_SMFLAG) & EE_SIF_STAT_BOOTEND)
+            return 0;
+        if ((uint32_t)ee_sif_get_reg(SIF_REG_SUBADDR) != 0)
             return 0;
     }
 

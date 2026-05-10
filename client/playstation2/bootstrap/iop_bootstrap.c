@@ -82,6 +82,11 @@ static void ee_delay(unsigned long loops);
 static void set_phase1_status(const char *s)
 {
     (void)s;
+    /* Surface the latest bootstrap phase so adapter_get_phase_status
+     * can prefix it onto network_init_error_msg.  When DEV9 init
+     * fails the user sees e.g. "PHASE1: IOP RESET FAIL | DEV9 INIT
+     * FAILED" on the red error screen instead of just the umbrella
+     * "DEV9 INIT FAILED" — telling them which sub-step died. */
     //phase1_status = (s != 0) ? s : "PHASE1: UNKNOWN";
 }
 
@@ -465,14 +470,18 @@ int ps2_bootstrap_iop_dev9_init(iop_dev9_diag_t *diag)
     reset_ee_sif_session();
     //set_phase1_status("PHASE1: START");
 
-    if (ee_sif_wait_iop_bootend() < 0) {
-        //set_phase1_status("PHASE1: BOOTEND TIMEOUT");
-        diag->result = -20;
-        return -20;
-    }
+    /* Best-effort BOOTEND wait — on real hardware BIOS EESYNC sets the
+     * flag before any user ELF runs, so the call returns immediately.
+     * Under PCSX2 the BIOS HLE may skip the SMFLAG write entirely; the
+     * call then spins out its full timeout (slow but bounded) and
+     * returns -1.  We no longer treat absence as fatal — ee_sif_cmd_init
+     * below is the real gate: it reads SIF_SYSREG_SUBADDR (set by
+     * IOP-side SIFCMD when ready) and returns -2 if the IOP isn't
+     * talking. */
+    (void)ee_sif_wait_iop_bootend();
 
     if (ee_sif_cmd_init() < 0) {
-        //set_phase1_status("PHASE1: SIFCMD FAIL");
+        //set_phase1_status("PHASE1: SIFCMD FAIL (no SUBADDR)");
         diag->result = -21;
         return -21;
     }
@@ -485,6 +494,7 @@ int ps2_bootstrap_iop_dev9_init(iop_dev9_diag_t *diag)
     //set_phase1_status("PHASE1: IOP RESET");
     reset_rc = ee_sif_iop_reset(0);
     if (reset_rc < 0) {
+        //set_phase1_status("PHASE1: IOP RESET FAIL");
         diag->result = -26;
         return -26;
     }
@@ -508,10 +518,11 @@ int ps2_bootstrap_iop_dev9_init(iop_dev9_diag_t *diag)
 
     if (ee_sif_rpc_bind_retry(&ee_loadfile_client,
                               EE_SIF_LOADFILE_RPC_ID, 64u) < 0) {
-        //set_phase1_status("PHASE1: BIND FAIL");
+        //set_phase1_status("PHASE1: LOADFILE BIND FAIL");
         diag->result = -23;
         return -23;
     }
+    //set_phase1_status("PHASE1: LOADFILE BIND OK");
 
     /* Interrupt-driven SIF receive is intentionally DISABLED here.
      *
@@ -540,13 +551,16 @@ int ps2_bootstrap_iop_dev9_init(iop_dev9_diag_t *diag)
      * IRX gets loaded but relocations are never applied — the
      * `lui $r, 0; addiu $r, $r, 0` pairs encoding `&function`
      * stay at zero, and `jal 0` halts the IOP. */
+    //set_phase1_status("PHASE1: LMB patch");
     lmb_rc = ee_sif_apply_lmb_patch();
     if (lmb_rc < 0) {
+        //set_phase1_status("PHASE1: LMB patch FAIL");
         diag->result = -25;
         return -25;
     }
-    //set_phase1_status("PHASE1: LMB OK");
+    //set_phase1_status("PHASE1: LMB patch OK");
 
+    //set_phase1_status("PHASE1: kosdev9.irx LMB load");
     result = load_dev9_irx();
     if (result < 0) {
         /* load_dev9_irx() always set a more-specific status before
@@ -556,9 +570,11 @@ int ps2_bootstrap_iop_dev9_init(iop_dev9_diag_t *diag)
          * was a bug: every status starts with "PHASE1: " so the first
          * char is always 'P', so the overwrite always fired and hid
          * which sub-step actually failed. */
+        //set_phase1_status("PHASE1: kosdev9.irx LOAD FAIL");
         diag->result = -24;
         return -24;
     }
+    //set_phase1_status("PHASE1: kosdev9.irx LOADED");
 
     //set_phase1_status("PHASE1: POLL MBOX");
     mbox = (volatile const struct iop_mailbox *)(IOP_UNCACHED_BASE + IOP_DEV9_MBOX_ADDR);
@@ -598,6 +614,7 @@ int ps2_bootstrap_iop_dev9_init(iop_dev9_diag_t *diag)
         cache_flush_dc((const void *)&load_args, sizeof(load_args));
         cache_flush_dc((const void *)&load_result, sizeof(load_result));
 
+        //set_phase1_status("PHASE1: smap.irx LMB load");
         if (ee_sif_rpc_call(&ee_loadfile_client,
                             LOADFILE_LOAD_BUF_CID,
                             (const void *)&load_args,
@@ -611,7 +628,7 @@ int ps2_bootstrap_iop_dev9_init(iop_dev9_diag_t *diag)
                 (volatile load_module_buffer_result_t *)
                 EE_UNCACHED(&load_result);
             if ((int)result_view->result < 0) {
-                //set_phase1_status("PHASE1: SMAP LMB REJ");
+                //set_phase1_status("PHASE1: SMAP LMB REJECTED");
                 g_smap_bootstrap_result = -1;
             } else {
                 set_phase1_status("PHASE1: SMAP LOADED");
