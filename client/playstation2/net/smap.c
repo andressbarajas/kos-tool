@@ -377,13 +377,13 @@ static void smap_loop_adapter(bool is_main_loop) {
 #endif
             smap_update_link_status();
             dhcp_tick();   /* lease countdown — always, no network ops */
-            /* g_last_link_state reflects the IRX-reported link snapshot
-             * (refreshed by the smap_update_link_status() call above).
-             * The 0xffffffff sentinel means "never read yet" — treat as
-             * not-up so we don't waste DISCOVER attempts before the IRX
-             * has reported in. */
-            if(g_last_link_state != 0xffffffffu &&
-               g_last_link_state != PS2_SMAP_LINK_DOWN)
+            /* Only a *known* link-DOWN suppresses DHCP.  An unread or
+             * unknown snapshot (0xffffffff sentinel) must NOT gate it
+             * off: dhcp_go/dhcp_renew tolerate no-link (they retry), and
+             * blocking on "unknown" stalls acquisition forever when the
+             * IRX hot-snapshot is slow/failing after a loader re-entry
+             * (symptom: intermittent blank IP + DHCP lease 0). */
+            if(g_last_link_state != PS2_SMAP_LINK_DOWN)
                 dhcp_poll();
             screensaver_poll();
         }

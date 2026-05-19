@@ -372,13 +372,15 @@ void dhcp_poll(void)
         int dhcp_result = dhcp_go((unsigned int *)&our_ip);
         if (dhcp_result == -1 || dhcp_nest_counter_maxed)
         {
-            /* Failed: set IP to 255.255.255.255 to disable DHCP.
-             * Skip the visible "255.255.255.255 DHCP timed out" line —
-             * clear the IP row so nothing is drawn there. */
-            our_ip = 0xffffffff;
+            /* Transient failure (cold-start IRX RX not live yet, OFFER
+             * lost, ...).  Stay in the "no IP yet" state so the next
+             * dhcp_poll() re-runs the full DISCOVER sequence — never
+             * permanently disable DHCP on a timeout. */
+            our_ip = 0;
+            dhcp_nest_counter_maxed = 0;
             lease_expiry_rtc = 0;
             lease_display_secs = 0;
-            clear_lines(126, 24, global_bg_color);
+            dhcp_waiting_mode_display();
         }
         else
         {
