@@ -10,9 +10,11 @@
  * All drawing is done by sending GIF packets via DMA channel 2.
  */
 
+#include <stdint.h>
+
 #include "video.h"
 #include "cache.h"
-#include <stdint.h>
+#include "ee_cop0.h"
 
 /* ===== GS Privileged Registers (KSEG1 mapped, 64-bit) ===== */
 
@@ -22,6 +24,7 @@
 #define GS_SMODE2       (*(volatile uint64_t *)(GS_PRIV_BASE + 0x20))
 #define GS_DISPFB1      (*(volatile uint64_t *)(GS_PRIV_BASE + 0x70))
 #define GS_DISPLAY1     (*(volatile uint64_t *)(GS_PRIV_BASE + 0x80))
+#define GS_BGCOLOR      (*(volatile uint64_t *)(GS_PRIV_BASE + 0xE0))
 #define GS_CSR          (*(volatile uint64_t *)(GS_PRIV_BASE + 0x1000))
 
 /* ===== GIF DMA Channel (DMA channel 2) ===== */
@@ -35,14 +38,24 @@
 /* DMA control registers */
 #define DMA_CTRL        (*(volatile uint32_t *)0xB000E000)
 #define DMA_STAT        (*(volatile uint32_t *)0xB000E010)
+#define DMA_PCR         (*(volatile uint32_t *)0xB000E020)
+#define DMA_SQWC        (*(volatile uint32_t *)0xB000E030)
+
+#define DMA_CTRL_DMAE       0x00000001u
+#define DMA_STAT_GIF        0x00000004u
+#define DMA_PCR_CDE_GIF     0x00040000u
+#define DMA_CHCR_STR        0x00000100u
+
+/* DMAC global hold (CPND) — used to force-abort a wedged channel.
+ * Same registers/bit ee_sif.c's dmac_force_stop() uses for SIF. */
+#define DMAC_ENABLER    (*(volatile uint32_t *)0xB000F520)
+#define DMAC_ENABLEW    (*(volatile uint32_t *)0xB000F590)
+#define DMAC_CPND       0x00010000u
 
 /* GIF unit control register (NOT the GIF DMA channel).
  * Writing bit 0 (RST) resets the GIF path controller. */
 #define GIF_UNIT_CTRL   (*(volatile uint32_t *)0xB0003000)
-
-/* Debug: GS BGCOLOR register — works without any video init.
- * Used to trace execution on real hardware when no other output is available. */
-#define GS_BGCOLOR      (*(volatile uint64_t *)(GS_PRIV_BASE + 0xE0))
+#define GIF_UNIT_STAT   (*(volatile uint32_t *)0xB0003020)
 
 /* ===== GIF Tag and GS Register Macros ===== */
 
@@ -111,32 +124,82 @@
 
 /* ===== GIF DMA transfer ===== */
 
+/* Bounded budget for the ch2 STR-clear wait.  A healthy GIF DMA of a few
+ * quadwords completes in microseconds; the old debug code already flagged
+ * a spin count of 0x100000 (~1M) as pathological.  4M gives any real
+ * transfer an enormous margin while still capping a wedged channel to a
+ * fraction of a second instead of an infinite spin.  Mirrors ee_sif.c,
+ * where every hardware wait is POLL_TIMEOUT-bounded. */
+#define GIF_DMA_WAIT_BUDGET  0x00400000
+
+/* Defined later in this file; used by gif_dma_recover() below. */
+static void gif_dma_stop_held(void);
+static void gif_unit_reset(void);
+
+/* Repair an inherited / wedged DMAC ch2 + GIF unit.  This is exactly the
+ * sequence ps2_video_init() already trusts for -F-inherited state; kept
+ * in one place so gif_dma_send()'s retry and video init cannot diverge. */
+static void gif_dma_recover(void)
+{
+    gif_dma_stop_held();   /* DMAC hold, ch2 CHCR/QWC=0, release */
+    gif_unit_reset();      /* GIF_CTRL.RST: clear PATH3/PSE inside GIF */
+    DMA_CTRL = DMA_CTRL_DMAE;
+    DMA_SQWC = 0;
+    DMA_PCR  = DMA_PCR | DMA_PCR_CDE_GIF;
+    DMA_STAT = DMA_STAT_GIF;   /* clear any latched ch2 status */
+}
+
 /*
  * Send a GIF packet via DMA channel 2.
  * data must be 16-byte aligned and in cached memory (we flush before DMA).
  * qwc = number of quadwords (128-bit units) to transfer.
+ *
+ * A firmware-update (-F) handoff can hand us DMAC ch2 / the GIF unit
+ * mid-transfer (there is no Sony-style exiting-side teardown), so the
+ * STR bit may never clear.  Bound the wait; on a wedge run the
+ * inherited-state repair and retry once; if it still wedges, return
+ * rather than freeze the machine.
  */
 static void gif_dma_send(void *data, unsigned int qwc)
 {
+    unsigned int attempt;
+
     /* Flush cached packet writes so DMA sees them. Packets written through
      * KSEG1 are already uncached and must not be written back from stale
      * cached lines. */
     if (((uint32_t)data & 0xE0000000) != 0xA0000000)
         cache_flush_dc(data, qwc * 16);
 
-    /* Enable DMA if not already enabled */
-    DMA_CTRL = 1;
+    for (attempt = 0; attempt < 2; attempt++) {
+        uint32_t spin = 0;
 
-    /* Set source address (physical) and quadword count */
-    GIF_MADR = PHYSADDR(data);
-    GIF_QWC  = qwc;
+        /* (Re)enable DMA + arm ch2.  Repeated on the retry path because
+         * gif_dma_recover() tears the channel down. */
+        if ((DMAC_ENABLER & DMAC_CPND) != 0) {
+            DMAC_ENABLEW = DMAC_ENABLER & ~DMAC_CPND;
+            (void)DMAC_ENABLER;
+        }
+        DMA_CTRL = DMA_CTRL_DMAE;
+        DMA_PCR  = DMA_PCR | DMA_PCR_CDE_GIF;
 
-    /* Start transfer: normal mode, DIR=0 (from memory), STR=1 (start) */
-    GIF_CHCR = 0x0100;
+        /* Source address (physical) + quadword count, then start:
+         * normal mode, DIR=0 (from memory), STR=1. */
+        GIF_MADR = PHYSADDR(data);
+        GIF_QWC  = qwc;
+        GIF_CHCR = DMA_CHCR_STR;
 
-    /* Wait for transfer to complete (STR bit clears) */
-    while (GIF_CHCR & 0x0100)
-        ;
+        while (GIF_CHCR & DMA_CHCR_STR) {
+            if (++spin >= GIF_DMA_WAIT_BUDGET)
+                break;
+        }
+        if ((GIF_CHCR & DMA_CHCR_STR) == 0)
+            return;                       /* transfer completed */
+
+        /* Wedged — repair the channel and retry once. */
+        gif_dma_recover();
+    }
+    /* Both attempts wedged: GS/DMAC is unrecoverable from here.  Don't
+     * hang — let bring-up continue. */
 }
 
 /* ===== GIF packet buffer ===== */
@@ -156,7 +219,7 @@ static uint64_t pkt_buf[PKT_MAX_QWORDS * 2] __attribute__((aligned(16)));
 static void gs_fill_rect(int x, int y, int w, int h,
                           uint8_t r, uint8_t g, uint8_t b)
 {
-    uint64_t *p = (uint64_t *)UNCACHED_ADDR(pkt_buf);
+    uint64_t *p = (uint64_t *)pkt_buf;
 
     /* GIFtag: NLOOP=4, EOP=1, PACKED mode, NREG=1, REG=A+D */
     p[0] = GIF_TAG(4, 1, 0, 0, 0, 1);
@@ -214,16 +277,54 @@ static void color_to_rgb(uint32_t color, uint8_t *r, uint8_t *g, uint8_t *b)
 
 /* ===== Public API ===== */
 
+static void gif_dma_stop_held(void)
+{
+    uint32_t status = ee_cop0_read_status();
+    uint32_t saved;
+
+    ee_cop0_write_status(status & ~EE_COP0_STATUS_IE);
+    saved = DMAC_ENABLER;
+    DMAC_ENABLEW = saved | DMAC_CPND;
+    (void)DMAC_ENABLER;
+    (void)GIF_CHCR;
+    (void)DMA_CTRL;
+    GIF_CHCR = 0;
+    GIF_QWC = 0;
+    (void)GIF_CHCR;            /* MMIO read-back drains the EE write buffer */
+    /* This is early hardware ownership, not a temporary pause/resume.  If a
+     * previous context left the whole DMAC held, release it before video DMA. */
+    DMAC_ENABLEW = saved & ~DMAC_CPND;
+    (void)DMAC_ENABLER;
+    ee_cop0_write_status(status);
+}
+
+
+static void gif_unit_reset(void)
+{
+    GIF_UNIT_CTRL = 1;         /* RST */
+    (void)GIF_UNIT_STAT;
+    GIF_UNIT_CTRL = 0;         /* PSE=0: ensure transfer processing is live */
+    (void)GIF_UNIT_STAT;
+}
+
 void ps2_video_init(void)
 {
     uint64_t *p;
 
     /* Initialize DMAC for bare-metal operation.
-     * We must ensure DMAC is enabled and the GIF DMA channel is idle
-     * before any GIF transfers. */
-    DMA_CTRL = 1;          /* DMAE = 1: enable DMA engine */
-    DMA_STAT = (1 << 2);   /* Clear GIF channel interrupt status */
-    GIF_CHCR = 0;          /* Ensure GIF DMA channel is idle */
+     * A firmware update enters here with EE hardware inherited from the
+     * previous loader.  Repair the global state that controls whether ch2 can
+     * execute at all, not just the ch2 STR bit:
+     *   - DMA_CTRL clears any stale stall/MFIFO mode while enabling DMA.
+     *   - DMA_PCR.CDE2 lets GIF run if priority control was left enabled.
+     *   - GIF_CTRL.RST clears PATH3/PSE state inside the GIF unit itself.
+     */
+    gif_dma_stop_held();
+    gif_unit_reset();
+    DMA_CTRL = DMA_CTRL_DMAE;
+    DMA_SQWC = 0;
+    DMA_PCR = DMA_PCR | DMA_PCR_CDE_GIF;
+    DMA_STAT = DMA_STAT_GIF;
 
     /* Fully configure display for NTSC 640x480 interlaced.
      * The BIOS/uLaunchELF may have been using circuit 2 or a different
@@ -263,7 +364,7 @@ void ps2_video_init(void)
     GS_BGCOLOR = 0;
 
     /* Send GIF packets to configure GS drawing environment */
-    p = (uint64_t *)UNCACHED_ADDR(pkt_buf);
+    p = (uint64_t *)pkt_buf;
 
     /* GIFtag: NLOOP=4, EOP=1, PACKED, NREG=1, REG=A+D */
     p[0] = GIF_TAG(4, 1, 0, 0, 0, 1);
@@ -333,7 +434,7 @@ static void ps2_video_draw_char(int x, int y, char c,
      * Plus GIFtag (1 QW) + PRIM (1 QW) + RGBAQ (1 QW) = 3 QW overhead.
      * Max payload = PKT_MAX_QWORDS - 3 = 63 pixels per batch.
      * A 12x24 glyph has at most 288 pixels, typically ~100 foreground. */
-    p = (uint64_t *)UNCACHED_ADDR(pkt_buf);
+    p = (uint64_t *)pkt_buf;
     int batch_count = 0;
     int total_nloop;
 
@@ -377,7 +478,7 @@ static void ps2_video_draw_char(int x, int y, char c,
     }
 done:
     /* Total quadwords = 1 (GIFtag) + total_nloop (data) */
-    gif_dma_send((void *)UNCACHED_ADDR(pkt_buf), 1 + total_nloop);
+    gif_dma_send((void *)pkt_buf, 1 + total_nloop);
 }
 
 void ps2_video_draw_string(int x, int y, const char *str, uint32_t color)
@@ -428,7 +529,7 @@ void ps2_video_draw_bitmap(int x, int y, int w, int h,
             row_pixels = PKT_MAX_QWORDS - 1 - 2;
 
         int total_nloop = 2 + row_pixels;
-        uint64_t *p = (uint64_t *)UNCACHED_ADDR(pkt_buf);
+        uint64_t *p = (uint64_t *)pkt_buf;
 
         p[0] = GIF_TAG(total_nloop, 1, 0, 0, 0, 1);
         p[1] = GIF_AD;
@@ -454,7 +555,7 @@ void ps2_video_draw_bitmap(int x, int y, int w, int h,
             }
         }
 
-        gif_dma_send((void *)UNCACHED_ADDR(pkt_buf), 1 + total_nloop);
+        gif_dma_send((void *)pkt_buf, 1 + total_nloop);
     }
 }
 

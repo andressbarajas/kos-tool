@@ -8,7 +8,6 @@
 
 /* Colors in 0x00RRGGBB format */
 #define BBA_BG_COLOR   0x001C81B3   /* PlayStation 2 blue */
-#define ERROR_BG_COLOR 0x00400000   /* Dark red */
 #define STR_COLOR      0x00FFFFFF   /* White */
 
 /* SMAP uses same BG as BBA on PS2 */

@@ -434,7 +434,6 @@ const target_ops_t dreamcast_target_ops = {
     .clear_screen = dc_clear_screen,
     .setup_video = dc_setup_video,
     .execute = dc_execute,
-    .execute_handoff = dc_execute,    /* go() saves are harmless */
     .disable_cache = dc_disable_cache_op,
     .reboot = dc_reboot,
     .cdfs_redir_save = dc_cdfs_redir_save_op,

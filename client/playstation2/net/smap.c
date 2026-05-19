@@ -333,11 +333,6 @@ static void smap_loop_adapter(bool is_main_loop) {
                     break;
             }
 
-            uint64_t deadline = t->get_ticks() +
-                (uint64_t)t->ticks_per_second * LINK_SETTLE_SECS;
-            while(t->get_ticks() < deadline)
-                ;
-
             g_loader_settled = 1;
             g_link_seen_up = 1;
             g_last_link_state = hot.link_state;

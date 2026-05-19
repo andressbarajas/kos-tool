@@ -635,9 +635,9 @@ void ee_sif_rearm_receive(void);
     \ingroup ee_sif
 
     This is the local replacement for the resident EE BIOS SifSetDChain syscall.
-    It does not call the syscall; it resets SIF0 QWC and starts EE DMAC channel
-    5 with CHCR 0x184 (busy, chain mode, tag-transfer enabled). The channel can
-    be armed before the IOP has reply data ready.
+    It does not call the syscall; when SIF0 is idle, it resets SIF0 QWC and
+    starts EE DMAC channel 5 with CHCR 0x184 (busy, chain mode, tag-transfer
+    enabled). The channel can be armed before the IOP has reply data ready.
 */
 void ee_sif_set_dchain(void);
 

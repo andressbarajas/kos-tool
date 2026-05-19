@@ -23,6 +23,7 @@
 #include "iop_smap.h"
 #include "iop/smap_protocol.h"
 #include "ps2_memory_map.h"
+#include "video.h"   /* DEBUG: on-screen dump-and-halt */
 
 /* Convert an IOP RAM address into the EE address that reads the same bytes.
  * IOP RAM is only 2 MB; from the EE it appears under the 0xBC000000 bridge. */
@@ -31,6 +32,15 @@
 
 /* Maximum number of bind retries.  ps2-load-ip's other clients use 64. */
 #define SMAP_BIND_ATTEMPTS  64u
+
+/* Bounded busy-poll budget for the SMAP RPC-ready sentinel.  Same order
+ * of magnitude as the dev9 mailbox poll in iop_bootstrap.c (which the
+ * comment there documents as covering a few seconds on real hardware).
+ * smap_rpc_thread publishes READY within milliseconds of _start
+ * returning once the IOP scheduler runs it, so in practice this passes
+ * on the first read; the cap only exists so a never-ready IRX fails
+ * cleanly instead of hanging. */
+#define SMAP_READY_POLL_BUDGET  200000000
 
 /* Static state — populated by ps2_smap_init() and used by the
  * subsequent send/poll calls. */
@@ -122,9 +132,50 @@ int ps2_smap_init(void)
 
     memset((void *)&smap_client, 0, sizeof(smap_client));
 
+    /* Gate the bind on smap.irx's RPC-ready sentinel.  smap.irx's _start
+     * returns RESIDENT_END before its smap_rpc_thread has run
+     * RpcRegister() + smap_register_queue_workaround(); LMB-return does
+     * NOT mean the server is bindable.  On cold boot IOP-IPL timing hides
+     * this, but on -F (IOP reset mid-session) the EE can bind a not-yet-
+     * registered server and get a garbage server/buf that wild-DMAs (the
+     * observed TLBS fault).  The sentinel is the load-bearing fix here: a
+     * numeric range check on server/buf can't catch it because the bad
+     * value lands inside IOP RAM.  See PS2_SMAP_READY_* in
+     * smap_protocol.h.  The bootstrap pre-cleared this word before the
+     * smap.irx LMB load, so a stale READY can't survive the IOP reset. */
+    {
+        volatile uint32_t *ready =
+            (volatile uint32_t *)EE_IOP_UNCACHED(PS2_SMAP_READY_IOP_PHYS);
+        uint32_t spins = 0;
+        while (*ready != PS2_SMAP_READY_MAGIC) {
+            if (++spins >= SMAP_READY_POLL_BUDGET)
+                return -6;   /* server never came up — fail cleanly */
+        }
+    }
+
     if (ee_sif_rpc_bind_retry(&smap_client, PS2_SMAP_RPC_ID,
                               SMAP_BIND_ATTEMPTS) < 0)
         return -1;
+
+    /* Defensive secondary net: a healthy bind yields IOP-RAM pointers
+     * (cold-boot reference buf ~0x0004CC8C).  Reject an obviously bad
+     * server/buf (0 or outside the 2 MB IOP RAM window) rather than let
+     * ee_sif_rpc_call() DMA through it — its only guard is buf != 0.
+     * NOTE: this is intentionally coarse; it catches 0 / out-of-RAM but
+     * NOT the resident-SIFCMD-range garbage (~0x3590) seen on -F, which
+     * is in-range.  The sentinel gate above is what actually prevents
+     * that case; this check is belt-and-suspenders. */
+    {
+        uint32_t srv = (uint32_t)(uintptr_t)smap_client.server;
+        uint32_t buf = (uint32_t)(uintptr_t)smap_client.buf;
+        if (srv == 0 || srv >= 0x00200000 ||
+            buf == 0 || buf >= 0x00200000)
+            return -7;
+    }
+
+    /* (SMAP BIND DIAG dump+halt removed 2026-05-18 — hardware-confirmed
+     * that -F now binds the real server: buf=0x0004CC8C / server=0x0004CD8C,
+     * matching the cold-boot reference.) */
 
     memset(&smap_layout_rsp, 0, sizeof(smap_layout_rsp));
     rc = rpc_call_sync(PS2_SMAP_FNO_GET_LAYOUT,

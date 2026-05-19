@@ -16,7 +16,6 @@
 #include "cache.h"
 #include "ee_cop0.h"
 #include "ee_sif.h"
-#include "iop_handoff_marker.h"
 #include "iop_smap.h"
 
 /* From go.S */
@@ -24,6 +23,18 @@ extern void go(unsigned int addr);
 
 /* From exception.S */
 extern void exception_common(void);
+
+static void ps2_quiesce_cop0_timer(void)
+{
+    uint32_t status = ee_cop0_read_status();
+
+    /* The loader polls COP0 Count for timekeeping; it never needs the COP0
+     * timer interrupt.  A firmware update can inherit Cause.IP7 from the old
+     * EE context, so acknowledge Compare and keep the timer mask down. */
+    ee_cop0_write_status(status & ~(EE_COP0_STATUS_IE |
+                                    EE_COP0_STATUS_INT5_TIMER));
+    ee_cop0_write_compare(0xffffffffu);
+}
 
 /* ===== Exception vector installation ===== */
 
@@ -44,7 +55,8 @@ extern void exception_common(void);
  */
 static void install_exception_stub(uint32_t vector_addr)
 {
-    volatile uint32_t *dst = (volatile uint32_t *)vector_addr;
+    volatile uint32_t *dst =
+        (volatile uint32_t *)((vector_addr & 0x1fffffffu) | 0xa0000000u);
     uint32_t handler = (uint32_t)exception_common;
     uint16_t hi = (handler >> 16) & 0xFFFF;
     uint16_t lo = handler & 0xFFFF;
@@ -58,8 +70,11 @@ static void install_exception_stub(uint32_t vector_addr)
     /* nop (branch delay slot) */
     dst[3] = 0x00000000;
 
-    /* Flush D-cache and invalidate I-cache for the stub */
-    cache_flush_range((const void *)vector_addr, 16);
+    /* KSEG1 stores bypass D-cache.  The firmware-update trampoline already
+     * index-invalidates the whole I-cache before entering this loader, so do
+     * not issue hit-based cache ops against the vector area here. */
+    (void)vector_addr;
+    __asm__ volatile("sync.l\nsync.p" ::: "memory");
 }
 
 /*
@@ -79,79 +94,59 @@ extern void progexit(int status);
 /* Save area size from exception.S: 416 bytes */
 #define EXC_SAVE_AREA_SIZE  416
 
+static volatile uint32_t exception_depth;
+static char exception_first_line[] =
+    "EX C=00000000 E=00 EPC=00000000 BAD=00000000";
+static char exception_second_line[] =
+    "SP=00000000 RA=00000000 GP=00000000";
+
+static void hex_byte(char *dst, uint32_t value)
+{
+    static const char hex[] = "0123456789ABCDEF";
+
+    dst[0] = hex[(value >> 4) & 0x0f];
+    dst[1] = hex[value & 0x0f];
+}
+
+static void hex_word(char *dst, uint32_t value)
+{
+    hex_byte(dst + 0, value >> 24);
+    hex_byte(dst + 2, value >> 16);
+    hex_byte(dst + 4, value >> 8);
+    hex_byte(dst + 6, value);
+}
+
 void exception_handler_c(uint32_t cause, uint32_t epc, uint32_t *save_area)
 {
-    /* Re-init video in case the launcher's GS state diverged from
-     * ours, then paint a red background so the exception screen is
-     * unmistakable. */
-    ps2_video_init();
-    ps2_video_clear(0x000000a0);  /* dark red */
-
-    /* ExcCode = Cause bits 6:2 (0=Int, 4=AdEL, 5=AdES, 6=IBE, 7=DBE,
-     * 8=Sys, 9=Bp, 10=RI, 11=CpU, 12=Ov, 13=Tr).  IP=Cause bits 15:8. */
     uint32_t excode = (cause >> 2) & 0x1Fu;
-    uint32_t ip     = (cause >> 8) & 0xFFu;
+    uint32_t bvaddr = ee_cop0_read_badvaddr();
+    uint32_t sp;
+    uint32_t ra;
+    uint32_t gp;
 
-    /* COP0 from save area (sw/lw — 32-bit fields). */
-    uint32_t status   = save_area[0x104 / 4];
-    uint32_t bvaddr   = save_area[0x10C / 4];
+    if (exception_depth++ != 0u) {
+        /* Nested fault inside the handler — stop here rather than recurse. */
+        for (;;) {}
+    }
+
+    hex_word(exception_first_line + 5, cause);
+    hex_byte(exception_first_line + 16, excode);
+    hex_word(exception_first_line + 23, epc);
+    hex_word(exception_first_line + 36, bvaddr);
+
+    ps2_video_draw_string(10, 30, exception_first_line, 0xffffff);
 
     /* GPRs from save area: each is sd'd at offset reg*8.  The low
      * 32 bits live at index (reg*8)/4 = reg*2 on a little-endian
      * 32-bit-indexed view of the save area. */
-    uint32_t sp = save_area[29 * 2];
-    uint32_t ra = save_area[31 * 2];
-    uint32_t gp = save_area[28 * 2];
+    sp = save_area[29 * 2];
+    ra = save_area[31 * 2];
+    gp = save_area[28 * 2];
 
-    unsigned char hexbuf[16];
-    int y = 30;
-
-    ps2_video_draw_string(30, y, "*** EE EXCEPTION ***", 0xffffff); y += 30;
-
-    ps2_video_draw_string(30, y, "cause   =", 0xffff00);
-    uint_to_string(cause, hexbuf);
-    ps2_video_draw_string(30 + 12 * 10, y, (const char *)hexbuf, 0xffffff);
-    y += 24;
-
-    ps2_video_draw_string(30, y, "excode  =", 0xffff00);
-    uint_to_string(excode, hexbuf);
-    ps2_video_draw_string(30 + 12 * 10, y, (const char *)hexbuf, 0xffffff);
-    y += 24;
-
-    ps2_video_draw_string(30, y, "ip(15:8)=", 0xffff00);
-    uint_to_string(ip, hexbuf);
-    ps2_video_draw_string(30 + 12 * 10, y, (const char *)hexbuf, 0xffffff);
-    y += 24;
-
-    ps2_video_draw_string(30, y, "epc     =", 0xffff00);
-    uint_to_string(epc, hexbuf);
-    ps2_video_draw_string(30 + 12 * 10, y, (const char *)hexbuf, 0xffffff);
-    y += 24;
-
-    ps2_video_draw_string(30, y, "status  =", 0xffff00);
-    uint_to_string(status, hexbuf);
-    ps2_video_draw_string(30 + 12 * 10, y, (const char *)hexbuf, 0xffffff);
-    y += 24;
-
-    ps2_video_draw_string(30, y, "badvaddr=", 0xffff00);
-    uint_to_string(bvaddr, hexbuf);
-    ps2_video_draw_string(30 + 12 * 10, y, (const char *)hexbuf, 0xffffff);
-    y += 24;
-
-    ps2_video_draw_string(30, y, "sp      =", 0xffff00);
-    uint_to_string(sp, hexbuf);
-    ps2_video_draw_string(30 + 12 * 10, y, (const char *)hexbuf, 0xffffff);
-    y += 24;
-
-    ps2_video_draw_string(30, y, "ra      =", 0xffff00);
-    uint_to_string(ra, hexbuf);
-    ps2_video_draw_string(30 + 12 * 10, y, (const char *)hexbuf, 0xffffff);
-    y += 24;
-
-    ps2_video_draw_string(30, y, "gp      =", 0xffff00);
-    uint_to_string(gp, hexbuf);
-    ps2_video_draw_string(30 + 12 * 10, y, (const char *)hexbuf, 0xffffff);
-    y += 24;
+    hex_word(exception_second_line + 3, sp);
+    hex_word(exception_second_line + 15, ra);
+    hex_word(exception_second_line + 27, gp);
+    ps2_video_draw_string(10, 60, exception_second_line, 0xffffff);
 
     /* Halt forever so the user can read the screen.  Don't call
      * progexit() — it's a stub.  Don't return — exception.S would
@@ -163,6 +158,8 @@ void exception_handler_c(uint32_t cause, uint32_t epc, uint32_t *save_area)
 
 void exception_init(void)
 {
+    ps2_quiesce_cop0_timer();
+
     /* Install exception stubs at all standard EE vectors */
     install_exception_stub(EE_COP0_VEC_TLB_REFILL);
     install_exception_stub(EE_COP0_VEC_PERF_COUNTER);
@@ -175,6 +172,7 @@ void exception_init(void)
 
 static int ps2_init(void)
 {
+    ps2_quiesce_cop0_timer();
     ps2_video_init();
     return 0;
 }
@@ -203,53 +201,6 @@ static void ps2_execute(uint32_t address)
     /* Flush caches for the loaded program region */
     cache_flush_range((const void *)address, 0x01000000);
     go(address);
-}
-
-/* Firmware-update handoff variant.  Differs from ps2_execute in two ways:
- *
- *   1. Issues a SifIopReset equivalent first.  After this, the IOP is back
- *      in BIOS-default state — same as cold boot — and the new loader's
- *      transport->init runs against a fresh SIFCMD/SIFRPC session, IRX set,
- *      and bus state, instead of the half-conversation that's been the root
- *      cause of -F flakiness.
- *
- *   2. Does NOT call go().  go() saves the loader's register file to
- *      __go_save_sp / __go_save_regs in .bss so a returning program can
- *      resume.  But a firmware-update trampoline ERETs into a new loader
- *      and never returns — the saved context is dead state, and those
- *      cache-line writes land in physical addresses that overlap the
- *      trampoline's destination range, which is exactly the bug the
- *      cache-reorder fix in mips_r5900_trampoline addresses defensively. */
-static void ps2_execute_handoff(uint32_t address)
-{
-    (void)ps2_smap_release_pending();
-
-    /* Reset the IOP back to BIOS state before handing off.  Guarantees the 
-     * new loader sees the same fresh IOP cold-boot would. */
-    (void)ee_sif_iop_reset(0);
-
-    /* Flush caches over the upload region: the 256-byte trampoline plus
-     * the new loader image, which is bounded to <=1 MiB.  (ps2_execute
-     * flushes much more because it runs variable-size user programs; the
-     * handoff target is only ever the loader.) */
-    cache_flush_range((const void *)address, 0x00100000);
-
-    /* Tell the incoming loader the IOP was already reset, so its bootstrap
-     * can skip the redundant SifIopReset (~1.5 s).  Write must happen AFTER
-     * cache_flush_range — otherwise dirty KUSEG lines for the trampoline
-     * bytes (left by NET_CMD_SENDBIN's writes) would overwrite the magic when
-     * flushed.  KSEG1 lands directly in physical RAM, no D-cache involved. */
-    *(volatile uint32_t *)KOSLOAD_IOP_HANDOFF_ADDR = KOSLOAD_IOP_HANDOFF_MAGIC;
-
-    /* Direct unconditional jump — bypasses go()'s context-save path so no
-     * dirty D-cache lines end up at addresses overlapping the trampoline
-     * destination. */
-    __asm__ volatile (
-        "jr     %0\n"
-        "nop\n"
-        :: "r"(address)
-    );
-    __builtin_unreachable();
 }
 
 static void ps2_disable_cache(void)
@@ -337,7 +288,9 @@ static void ps2_restart_timer(void)
 {
     /* Match the Dreamcast lifecycle: after an uploaded program returns, start
      * the loader's monotonic timer from a known point again. */
+    ps2_quiesce_cop0_timer();
     ee_cop0_write_count(0);
+    ee_cop0_write_compare(0xffffffffu);
     last_count = 0;
     count_hi = 0;
 }
@@ -373,7 +326,6 @@ const target_ops_t playstation2_target_ops = {
     .clear_screen = ps2_clear_screen,
     .setup_video = ps2_setup_video,
     .execute = ps2_execute,
-    .execute_handoff = ps2_execute_handoff,
     .disable_cache = ps2_disable_cache,
     .reboot = ps2_reboot,
     .cdfs_redir_save = NULL,

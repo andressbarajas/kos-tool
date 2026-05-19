@@ -71,6 +71,35 @@ exc_to_string_ptr:
 # End of kosload hardcoded header
 
 realstart:
+    # ---- -F stale instruction-cache fix ----------------------------
+    # On a firmware self-update (-F) the host trampoline copies this new
+    # loader image into RAM and purges the D-cache, but nothing
+    # invalidates the EE *instruction* cache.  The old and new loader
+    # both link at 0x80000280, so the I-cache still holds the OLD
+    # loader's lines for these addresses.  crt0 is layout-stable (always
+    # first in .text) so it runs correctly from stale lines, but
+    # main()/memset()/etc. sit at addresses whose stale I-cache contents
+    # differ from this build -> Reserved-Instruction fault (observed as
+    # excode 0xA, epc=memset, on -F; clean on cold boot, and
+    # intermittent exactly because it is a cache-refill race).
+    #
+    # Hit-invalidate the whole image range [_start, _end) with the same
+    # `cache 0x0b` (IHIN) + sync.p pattern as arch_icache_inval_range().
+    # Self-contained inline asm on purpose: a C cache routine's own
+    # lines could be stale too (chicken-and-egg).  Cold boot is
+    # unaffected — invalidating an already-coherent I-cache just forces
+    # harmless refills.  Needs no $gp/stack, so it runs first.
+    la      $t0, _start
+    la      $t1, _end
+    sync.p
+.Licache_inval:
+    cache   0x0b, 0($t0)
+    addiu   $t0, $t0, 64
+    sltu    $t2, $t0, $t1
+    bne     $t2, $zero, .Licache_inval
+    nop
+    sync.p
+
     # Load global pointer
     la      $gp, _gp
 
@@ -92,6 +121,13 @@ realstart:
     lui     $t0, 0x7003
     ori     $t0, $t0, 0x0C00
     mtc0    $t0, $12            # COP0 Status
+    sync.p
+
+    # Start with no pending COP0 timer interrupt from the previous EE
+    # context.  Writing Compare acknowledges the timer pending bit.
+    mtc0    $zero, $9            # COP0 Count
+    li      $t0, -1
+    mtc0    $t0, $11             # COP0 Compare
     sync.p
 
     # Set up stack pointer (from linker script _stack symbol)

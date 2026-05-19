@@ -15,8 +15,11 @@ extern void exception_init(void);
 
 /* Version string - configured by CMake, fallback for direct builds */
 #ifndef KOSLOAD_VERSION_STRING
-#define KOSLOAD_VERSION_STRING "0.1.0"
+#define KOSLOAD_VERSION_STRING "3.0.0"
 #endif
+
+/* Red background color */
+#define ERROR_BG_COLOR 0x2000
 
 static const target_ops_t *target;
 static const client_transport_ops_t *transport;
@@ -36,10 +39,9 @@ void common_main(const target_ops_t *tgt, const client_transport_ops_t *xport) {
      * This matches the original dcload-ip initialization order. */
     if (transport->init() != 0) {
         /* Transport failed — show red error screen and keep retrying.
-         * 0x2000 is red in RGB555 (matches legacy ERROR_BG_COLOR).
-         * The user can insert the BBA/LAN adapter without power cycling. */
-        target->setup_video(0, 0x2000);
-        target->clear_screen(0x2000);
+         * The user can insert the BBA/LAN/Serial adapter without power cycling. */
+        target->setup_video(0, ERROR_BG_COLOR);
+        target->clear_screen(ERROR_BG_COLOR);
         target->draw_string(30, 54, LOADER_NAME " " KOSLOAD_VERSION_STRING, 0xffff);
         if (transport->init_error_msg)
             target->draw_string(30, 78, transport->init_error_msg, 0xffff);

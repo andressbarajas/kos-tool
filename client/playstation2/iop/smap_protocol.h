@@ -27,6 +27,39 @@
 
 #define PS2_SMAP_RPC_ID         0x534D4150u  /* 'PAMS' */
 
+/* ------------------------------------------------------------
+ * RPC-server readiness handshake (the -F bind-before-register fix)
+ * ------------------------------------------------------------
+ *
+ * smap.irx's _start spawns smap_rpc_thread and returns RESIDENT_END
+ * immediately; RpcRegister() + smap_register_queue_workaround() only
+ * run later, inside that thread.  LMB-return therefore does NOT mean
+ * the SMAP RPC server is bindable.  On cold boot the IOP-IPL timing
+ * hides this; on -F (IOP reset mid-session) the EE can bind before the
+ * server is registered and stable, getting a garbage server/buf that
+ * later wild-DMAs (observed TLBS fault, badvaddr in resident-SIFCMD
+ * range).  A loose numeric range check can't catch it — the bad value
+ * sits inside IOP RAM — so we use an explicit ready sentinel instead.
+ *
+ * Mechanism mirrors the kosdev9.irx mailbox at IOP-phys 0x1F8000:
+ *   - EE clears the word to NOTREADY before issuing the smap.irx LMB
+ *     load (defeats a stale READY surviving the IOP reset on -F).
+ *   - smap_rpc_thread writes READY *after* BOTH RpcRegister() and
+ *     smap_register_queue_workaround() return (the true service-stable
+ *     point — the workaround is what makes the queue visible to the
+ *     EE-side bind walk).
+ *   - EE polls for READY before ee_sif_rpc_bind_retry().
+ *
+ * Placed at 0x1F8040: the same system-reserved IOP scratch page as the
+ * 24-byte dev9 mailbox (0x1F8000..0x1F8018), comfortably past it, and
+ * not written by kosdev9 after its _start.  IOP writes the KSEG1
+ * uncached alias 0xA01F8040 (SBUS-visible immediately, no FlushDcache,
+ * same pattern as kosdev9's probe); EE reads 0xBC1F8040.
+ */
+#define PS2_SMAP_READY_IOP_PHYS 0x001F8040
+#define PS2_SMAP_READY_MAGIC    0x534D5244  /* 'DRMS' — SMAP RPC ReaDy */
+#define PS2_SMAP_NOTREADY_MAGIC 0x00000000
+
 /* RPC function numbers.  Whitelisted on the IOP side; the handler
  * rejects anything outside this set. */
 enum ps2_smap_fno {

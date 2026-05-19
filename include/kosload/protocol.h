@@ -119,12 +119,11 @@
 
 #define KOSLOAD_EXEC_CONSOLE   (1 << 0)  /* enable console redirection while program runs */
 #define KOSLOAD_EXEC_CDFS      (1 << 1)  /* enable CDFS redir while program runs */
-#define KOSLOAD_EXEC_FW_UPDATE (1 << 2)  /* target is firmware-update trampoline:
-                                          * skip console/CDFS setup, do platform-
-                                          * specific pre-handoff quiesce (PS2: IOP
-                                          * reset), use execute_handoff() so the
-                                          * old loader leaves no dirty cache lines
-                                          * from go()'s register saves. */
+#define KOSLOAD_EXEC_FW_UPDATE (1 << 2)  /* target is a firmware-update
+                                          * trampoline: skip the console/CDFS
+                                          * setup meant for user programs.
+                                          * The execute path is otherwise the
+                                          * same as a normal program launch. */
 
 /* ===== Network Packet Structures ===== */
 

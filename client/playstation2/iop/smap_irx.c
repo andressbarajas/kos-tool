@@ -1725,6 +1725,17 @@ static void smap_rpc_thread(void *arg)
                 g_rpc_buf, 0, 0, &g_queue);
     smap_register_queue_workaround(&g_queue);
 
+    /* Service is now stable: RpcRegister() has installed the server AND
+     * smap_register_queue_workaround() has linked our queue onto the list
+     * the EE-side bind walk traverses.  Publish the ready sentinel so the
+     * EE's ps2_smap_init() can bind without racing this thread (the -F
+     * bind-before-register fix — see PS2_SMAP_READY_* in smap_protocol.h).
+     * Written through the KSEG1 uncached alias so it reaches IOP RAM
+     * immediately for the EE's SBUS-bridge poll, with no FlushDcache —
+     * exactly the kosdev9.irx mailbox-probe pattern. */
+    *(volatile unsigned int *)(0xA0000000 | PS2_SMAP_READY_IOP_PHYS) =
+        PS2_SMAP_READY_MAGIC;
+
     {
         volatile smap_iop_rpc_queue_t *vqd =
             (volatile smap_iop_rpc_queue_t *)&g_queue;

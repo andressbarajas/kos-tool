@@ -29,9 +29,6 @@ typedef struct target_ops {
     void        (*clear_screen)(uint32_t color);
     void        (*setup_video)(uint32_t mode, uint32_t bg_color);
     void        (*execute)(uint32_t address);
-    /* Like execute(), but for firmware-update handoff where the old loader is
-     * about to be overwritten and there's no point saving its context. */
-    void        (*execute_handoff)(uint32_t address);
     void        (*disable_cache)(void);
     void        (*reboot)(void);
     void        (*cdfs_redir_save)(void);

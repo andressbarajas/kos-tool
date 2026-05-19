@@ -18,7 +18,6 @@
 #define BBA_BG_COLOR   0x0010
 #define LAN_BG_COLOR   0x0100
 #define W5500_BG_COLOR 0x0210   /* Dark cyan-ish */
-#define ERROR_BG_COLOR 0x2000
 #define STR_COLOR      0xffff
 
 /* SH4 CPU frequency (stock Dreamcast) */

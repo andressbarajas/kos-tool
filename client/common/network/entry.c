@@ -86,6 +86,14 @@ static void lease_resync_from_rtc(void);
 
 static volatile bool dont_renew = false;
 
+/* Renewal cadence.  dhcp_poll() attempts a RENEW once lease_display_secs
+ * drops to/below this.  Set to T/2 on every fresh lease; on a lost/late
+ * renew ACK it is backed off (~half the remaining lease, floored) so the
+ * fast poll loop retries the renew without storming the wire — instead
+ * of the old behaviour of disabling DHCP entirely on a single miss. */
+static unsigned int renew_threshold = 0;
+#define DHCP_RENEW_RETRY_FLOOR_SECS 4
+
 static char ip_disp_string[16] = "000.000.000.000";
 static const char *waiting_string = "Waiting For IP...";
 static const char *dhcp_mode_string = " (DHCP Mode)";
@@ -321,7 +329,7 @@ void dhcp_poll(void)
 
     /* --- Renewal check (50% of lease elapsed) --- */
     if (__builtin_expect(dhcp_lease_time && (!dont_renew) &&
-                         (lease_display_secs <= dhcp_lease_time / 2), 0))
+                         (lease_display_secs <= renew_threshold), 0))
     {
         unsigned int saved_lease_time = dhcp_lease_time;
         dhcp_lease_time = 0;
@@ -341,21 +349,44 @@ void dhcp_poll(void)
         }
         else if (renew_result == -1)
         {
-            /* Error: ACK was invalid. Disable DHCP entirely. */
-            our_ip = 0xffffffff;
-            lease_expiry_rtc = 0;
-            lease_display_secs = 0;
-            /* Skip the "255.255.255.255 DHCP timed out" line — clear
-             * the IP row so nothing is drawn there. */
-            clear_lines(126, 24, global_bg_color);
-            update_lease_time_display(0);
-            return;
+            /* Lost/late renew ACK.  Renewal happens at T/2, so the
+             * current lease is still valid — a single missed ACK must
+             * NOT disable DHCP (the old code latched our_ip=0xffffffff
+             * and blanked the IP forever, with no recovery path).  Keep
+             * the IP, keep the existing lease counting down, and retry
+             * RENEW after ~half the remaining lease (floored so the fast
+             * poll loop can't storm the wire).  Only when the lease has
+             * fully expired with every renew having failed do we fall
+             * back to a fresh DISCOVER. */
+            if (lease_display_secs == 0)
+            {
+                /* Lease expired, all renews failed → return to INIT;
+                 * the discovery branch below re-acquires immediately. */
+                our_ip = 0;
+                dhcp_lease_time = 0;
+                lease_expiry_rtc = 0;
+                renew_threshold = 0;
+            }
+            else
+            {
+                unsigned int half = lease_display_secs / 2;
+
+                dhcp_lease_time = saved_lease_time;   /* keep tracking */
+                renew_threshold = (half > DHCP_RENEW_RETRY_FLOOR_SECS)
+                                  ? half : DHCP_RENEW_RETRY_FLOOR_SECS;
+                if (renew_threshold >= lease_display_secs)
+                    renew_threshold = lease_display_secs - 1;
+                last_display_tick = t->get_ticks();
+                update_ip_display(our_ip, dhcp_mode_string);
+                update_lease_time_display(lease_display_secs);
+            }
         }
         else
         {
             /* Success: set new expiry from fresh lease time */
             lease_expiry_rtc = t->get_rtc() + dhcp_lease_time;
             lease_display_secs = dhcp_lease_time;
+            renew_threshold = dhcp_lease_time / 2;
             last_display_tick = t->get_ticks();
             update_ip_display(our_ip, dhcp_mode_string);
             update_lease_time_display(lease_display_secs);
@@ -387,6 +418,7 @@ void dhcp_poll(void)
             /* Got an address from DHCP */
             lease_expiry_rtc = t->get_rtc() + dhcp_lease_time;
             lease_display_secs = dhcp_lease_time;
+            renew_threshold = dhcp_lease_time / 2;
             last_display_tick = t->get_ticks();
             update_ip_display(our_ip, dhcp_mode_string);
             update_lease_time_display(lease_display_secs);

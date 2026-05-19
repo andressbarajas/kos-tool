@@ -329,7 +329,6 @@ const target_ops_t gamecube_target_ops = {
     .clear_screen = gc_clear_screen,
     .setup_video = gc_setup_video,
     .execute = gc_execute,
-    .execute_handoff = gc_execute,    /* go() saves are harmless */
     .disable_cache = gc_disable_cache,
     .reboot = gc_reboot,
     .set_console_enabled = gc_set_console_enabled,

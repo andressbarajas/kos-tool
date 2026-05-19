@@ -56,14 +56,16 @@ exception_common:
     sd      $a1,    0x28($k0)  # r5
     sd      $a2,    0x30($k0)  # r6
     sd      $a3,    0x38($k0)  # r7
-    sd      $t0,    0x40($k0)  # r8
-    sd      $t1,    0x48($k0)  # r9
-    sd      $t2,    0x50($k0)  # r10
-    sd      $t3,    0x58($k0)  # r11
-    sd      $12,    0x60($k0)  # r12 (t4 in o32)
-    sd      $13,    0x68($k0)  # r13 (t5 in o32)
-    sd      $14,    0x70($k0)  # r14 (t6 in o32)
-    sd      $15,    0x78($k0)  # r15 (t7 in o32)
+    # Use numeric register names for r8-r15.  This toolchain's R5900 ABI
+    # aliases r8-r11 as a4-a7 and r12-r15 as t0-t3.
+    sd      $8,     0x40($k0)  # r8
+    sd      $9,     0x48($k0)  # r9
+    sd      $10,    0x50($k0)  # r10
+    sd      $11,    0x58($k0)  # r11
+    sd      $12,    0x60($k0)  # r12
+    sd      $13,    0x68($k0)  # r13
+    sd      $14,    0x70($k0)  # r14
+    sd      $15,    0x78($k0)  # r15
     sd      $s0,    0x80($k0)  # r16
     sd      $s1,    0x88($k0)  # r17
     sd      $s2,    0x90($k0)  # r18
@@ -187,10 +189,10 @@ interrupt_fast_path:
     sd      $a1,    0x028($k0)
     sd      $a2,    0x030($k0)
     sd      $a3,    0x038($k0)
-    sd      $t0,    0x040($k0)
-    sd      $t1,    0x048($k0)
-    sd      $t2,    0x050($k0)
-    sd      $t3,    0x058($k0)
+    sd      $8,     0x040($k0)
+    sd      $9,     0x048($k0)
+    sd      $10,    0x050($k0)
+    sd      $11,    0x058($k0)
     sd      $12,    0x060($k0)
     sd      $13,    0x068($k0)
     sd      $14,    0x070($k0)
@@ -239,9 +241,9 @@ interrupt_fast_path:
     ld      $a1,    0x028($k0)
     ld      $a2,    0x030($k0)
     ld      $a3,    0x038($k0)
-    ld      $t1,    0x048($k0)
-    ld      $t2,    0x050($k0)
-    ld      $t3,    0x058($k0)
+    ld      $9,     0x048($k0)
+    ld      $10,    0x050($k0)
+    ld      $11,    0x058($k0)
     ld      $12,    0x060($k0)
     ld      $13,    0x068($k0)
     ld      $14,    0x070($k0)
@@ -252,8 +254,8 @@ interrupt_fast_path:
     ld      $sp,    0x0E8($k0)
     ld      $ra,    0x0F8($k0)
 
-    # Restore $t0 last (used as scratch above)
-    ld      $t0,    0x040($k0)
+    # Restore r8 last (used as scratch above through the ABI's $a4 alias).
+    ld      $8,     0x040($k0)
 
     # ERET: clears EXL, branches to EPC, allows next interrupt
     sync.p

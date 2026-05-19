@@ -807,15 +807,21 @@ int auto_update_firmware(kostool_context_t *ctx) {
     int dhcp_reconnect = 0;
 
     if (!is_serial) {
-        /* New-style loader with capabilities: check DHCP flag */
+        /* New-style loader with capabilities.
+         *
+         * A firmware self-update always preserves the IP the device is
+         * CURRENTLY reachable at (ctx->hostname — for `-t dhcp` this is
+         * the address discovery just found it at).  This holds even when
+         * the running loader obtained that address via DHCP
+         * (KOSLOAD_CAP_DHCP set): re-running DHCP after the handoff is
+         * slower and non-deterministic (the lease may come back with a
+         * different address, and the host is mid-"Reconnecting..." to the
+         * old one).  An in-place update must keep the same network
+         * identity, so patch the new firmware to a static IP = the
+         * current address and reuse the socket (dhcp_reconnect = 0). */
         if (ctx->remote_capabilities != 0) {
-            if (!(ctx->remote_capabilities & (1 << 3))) {
-                /* Static IP — patch firmware to preserve it */
-                patch_ip = ctx->hostname;
-            } else {
-                patch_ip = "0.0.0.0";
-                dhcp_reconnect = 1;
-            }
+            patch_ip = ctx->hostname;
+            dhcp_reconnect = 0;
         }
         /* Legacy dcload-ip: probe memory to detect DHCP vs static.
          * The patchable IP string literal lives in .rodata. */

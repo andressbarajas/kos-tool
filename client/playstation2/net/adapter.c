@@ -8,6 +8,8 @@
 #include "smap.h"
 #include "../iop_dev9.h"
 
+#include <kosload/target.h>
+
 volatile unsigned char escape_loop = 0;
 int timeout_loop = 0;
 int loop_secs_elapsed = 0;

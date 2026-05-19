@@ -14,6 +14,7 @@
 #include <string.h>
 
 #include "cache.h"
+#include "ee_cop0.h"
 #include "ee_sif.h"
 
 #define SIF_REG_MAINADDR       1u
@@ -100,7 +101,6 @@ static uint8_t sif1_dma_queue[SIF_DMA_QUEUE_DEPTH];
 static uint32_t sif_subaddr;
 static uint32_t rpc_next_packet;
 static uint32_t sifrpc_next_rid;
-static uint32_t sifrpc_call_seq;
 static uint32_t sif1_dma_queue_head;
 static uint32_t sif1_dma_queue_tail;
 static uint32_t sif1_dma_queue_count;
@@ -114,11 +114,18 @@ static uint32_t sif_sreg_shadow[256];
 #define D6_CHCR  (*(volatile uint32_t *)PS2_EE_REG_DMAC_SIF1_CHCR)
 #define D6_QWC   (*(volatile uint32_t *)PS2_EE_REG_DMAC_SIF1_QWC)
 #define D6_TADR  (*(volatile uint32_t *)PS2_EE_REG_DMAC_SIF1_TADR)
+#define D_CTRL   (*(volatile uint32_t *)PS2_EE_REG_DMAC_CTRL)
 #define D_STAT   (*(volatile uint32_t *)PS2_EE_REG_DMAC_STAT)
+#define D_PCR    (*(volatile uint32_t *)PS2_EE_REG_DMAC_PCR)
 #define D_ENABLER (*(volatile uint32_t *)PS2_EE_REG_DMAC_ENABLER)
 #define D_ENABLEW (*(volatile uint32_t *)PS2_EE_REG_DMAC_ENABLEW)
-#define DMAC_CPND   0x00010000u
-#define D_STAT_SIF0 0x00000020u
+#define DMAC_CPND       0x00010000u
+#define D_CTRL_DMAE     0x00000001u
+#define D_PCR_CDE_SIF0  0x00200000u
+#define D_PCR_CDE_SIF1  0x00400000u
+#define D_STAT_SIF0     0x00000020u
+#define D_STAT_SIF1     0x00000040u
+#define D_STAT_SIF      (D_STAT_SIF0 | D_STAT_SIF1)
 
 #define CHCR_MOD_CHAIN     0x004u
 #define CHCR_TIE           0x080u
@@ -130,6 +137,7 @@ static uint32_t sif_sreg_shadow[256];
 #define SBUS_SMCOM   (*(volatile uint32_t *)EE_SIF_REG_SMCOM)
 #define SBUS_MSFLAG  (*(volatile uint32_t *)EE_SIF_REG_MSFLG)
 #define SBUS_SMFLAG  (*(volatile uint32_t *)EE_SIF_REG_SMFLG)
+#define SBUS_CTRL    (*(volatile uint32_t *)EE_SIF_REG_CTRL)
 
 #define DMA_TAG_REFE  0u
 #define DMA_TAG_REF   3u
@@ -150,8 +158,9 @@ static uint32_t sif_sreg_shadow[256];
 #define SIFRPC_REC_ID_FOR(rid) (((rid) << 16) | 0x05u)
 
 static void ee_sif_status(const char *status) {
-    if(g_status_fn != 0)
-        g_status_fn(status);
+    (void)status;
+    // if(g_status_fn != 0)
+    //     g_status_fn(status);
 }
 
 void ee_sif_set_status_callback(ee_sif_status_fn_t fn) {
@@ -171,20 +180,19 @@ void ee_sif_reset_state(void) {
     memset((void *)&iopheap_client, 0, sizeof(iopheap_client));
     memset((void *)&loadfile_client, 0, sizeof(loadfile_client));
     for (i = 0; i < SIF_DMA_QUEUE_DEPTH; i++) {
-        sif1_dma_jobs[i].id = 0u;
-        sif1_dma_jobs[i].stream_size = 0u;
+        sif1_dma_jobs[i].id = 0;
+        sif1_dma_jobs[i].stream_size = 0;
         sif1_dma_jobs[i].state = SIF_DMA_JOB_FREE;
-        sif1_dma_queue[i] = 0u;
+        sif1_dma_queue[i] = 0;
     }
-    sif1_dma_queue_head = 0u;
-    sif1_dma_queue_tail = 0u;
-    sif1_dma_queue_count = 0u;
+    sif1_dma_queue_head = 0;
+    sif1_dma_queue_tail = 0;
+    sif1_dma_queue_count = 0;
     sif1_dma_next_id = 1u;
     sif1_dma_current = -1;
     sif_subaddr = 0;
     rpc_next_packet = 0;
     sifrpc_next_rid = 0;
-    sifrpc_call_seq = 0;
 }
 
 static int ee_sif_set_reg(uint32_t reg, uint32_t value) {
@@ -232,14 +240,62 @@ static void ee_sif_dispatch_cmd(volatile ee_sif_cmd_header_t *hdr) {
     }
 }
 
-static void dmac_force_stop(volatile uint32_t *chcr) {
+static void ee_sif_prepare_dmac(void) {
+    /* Mirror the BIOS SIF bring-up side effects before arming either
+     * direction: global DMA enable, ch5/ch6 priority gates, and SBUS SIF
+     * control. */
+    D_CTRL = D_CTRL | D_CTRL_DMAE;
+    D_PCR = D_PCR | D_PCR_CDE_SIF0 | D_PCR_CDE_SIF1;
+    SBUS_MSFLAG = 1;
+    SBUS_CTRL = 0x100;
+    (void)SBUS_CTRL;
+}
+
+static uint32_t dmac_suspend(void) {
     uint32_t saved = D_ENABLER;
+
     D_ENABLEW = saved | DMAC_CPND;
     (void)D_ENABLER;
+    (void)D_CTRL;
     (void)D_ENABLER;
+    return saved;
+}
+
+static void dmac_resume(uint32_t saved) {
+    D_ENABLEW = saved;
+    (void)D_ENABLER;
+}
+
+static void dmac_stop_channel_held(volatile uint32_t *chcr) {
     *chcr = 0;
     (void)*chcr;            /* MMIO read-back drains WBB before re-enable; matches BIOS isceSifSetDma at 0x80006800. */
-    D_ENABLEW = saved;
+}
+
+static void dmac_force_stop(volatile uint32_t *chcr) {
+    uint32_t status = ee_cop0_read_status();
+    uint32_t saved;
+
+    ee_cop0_write_status(status & ~EE_COP0_STATUS_IE);
+    saved = dmac_suspend();
+    dmac_stop_channel_held(chcr);
+    dmac_resume(saved);
+    ee_cop0_write_status(status);
+}
+
+/* Only use this after ee_sif_iop_reset() has observed a fresh BOOTEND.  Before
+ * that point the old IOP-side SIF session may still be driving SIF0, and
+ * aborting the EE channel can wedge the SBUS. */
+static void ee_sif_quiesce_dmac_after_iop_reset(void) {
+    ee_sif_status("PHASE1: DMAC QUIESCE");
+    dmac_force_stop(&D5_CHCR);
+    ee_sif_status("PHASE1: D5 STOPPED");
+    dmac_force_stop(&D6_CHCR);
+    D5_QWC = 0;
+    D6_QWC = 0;
+    D6_TADR = 0;
+    D_STAT = D_STAT_SIF;
+    (void)D_STAT;
+    ee_sif_status("PHASE1: DMAC QUIET");
 }
 
 static uint32_t ee_sif_next_dma_id(void) {
@@ -340,6 +396,7 @@ static int ee_sif_build_dma_job(ee_sif_dma_job_t *job,
 static void ee_sif_start_dma_job(int slot) {
     ee_sif_dma_job_t *job = &sif1_dma_jobs[slot];
 
+    ee_sif_prepare_dmac();
     D6_TADR = EE_PHYS(job->stream);
     D6_QWC = 0;
     D6_CHCR = SIF1_SOURCE_CHCR;
@@ -428,8 +485,9 @@ int ee_sif_dma_stat(int trid) {
 }
 
 void ee_sif_set_dchain(void) {
+    ee_sif_prepare_dmac();
     if(D5_CHCR & CHCR_STR)
-        dmac_force_stop(&D5_CHCR);
+        return;
     D_STAT = D_STAT_SIF0;
     D5_QWC = 0;
     D5_CHCR = SIF0_DCHAIN_CHCR;
@@ -671,48 +729,48 @@ int ee_sif_cmd_init(void) {
     ee_sif_saddr_pkt_t saddr_pkt;
     ee_sif_init_pkt_t init_pkt;
 
-    //ee_sif_status("PHASE1: SIFCMD ARM RX");
+    ee_sif_status("PHASE1: SIFCMD ARM RX");
     memset((void *)sif_recv_buf, 0, sizeof(sif_recv_buf));
     ee_sif_rearm_receive();
 
-    //ee_sif_status("PHASE1: READ SUBADDR");
+    ee_sif_status("PHASE1: READ SUBADDR");
     sif_subaddr = (uint32_t)ee_sif_get_reg(SIF_REG_SUBADDR);
     if(sif_subaddr == 0u)
         sif_subaddr = (uint32_t)ee_sif_get_reg(SIF_SYSREG_SUBADDR);
     if(sif_subaddr == 0u) {
-        //ee_sif_status("PHASE1: SUBADDR=0");
+        ee_sif_status("PHASE1: SUBADDR=0");
         return -2;
     }
 
-    //ee_sif_status("PHASE1: PUBLISH MAINADDR");
+    ee_sif_status("PHASE1: PUBLISH MAINADDR");
     (void)ee_sif_set_reg(SIF_SYSREG_MAINADDR, EE_PHYS(sif_recv_buf));
     (void)ee_sif_set_reg(SIF_REG_MAINADDR, EE_PHYS(sif_recv_buf));
 
-    //ee_sif_status("PHASE1: BUILD CHANGE_SADDR");
+    ee_sif_status("PHASE1: BUILD CHANGE_SADDR");
     memset(&saddr_pkt, 0, sizeof(saddr_pkt));
     ee_sif_fill_header(&saddr_pkt.header, EE_SIF_CMD_CHANGE_SADDR,
                        sizeof(saddr_pkt));
     saddr_pkt.buff = (void *)EE_PHYS(sif_recv_buf);
 
-    //ee_sif_status("PHASE1: SEND CHANGE_SADDR");
+    ee_sif_status("PHASE1: SEND CHANGE_SADDR");
     if(ee_sif_send_cmd(EE_SIF_CMD_CHANGE_SADDR, &saddr_pkt,
                         sizeof(saddr_pkt), 0, 0, 0) < 0) {
-        //ee_sif_status("PHASE1: SEND TIMEOUT");
+        ee_sif_status("PHASE1: SEND TIMEOUT");
         return -3;
     }
 
-    //ee_sif_status("PHASE1: SEND INIT_ADDR");
+    ee_sif_status("PHASE1: SEND INIT_ADDR");
     memset(&init_pkt, 0, sizeof(init_pkt));
     ee_sif_fill_header(&init_pkt.header, EE_SIF_CMD_INIT_CMD,
                        sizeof(init_pkt));
     init_pkt.buff = (void *)EE_PHYS(sif_recv_buf);
     if(ee_sif_send_cmd(EE_SIF_CMD_INIT_CMD, &init_pkt,
                         sizeof(init_pkt), 0, 0, 0) < 0) {
-        //ee_sif_status("PHASE1: INIT_ADDR FAIL");
+        ee_sif_status("PHASE1: INIT_ADDR FAIL");
         return -4;
     }
 
-    //ee_sif_status("PHASE1: SIFCMD OK");
+    ee_sif_status("PHASE1: SIFCMD OK");
     return 0;
 }
 
@@ -728,25 +786,24 @@ int ee_sif_rpc_init(void) {
     ee_sif_cmd_header_t pkt;
     unsigned int i;
 
-    //ee_sif_status("PHASE1: SIFRPC INIT");
+    ee_sif_status("PHASE1: SIFRPC INIT");
     memset((void *)sif_rpc_packets, 0, sizeof(sif_rpc_packets));
     memset((void *)&iopheap_client, 0, sizeof(iopheap_client));
     memset((void *)&loadfile_client, 0, sizeof(loadfile_client));
     rpc_next_packet = 0;
     sifrpc_next_rid = 0;
-    sifrpc_call_seq = 0;
 
-    //ee_sif_status("PHASE1: SEND INIT_CMD");
+    ee_sif_status("PHASE1: SEND INIT_CMD");
     memset(&pkt, 0, sizeof(pkt));
     pkt.opt = 1u;
     if(ee_sif_send_cmd(EE_SIF_CMD_INIT_CMD, &pkt, sizeof(pkt), 0, 0, 0) < 0) {
-        //ee_sif_status("PHASE1: INIT_CMD TX FAIL");
+        ee_sif_status("PHASE1: INIT_CMD TX FAIL");
         return -1;
     }
 
     (void)ee_sif_set_reg(SIF_SYSREG_RPCINIT, 0u);
 
-    //ee_sif_status("PHASE1: WAIT RPCINIT");
+    ee_sif_status("PHASE1: WAIT RPCINIT");
     for (i = 0; i < POLL_TIMEOUT / 256u; i++) {
         volatile ee_sif_cmd_header_t *hdr =
             ee_sif_poll_packet(EE_SIF_CMD_SET_SREG, 256u);
@@ -755,7 +812,7 @@ int ee_sif_rpc_init(void) {
             ee_sif_rearm_receive();
         }
         if((uint32_t)ee_sif_get_reg(SIF_SYSREG_RPCINIT) != 0u) {
-            //ee_sif_status("PHASE1: RPCINIT GOT");
+            ee_sif_status("PHASE1: RPCINIT GOT");
             return 0;
         }
     }
@@ -778,7 +835,7 @@ int ee_sif_rpc_bind(volatile ee_sif_rpc_client_t *client,
     if(client == 0)
         return -1;
 
-    //ee_sif_status("PHASE1: RPC BIND");
+    ee_sif_status("PHASE1: RPC BIND");
     pkt = (volatile ee_sif_rpc_bind_pkt_t *)rpc_alloc_packet();
     ee_sif_fill_header((ee_sif_cmd_header_t *)&pkt->sifcmd,
                        EE_SIF_CMD_RPC_BIND, SIF_PACKET_SIZE);
@@ -802,12 +859,12 @@ int ee_sif_rpc_bind(volatile ee_sif_rpc_client_t *client,
     reply = (volatile ee_sif_rpc_rend_pkt_t *)
         ee_sif_poll_packet(EE_SIF_CMD_RPC_END, POLL_TIMEOUT);
     if(reply == 0) {
-        //ee_sif_status("PHASE1: BIND NO REPLY");
+        ee_sif_status("PHASE1: BIND NO REPLY");
         ee_sif_rearm_receive();
         return -2;
     }
     if(reply->cid != EE_SIF_CMD_RPC_BIND) {
-        //ee_sif_status("PHASE1: BIND BAD CID");
+        ee_sif_status("PHASE1: BIND BAD CID");
         ee_sif_rearm_receive();
         return -4;
     }
@@ -819,7 +876,7 @@ int ee_sif_rpc_bind(volatile ee_sif_rpc_client_t *client,
     ee_sif_rearm_receive();
 
     if(client->server == 0) {
-        //ee_sif_status("PHASE1: BIND NULL SERVER");
+        ee_sif_status("PHASE1: BIND NULL SERVER");
         return -3;
     }
 
@@ -849,17 +906,7 @@ int ee_sif_rpc_call(volatile ee_sif_rpc_client_t *client, int rpc_number,
                     void *recvbuf, uint32_t recv_size) {
     volatile ee_sif_rpc_call_pkt_t *pkt;
     volatile ee_sif_rpc_header_t *reply;
-    uint32_t my_seq = ++sifrpc_call_seq;
-    static char rpc_msg[24];
-    char *p = rpc_msg;
-    const char *prefix = "PHASE1: RPC CALL #";
     uint32_t rid;
-
-    for (; *prefix; ++prefix) *p++ = *prefix;
-    if(my_seq >= 10u) *p++ = (char)('0' + (my_seq / 10u) % 10u);
-    *p++ = (char)('0' + (my_seq % 10u));
-    *p = '\0';
-    ee_sif_status(rpc_msg);
 
     if(client == 0 || client->server == 0 || client->buf == 0)
         return -1;
@@ -882,6 +929,7 @@ int ee_sif_rpc_call(volatile ee_sif_rpc_client_t *client, int rpc_number,
     client->pkt_addr = (void *)pkt;
     client->rpc_id = 0;
     client->command = (uint32_t)rpc_number;
+    ee_sif_status("PHASE1: RPC CALL");
 
     if(recv_size != 0u)
         cache_flush_dc(recvbuf, recv_size);
@@ -893,30 +941,7 @@ int ee_sif_rpc_call(volatile ee_sif_rpc_client_t *client, int rpc_number,
     reply = (volatile ee_sif_rpc_header_t *)
         ee_sif_poll_packet(EE_SIF_CMD_RPC_END, RPC_REPLY_TIMEOUT);
     if(reply == 0) {
-        static char cnr_msg[56];
-        volatile ee_sif_cmd_header_t *recv_hdr =
-            (volatile ee_sif_cmd_header_t *)EE_UNCACHED(sif_recv_buf);
-        uint32_t recv_cid = recv_hdr->cid;
-        uint32_t recv_ds = (uint32_t)recv_hdr->psize |
-                           ((uint32_t)recv_hdr->dsize << 8);
-        uint32_t dstat = D_STAT;
-        char *p = cnr_msg;
-        static const char hex[] = "0123456789abcdef";
-        int i;
-
-        const char *prefix = "PHASE1: CNR#";
-        for (; *prefix; ++prefix) *p++ = *prefix;
-        if(my_seq >= 10u) *p++ = (char)('0' + (my_seq / 10u) % 10u);
-        *p++ = (char)('0' + (my_seq % 10u));
-        *p++ = ' '; *p++ = 'c'; *p++ = '=';
-        for (i = 28; i >= 0; i -= 4) *p++ = hex[(recv_cid >> i) & 0xfu];
-        *p++ = ' '; *p++ = 'd'; *p++ = '=';
-        for (i = 4; i >= 0; i -= 4) *p++ = hex[(recv_ds >> i) & 0xfu];
-        *p++ = ' '; *p++ = 's'; *p++ = '=';
-        for (i = 28; i >= 0; i -= 4) *p++ = hex[(dstat >> i) & 0xfu];
-        *p = '\0';
-
-        ee_sif_status(cnr_msg);
+        ee_sif_status("PHASE1: RPC NO REPLY");
         return -3;
     }
 
@@ -1200,6 +1225,8 @@ int ee_sif_iop_reset(const char *arg) {
     return -2;
 
 bootend_seen:
+    ee_sif_status("PHASE1: BOOTEND");
+    ee_sif_quiesce_dmac_after_iop_reset();
     ee_sif_reset_state();
     return 0;
 }

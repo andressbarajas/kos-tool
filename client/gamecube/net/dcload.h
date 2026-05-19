@@ -16,7 +16,6 @@
 #define BBA_BG_COLOR   0x00200040   /* GameCube purple (dark) */
 #define ENC_BG_COLOR   0x00003020   /* Dark teal (ENC28J60) */
 #define W5500_BG_COLOR 0x00002030   /* Dark teal-blue (W5500) */
-#define ERROR_BG_COLOR 0x00400000   /* Dark red */
 #define STR_COLOR      0x00FFFFFF   /* White */
 
 /* GC Gekko TBR frequency for timing calculations.

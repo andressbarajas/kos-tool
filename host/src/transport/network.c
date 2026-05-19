@@ -171,7 +171,8 @@ static int send_and_wait(kostool_context_t *ctx, const char cmd[4],
 
 static bool network_remote_supports_capabilities(const kostool_context_t *ctx) {
     return strncmp(ctx->remote_version_string, "dc-load-ip ", 11) == 0 ||
-           strncmp(ctx->remote_version_string, "gc-load-ip ", 11) == 0;
+           strncmp(ctx->remote_version_string, "gc-load-ip ", 11) == 0 ||
+           strncmp(ctx->remote_version_string, "ps2-load-ip ", 12) == 0;
 }
 
 static int query_capabilities(kostool_context_t *ctx, uint32_t *capabilities) {

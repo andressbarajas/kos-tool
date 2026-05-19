@@ -181,11 +181,7 @@ void cmd_execute(ether_header_t *ether, ip_header_t *ip, udp_header_t *udp, comm
 
 		running = true;
 
-		/* Firmware-update path takes the no-save variant. */
-		if (fw_update)
-			t->execute_handoff(ntohl(command->address));
-		else
-			t->execute(ntohl(command->address));
+		t->execute(ntohl(command->address));
 		t->restart_timer();
 
 		/* Adapter hardware state may have been modified by the executed
