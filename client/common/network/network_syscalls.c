@@ -1,10 +1,10 @@
-/* client/network/network_syscalls.c */
+/* client/common/network/network_syscalls.c */
 /*
  * Network transport syscall implementations for kosload client.
  * Based on dcload-ip: dcload-ip/target-src/dcload/syscalls.c
  *
  * These functions implement POSIX-like file I/O by sending UDP command
- * packets to the host tool and waiting for CMD_RETVAL responses.
+ * packets to the host tool and waiting for NET_CMD_RETVAL responses.
  * Each syscall builds a packet in pkt_buf, calls build_send_packet()
  * to transmit it, then enters bb->loop(0) to wait for the response.
  *

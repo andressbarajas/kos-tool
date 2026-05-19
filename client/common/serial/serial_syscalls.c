@@ -1,4 +1,4 @@
-/* client/serial/serial_syscalls.c */
+/* client/common/serial/serial_syscalls.c */
 /*
  * Serial transport syscall implementations for kosload client.
  * Based on dcload-serial: dcload-serial/target-src/dcload/syscalls.c

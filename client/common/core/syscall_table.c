@@ -1,4 +1,4 @@
-/* client/common/syscall_table.c */
+/* client/common/core/syscall_table.c */
 /*
  * Kosload syscall jump table.
  *

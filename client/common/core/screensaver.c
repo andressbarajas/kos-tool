@@ -1,4 +1,4 @@
-/* client/common/screensaver.c */
+/* client/common/core/screensaver.c */
 /*
  * Platform-independent screensaver for kosload.
  *

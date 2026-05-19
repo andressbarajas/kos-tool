@@ -1,4 +1,4 @@
-/* client/network/packet_helpers.c */
+/* client/common/network/packet_helpers.c */
 /*
  * Shared packet construction helpers for IP transports.
  *

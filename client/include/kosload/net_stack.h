@@ -30,7 +30,7 @@ extern const unsigned char broadcast[6];
 extern __attribute__((aligned(32))) unsigned char raw_pkt_buf[RAW_TX_PKT_BUF_SIZE];
 extern __attribute__((aligned(2))) unsigned char *pkt_buf;
 
-/* Defined in client/common/commands.c. */
+/* Defined in client/common/core/commands.c. */
 extern __attribute__((aligned(4))) volatile unsigned int our_ip;
 
 #endif /* KOSLOAD_NET_STACK_H */

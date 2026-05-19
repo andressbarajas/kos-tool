@@ -1,4 +1,4 @@
-/* client/common/cdfs.c */
+/* client/common/core/cdfs.c */
 /*
  * Shared CDFS redirection management.
  *

@@ -1,4 +1,4 @@
-/* client/serial/serial_transport.c */
+/* client/common/serial/serial_transport.c */
 /*
  * Serial transport implementation for kosload client.
  *

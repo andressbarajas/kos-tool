@@ -1,4 +1,4 @@
-/* client/network/network_transport.c */
+/* client/common/network/network_transport.c */
 /*
  * Network transport implementation for kosload client.
  *

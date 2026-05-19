@@ -237,7 +237,7 @@ static void ps2_execute_handoff(uint32_t address)
     /* Tell the incoming loader the IOP was already reset, so its bootstrap
      * can skip the redundant SifIopReset (~1.5 s).  Write must happen AFTER
      * cache_flush_range — otherwise dirty KUSEG lines for the trampoline
-     * bytes (left by CMD_SENDBIN's writes) would overwrite the magic when
+     * bytes (left by NET_CMD_SENDBIN's writes) would overwrite the magic when
      * flushed.  KSEG1 lands directly in physical RAM, no D-cache involved. */
     *(volatile uint32_t *)KOSLOAD_IOP_HANDOFF_ADDR = KOSLOAD_IOP_HANDOFF_MAGIC;
 

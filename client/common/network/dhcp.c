@@ -1,4 +1,4 @@
-/* client/network/dhcp.c */
+/* client/common/network/dhcp.c */
 /*
  * Shared DHCP client for the network transport.  Originally
  * dcload-ip/target-src/dcload/dhcp.c; consolidated here so the same

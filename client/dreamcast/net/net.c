@@ -227,7 +227,7 @@ static void process_udp(ether_header_t *ether, ip_header_t *ip, udp_header_t *ud
 #endif
 
 		// This one is the most likely to be called the most often, so put it first and tell GCC it's likely to be called
-		if (__builtin_expect((pkt_match_id) && (!memcmp_32bit_eq(&pkt_match_id, CMD_PARTBIN, 4/4)), 1))
+		if (__builtin_expect((pkt_match_id) && (!memcmp_32bit_eq(&pkt_match_id, NET_CMD_PARTBIN, 4/4)), 1))
 		{
 			// Handle legacy packets and v2.0.0+ packets <= 1460 bytes
 			cmd_partbin(command);
@@ -239,74 +239,74 @@ static void process_udp(ether_header_t *ether, ip_header_t *ip, udp_header_t *ud
 		make_ether(ether->src, bb->mac, (ether_header_t *)pkt_buf);
 
 		// Next likely to be called most often (e.g. during maple <--> PC comms)
-		if ((pkt_match_id) && (!memcmp_32bit_eq(&pkt_match_id, CMD_MAPLE, 4/4)))
+		if ((pkt_match_id) && (!memcmp_32bit_eq(&pkt_match_id, NET_CMD_MAPLE, 4/4)))
 		{
 			cmd_maple(ip, udp, command);
 			pkt_match_id = 0;
 		}
 
 		// Next likely to be called most often (e.g. using PC to do perf counting)
-		if ((pkt_match_id) && (!memcmp_32bit_eq(&pkt_match_id, CMD_PMCR, 4/4)))
+		if ((pkt_match_id) && (!memcmp_32bit_eq(&pkt_match_id, NET_CMD_PMCR, 4/4)))
 		{
 			cmd_pmcr(ip, udp, command);
 			pkt_match_id = 0;
 		}
 
-		if ((pkt_match_id) && (!memcmp_32bit_eq(&pkt_match_id, CMD_DONEBIN, 4/4)))
+		if ((pkt_match_id) && (!memcmp_32bit_eq(&pkt_match_id, NET_CMD_DONEBIN, 4/4)))
 		{
 			cmd_donebin(ip, udp, command);
 			pkt_match_id = 0;
 		}
 
-		if ((pkt_match_id) && (!memcmp_32bit_eq(&pkt_match_id, CMD_RETVAL, 4/4)))
+		if ((pkt_match_id) && (!memcmp_32bit_eq(&pkt_match_id, NET_CMD_RETVAL, 4/4)))
 		{
 			cmd_retval(ip, udp, command);
 			pkt_match_id = 0;
 		}
 
-		if ((pkt_match_id) && (!memcmp_32bit_eq(&pkt_match_id, CMD_LOADBIN, 4/4)))
+		if ((pkt_match_id) && (!memcmp_32bit_eq(&pkt_match_id, NET_CMD_LOADBIN, 4/4)))
 		{
 			cmd_loadbin(ip, udp, command);
 			pkt_match_id = 0;
 		}
 
-		if ((pkt_match_id) && (!memcmp_32bit_eq(&pkt_match_id, CMD_SENDBINQ, 4/4)))
+		if ((pkt_match_id) && (!memcmp_32bit_eq(&pkt_match_id, NET_CMD_SENDBINQ, 4/4)))
 		{
 			cmd_sendbinq(ip, udp, command);
 			pkt_match_id = 0;
 		}
 
-		if ((pkt_match_id) && (!memcmp_32bit_eq(&pkt_match_id, CMD_SENDBIN, 4/4)))
+		if ((pkt_match_id) && (!memcmp_32bit_eq(&pkt_match_id, NET_CMD_SENDBIN, 4/4)))
 		{
 			cmd_sendbin(ip, udp, command);
 			pkt_match_id = 0;
 		}
 
-		if ((pkt_match_id) && (!memcmp_32bit_eq(&pkt_match_id, CMD_EXECUTE, 4/4)))
+		if ((pkt_match_id) && (!memcmp_32bit_eq(&pkt_match_id, NET_CMD_EXECUTE, 4/4)))
 		{
 			cmd_execute(ether, ip, udp, command);
 			pkt_match_id = 0;
 		}
 
-		if ((pkt_match_id) && (!memcmp_32bit_eq(&pkt_match_id, CMD_VERSION, 4/4)))
+		if ((pkt_match_id) && (!memcmp_32bit_eq(&pkt_match_id, NET_CMD_VERSION, 4/4)))
 		{
 			cmd_version(ip, udp, command);
 			pkt_match_id = 0;
 		}
 
-		if ((pkt_match_id) && (!memcmp_32bit_eq(&pkt_match_id, CMD_CAPABILITIES, 4/4)))
+		if ((pkt_match_id) && (!memcmp_32bit_eq(&pkt_match_id, NET_CMD_CAPABILITIES, 4/4)))
 		{
 			cmd_capabilities(ip, udp, command);
 			pkt_match_id = 0;
 		}
 
-		if ((pkt_match_id) && (!memcmp_32bit_eq(&pkt_match_id, CMD_SETRTC, 4/4)))
+		if ((pkt_match_id) && (!memcmp_32bit_eq(&pkt_match_id, NET_CMD_SETRTC, 4/4)))
 		{
 			cmd_setrtc(ip, udp, command);
 			pkt_match_id = 0;
 		}
 
-		if ((pkt_match_id) && (!memcmp_32bit_eq(&pkt_match_id, CMD_REBOOT, 4/4)))
+		if ((pkt_match_id) && (!memcmp_32bit_eq(&pkt_match_id, NET_CMD_REBOOT, 4/4)))
 		{
 			// This function does not return
 			cmd_reboot();

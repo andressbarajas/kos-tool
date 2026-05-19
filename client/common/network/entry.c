@@ -1,4 +1,4 @@
-/* client/network/entry.c */
+/* client/common/network/entry.c */
 /*
  * Network client entry point for kosload.
  * Defines global state and display helpers used by the network stack.

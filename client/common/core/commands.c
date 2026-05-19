@@ -1,4 +1,4 @@
-/* client/common/commands.c */
+/* client/common/core/commands.c */
 /*
  * Network command handlers for kosload client.
  * Ported from dcload-ip commands.c.
@@ -10,21 +10,23 @@
  * Based on dcload-ip: dcload-ip/target-src/dcload/commands.c
  */
 
-#include <stdbool.h>
 #include <string.h>
-#include <kosload/protocol.h>
-#include <kosload/target.h>
+#include <stdbool.h>
+
 #include <kosload/info.h>
-#include <kosload/screensaver.h>
-#include <kosload/net_adapter.h>
-#include <kosload/net_stack.h>
-#include "commands.h"
-#include "dcload.h"
-#include "maple.h"
-#include "perfctr.h"
-#include <kosload/memfuncs.h>
+#include <kosload/target.h>
 #include <kosload/divutil.h>
+#include <kosload/protocol.h>
+#include <kosload/memfuncs.h>
+#include <kosload/net_stack.h>
+#include <kosload/net_adapter.h>
+#include <kosload/screensaver.h>
+
 #include "scif.h"
+#include "maple.h"
+#include "dcload.h"
+#include "perfctr.h"
+#include "commands.h"
 
 extern kosload_info_t kosload_info;
 
@@ -405,7 +407,7 @@ void cmd_sendbinq(ip_header_t *ip, udp_header_t *udp, command_t *command)
 	unsigned short udp_src = ntohs(udp->src);
 	unsigned short udp_dest = ntohs(udp->dest);
 
-	memcpy(response->id, CMD_SENDBIN, 4);
+	memcpy(response->id, NET_CMD_SENDBIN, 4);
 
 	for (i = 0; i < numpackets; i++)
 	{
@@ -425,7 +427,7 @@ void cmd_sendbinq(ip_header_t *ip, udp_header_t *udp, command_t *command)
 		cmd_addr += bytes_thistime;
 	}
 
-	memcpy(response->id, CMD_DONEBIN, 4);
+	memcpy(response->id, NET_CMD_DONEBIN, 4);
 	response->address = 0;
 	response->size = 0;
 	make_ip(ip_src, our_ip, UDP_H_LEN + COMMAND_LEN, IP_UDP_PROTOCOL, (ip_header_t *)(pkt_buf + ETHER_H_LEN), ip->packet_id);

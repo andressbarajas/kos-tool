@@ -1,4 +1,4 @@
-/* client/common/main.c */
+/* client/common/core/main.c */
 /*
  * Common client main entry point.
  * Initializes the target platform and transport, then enters the main loop.

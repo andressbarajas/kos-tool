@@ -1,11 +1,11 @@
-/* client/common/syscalls.c */
+/* client/common/core/syscalls.c */
 /*
  * Shared client-side syscall helpers.
  *
  * Transport-specific syscall implementations (read, write, open, etc.)
  * and gethostinfo live in the transport layer files:
- *   - client/network/network_syscalls.c for network (UDP) syscalls
- *   - client/serial/serial_transport.c for serial (SCIF) syscalls
+ *   - client/common/network/network_syscalls.c for network (UDP) syscalls
+ *   - client/common/serial/serial_transport.c for serial (SCIF) syscalls
  *
  * gethostinfo is transport-specific because it references network globals
  * from the command and network stack layers. Putting it here would cause the

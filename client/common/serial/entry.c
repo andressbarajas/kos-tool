@@ -1,4 +1,4 @@
-/* client/serial/entry.c */
+/* client/common/serial/entry.c */
 /*
  * Serial client entry point for kosload.
  * Calls common_main with the platform's target_ops and the serial transport.

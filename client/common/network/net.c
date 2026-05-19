@@ -1,8 +1,17 @@
-/* client/gamecube/net/net.c */
-/*
- * Network stack for GameCube.
- * Adapted from DC version: uses standard memcpy/memcmp instead of
- * SH4-specific memory functions.
+/* client/common/network/net.c
+ *
+ * Shared network stack (ARP / ICMP / UDP processing + command dispatch)
+ * for GameCube and PlayStation 2 — their previous per-platform
+ * net/net.c files were byte-identical, so this is the single copy.
+ *
+ * Dreamcast keeps its own client/dreamcast/net/net.c: it is genuinely
+ * divergent (SH4 size-dependent memcmp_16bit/32bit ops, a #if NET_DEBUG
+ * scif block, hardcoded byteswapped ARP constants, and different
+ * screensaver-wake behavior), so it stays target-local rather than
+ * being force-merged.
+ *
+ * GC and PS2 both use the standard library memcpy/memcmp, so no
+ * per-platform memory-op shim is required here.
  */
 
 #include <string.h>
@@ -155,7 +164,7 @@ static void process_udp(ether_header_t *ether, ip_header_t *ip, udp_header_t *ud
 
 		unsigned int pkt_match_id = *(unsigned int *)command->id;
 
-		if (__builtin_expect((pkt_match_id) && (memcmp(&pkt_match_id, CMD_PARTBIN, 4) == 0), 1))
+		if (__builtin_expect((pkt_match_id) && (memcmp(&pkt_match_id, NET_CMD_PARTBIN, 4) == 0), 1))
 		{
 			cmd_partbin(command);
 			pkt_match_id = 0;
@@ -163,73 +172,73 @@ static void process_udp(ether_header_t *ether, ip_header_t *ip, udp_header_t *ud
 
 		make_ether(ether->src, bb->mac, (ether_header_t *)pkt_buf);
 
-		if ((pkt_match_id) && (memcmp(&pkt_match_id, CMD_MAPLE, 4) == 0))
+		if ((pkt_match_id) && (memcmp(&pkt_match_id, NET_CMD_MAPLE, 4) == 0))
 		{
 			cmd_maple(ip, udp, command);
 			pkt_match_id = 0;
 		}
 
-		if ((pkt_match_id) && (memcmp(&pkt_match_id, CMD_PMCR, 4) == 0))
+		if ((pkt_match_id) && (memcmp(&pkt_match_id, NET_CMD_PMCR, 4) == 0))
 		{
 			cmd_pmcr(ip, udp, command);
 			pkt_match_id = 0;
 		}
 
-		if ((pkt_match_id) && (memcmp(&pkt_match_id, CMD_DONEBIN, 4) == 0))
+		if ((pkt_match_id) && (memcmp(&pkt_match_id, NET_CMD_DONEBIN, 4) == 0))
 		{
 			cmd_donebin(ip, udp, command);
 			pkt_match_id = 0;
 		}
 
-		if ((pkt_match_id) && (memcmp(&pkt_match_id, CMD_RETVAL, 4) == 0))
+		if ((pkt_match_id) && (memcmp(&pkt_match_id, NET_CMD_RETVAL, 4) == 0))
 		{
 			cmd_retval(ip, udp, command);
 			pkt_match_id = 0;
 		}
 
-		if ((pkt_match_id) && (memcmp(&pkt_match_id, CMD_LOADBIN, 4) == 0))
+		if ((pkt_match_id) && (memcmp(&pkt_match_id, NET_CMD_LOADBIN, 4) == 0))
 		{
 			cmd_loadbin(ip, udp, command);
 			pkt_match_id = 0;
 		}
 
-		if ((pkt_match_id) && (memcmp(&pkt_match_id, CMD_SENDBINQ, 4) == 0))
+		if ((pkt_match_id) && (memcmp(&pkt_match_id, NET_CMD_SENDBINQ, 4) == 0))
 		{
 			cmd_sendbinq(ip, udp, command);
 			pkt_match_id = 0;
 		}
 
-		if ((pkt_match_id) && (memcmp(&pkt_match_id, CMD_SENDBIN, 4) == 0))
+		if ((pkt_match_id) && (memcmp(&pkt_match_id, NET_CMD_SENDBIN, 4) == 0))
 		{
 			cmd_sendbin(ip, udp, command);
 			pkt_match_id = 0;
 		}
 
-		if ((pkt_match_id) && (memcmp(&pkt_match_id, CMD_EXECUTE, 4) == 0))
+		if ((pkt_match_id) && (memcmp(&pkt_match_id, NET_CMD_EXECUTE, 4) == 0))
 		{
 			cmd_execute(ether, ip, udp, command);
 			pkt_match_id = 0;
 		}
 
-		if ((pkt_match_id) && (memcmp(&pkt_match_id, CMD_VERSION, 4) == 0))
+		if ((pkt_match_id) && (memcmp(&pkt_match_id, NET_CMD_VERSION, 4) == 0))
 		{
 			cmd_version(ip, udp, command);
 			pkt_match_id = 0;
 		}
 
-		if ((pkt_match_id) && (memcmp(&pkt_match_id, CMD_CAPABILITIES, 4) == 0))
+		if ((pkt_match_id) && (memcmp(&pkt_match_id, NET_CMD_CAPABILITIES, 4) == 0))
 		{
 			cmd_capabilities(ip, udp, command);
 			pkt_match_id = 0;
 		}
 
-		if ((pkt_match_id) && (memcmp(&pkt_match_id, CMD_SETRTC, 4) == 0))
+		if ((pkt_match_id) && (memcmp(&pkt_match_id, NET_CMD_SETRTC, 4) == 0))
 		{
 			cmd_setrtc(ip, udp, command);
 			pkt_match_id = 0;
 		}
 
-		if ((pkt_match_id) && (memcmp(&pkt_match_id, CMD_REBOOT, 4) == 0))
+		if ((pkt_match_id) && (memcmp(&pkt_match_id, NET_CMD_REBOOT, 4) == 0))
 		{
 			cmd_reboot();
 		}

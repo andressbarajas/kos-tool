@@ -167,13 +167,13 @@ COMMON_OBJS := $(COMMON_C_OBJS) $(COMMON_S_OBJS)
 COMMON_A    := $(COMMONDIR)/kosload_common.a
 
 # Common C object rules (by source directory)
-$(COMMONDIR)/info.o: $(CLIENTDIR)/common/info.c $(VERSION_H) | $(COMMONDIR)
+$(COMMONDIR)/info.o: $(CLIENTDIR)/common/core/info.c $(VERSION_H) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(COMMONDIR)/screensaver.o: $(CLIENTDIR)/common/screensaver.c $(VERSION_H) | $(COMMONDIR)
+$(COMMONDIR)/screensaver.o: $(CLIENTDIR)/common/core/screensaver.c $(VERSION_H) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(COMMONDIR)/syscall_table.o: $(CLIENTDIR)/common/syscall_table.c $(VERSION_H) | $(COMMONDIR)
+$(COMMONDIR)/syscall_table.o: $(CLIENTDIR)/common/core/syscall_table.c $(VERSION_H) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(COMMONDIR)/target.o: target.c ee_cop0.h $(VERSION_H) | $(COMMONDIR)
@@ -371,6 +371,7 @@ IP_BOOTSTRAP_OBJS := \
 IP_NETWORK_STACK_OBJS := \
     $(IPDIR)/net.o \
     $(IPDIR)/packet.o \
+    $(IPDIR)/packet_helpers.o \
     $(IPDIR)/dhcp.o
 
 IP_OBJS := \
@@ -393,19 +394,19 @@ IP_ELF                 := $(IPDIR)/ps2-load-ip.elf
 IP_BIN                 := $(IPDIR)/ps2-load-ip.bin
 
 # IP C object rules
-$(IPDIR)/main.o: $(CLIENTDIR)/common/main.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/main.o: $(CLIENTDIR)/common/core/main.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/commands.o: $(CLIENTDIR)/common/commands.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/commands.o: $(CLIENTDIR)/common/core/commands.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/entry.o: $(CLIENTDIR)/network/entry.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/entry.o: $(CLIENTDIR)/common/network/entry.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/network_transport.o: $(CLIENTDIR)/network/network_transport.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/network_transport.o: $(CLIENTDIR)/common/network/network_transport.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/network_syscalls.o: $(CLIENTDIR)/network/network_syscalls.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/network_syscalls.o: $(CLIENTDIR)/common/network/network_syscalls.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
 $(IPDIR)/adapter.o: net/adapter.c $(VERSION_H) | $(IPDIR)
@@ -423,13 +424,16 @@ $(IPDIR)/iop_bootstrap.o: bootstrap/iop_bootstrap.c bootstrap/iop_bootstrap.h ee
 $(IPDIR)/smap.o: net/smap.c iop_dev9.h $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/net.o: net/net.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/net.o: $(CLIENTDIR)/common/network/net.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
 $(IPDIR)/packet.o: net/packet.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/dhcp.o: $(CLIENTDIR)/network/dhcp.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/packet_helpers.o: $(CLIENTDIR)/common/network/packet_helpers.c $(VERSION_H) | $(IPDIR)
+	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
+
+$(IPDIR)/dhcp.o: $(CLIENTDIR)/common/network/dhcp.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
 # Stage 1: link the real loader at PS2_INNER_LOADER_BASE.

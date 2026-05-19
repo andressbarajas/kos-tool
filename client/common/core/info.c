@@ -1,4 +1,4 @@
-/* client/common/info.c */
+/* client/common/core/info.c */
 /*
  * kosload info block instance.
  *

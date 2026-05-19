@@ -134,13 +134,13 @@ COMMON_OBJS := $(COMMON_C_OBJS) $(COMMON_S_OBJS)
 COMMON_A    := $(COMMONDIR)/kosload_common.a
 
 # Common C object rules (by source directory)
-$(COMMONDIR)/info.o: $(CLIENTDIR)/common/info.c $(VERSION_H) | $(COMMONDIR)
+$(COMMONDIR)/info.o: $(CLIENTDIR)/common/core/info.c $(VERSION_H) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(COMMONDIR)/screensaver.o: $(CLIENTDIR)/common/screensaver.c $(VERSION_H) | $(COMMONDIR)
+$(COMMONDIR)/screensaver.o: $(CLIENTDIR)/common/core/screensaver.c $(VERSION_H) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(COMMONDIR)/syscall_table.o: $(CLIENTDIR)/common/syscall_table.c $(VERSION_H) | $(COMMONDIR)
+$(COMMONDIR)/syscall_table.o: $(CLIENTDIR)/common/core/syscall_table.c $(VERSION_H) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(COMMONDIR)/target.o: target.c $(VERSION_H) | $(COMMONDIR)
@@ -195,16 +195,16 @@ SERIAL_BIN := $(SERIALDIR)/gc-load-ser.bin
 GC_SERIAL_LDFLAGS := -nostdlib -Wl,-n -Wl,--gc-sections
 
 # Serial C object rules
-$(SERIALDIR)/main.o: $(CLIENTDIR)/common/main.c $(VERSION_H) | $(SERIALDIR)
+$(SERIALDIR)/main.o: $(CLIENTDIR)/common/core/main.c $(VERSION_H) | $(SERIALDIR)
 	$(CC) $(CFLAGS) $(SERIAL_DEFS) -c $< -o $@
 
-$(SERIALDIR)/entry.o: $(CLIENTDIR)/serial/entry.c $(VERSION_H) | $(SERIALDIR)
+$(SERIALDIR)/entry.o: $(CLIENTDIR)/common/serial/entry.c $(VERSION_H) | $(SERIALDIR)
 	$(CC) $(CFLAGS) $(SERIAL_DEFS) -c $< -o $@
 
-$(SERIALDIR)/serial_transport.o: $(CLIENTDIR)/serial/serial_transport.c $(VERSION_H) | $(SERIALDIR)
+$(SERIALDIR)/serial_transport.o: $(CLIENTDIR)/common/serial/serial_transport.c $(VERSION_H) | $(SERIALDIR)
 	$(CC) $(CFLAGS) $(SERIAL_DEFS) -c $< -o $@
 
-$(SERIALDIR)/serial_syscalls.o: $(CLIENTDIR)/serial/serial_syscalls.c $(VERSION_H) | $(SERIALDIR)
+$(SERIALDIR)/serial_syscalls.o: $(CLIENTDIR)/common/serial/serial_syscalls.c $(VERSION_H) | $(SERIALDIR)
 	$(CC) $(CFLAGS) $(SERIAL_DEFS) -c $< -o $@
 
 $(SERIAL_ELF): $(SERIAL_OBJS) $(COMMON_A) $(MINILZO_A) $(SERIAL_LD)
@@ -231,7 +231,7 @@ GC_IP_LDFLAGS := -nostdlib -Wl,-n -Wl,--gc-sections
 # IP object groups keep the network layering visible:
 # - platform adapters and bus bindings live under client/gamecube/net/
 # - shared chip drivers live under client/common/drivers/
-# - shared transport/stack code lives under client/network/
+# - shared transport/stack code lives under client/common/network/
 IP_CLIENT_TRANSPORT_OBJS := \
     $(IPDIR)/main.o \
     $(IPDIR)/entry.o \
@@ -272,19 +272,19 @@ $(IP_CONFIG_STAMP): | $(IPDIR)
 	@if ! cmp -s $@.tmp $@ 2>/dev/null; then mv $@.tmp $@; echo "  GEN     $@"; else rm $@.tmp; fi
 
 # IP C object rules
-$(IPDIR)/main.o: $(CLIENTDIR)/common/main.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/main.o: $(CLIENTDIR)/common/core/main.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/commands.o: $(CLIENTDIR)/common/commands.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/commands.o: $(CLIENTDIR)/common/core/commands.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/entry.o: $(CLIENTDIR)/network/entry.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/entry.o: $(CLIENTDIR)/common/network/entry.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/network_transport.o: $(CLIENTDIR)/network/network_transport.c $(VERSION_H) $(IP_CONFIG_STAMP) | $(IPDIR)
+$(IPDIR)/network_transport.o: $(CLIENTDIR)/common/network/network_transport.c $(VERSION_H) $(IP_CONFIG_STAMP) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/network_syscalls.o: $(CLIENTDIR)/network/network_syscalls.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/network_syscalls.o: $(CLIENTDIR)/common/network/network_syscalls.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
 $(IPDIR)/adapter.o: net/adapter.c $(VERSION_H) | $(IPDIR)
@@ -302,16 +302,16 @@ $(IPDIR)/w5500.o: $(CLIENTDIR)/common/drivers/w5500.c $(VERSION_H) | $(IPDIR)
 $(IPDIR)/w5500_spi_gc.o: net/w5500_spi_gc.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/net.o: net/net.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/net.o: $(CLIENTDIR)/common/network/net.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
 $(IPDIR)/packet.o: net/packet.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/packet_helpers.o: $(CLIENTDIR)/network/packet_helpers.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/packet_helpers.o: $(CLIENTDIR)/common/network/packet_helpers.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/dhcp.o: $(CLIENTDIR)/network/dhcp.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/dhcp.o: $(CLIENTDIR)/common/network/dhcp.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
 $(IP_ELF): $(IP_OBJS) $(COMMON_A) $(IP_LD)

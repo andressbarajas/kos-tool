@@ -81,7 +81,7 @@
  * Bits 0 and 1 of NWAYS report 10 Mbps and 100 Mbps link status; either
  * being set means the chip has settled on a usable link.  The driver
  * only needs the composite, so the individual bits aren't named here. */
-#define GCBBA_NWAYS_LINK_UP  0x03u
+#define GCBBA_NWAYS_LINK_UP  0x03
 
 /* ===== Adapter driver entry points ===== */
 int  bba_detect(void);

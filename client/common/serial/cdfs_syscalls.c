@@ -1,21 +1,20 @@
-/* client/network/cdfs_syscalls.c */
+/* client/common/serial/cdfs_syscalls.c */
 /*
- * CDFS syscall implementations for network transport.
- * Based on dcload-ip: dcload-ip/target-src/dcload/cdfs_syscalls.c
+ * CDFS syscall implementations for serial transport.
+ * Ported from dcload-serial cdfs_syscalls.c.
  *
  * Intercepts GD-ROM BIOS calls and redirects sector reads over
- * the network to the host tool via CMD_CDFSREAD.
+ * the serial port to the host tool.
  */
 
-#include <string.h>
 #include <kosload/protocol.h>
-#include <kosload/net_adapter.h>
-#include <kosload/net_stack.h>
-#include "packet.h"
-#include "commands.h"
+#include <kosload/serial_io.h>
 
-/* From network_syscalls.c */
-extern void build_send_packet(int command_len);
+/* From serial_transport.c */
+extern void load_data_block_general(unsigned char *addr,
+                                    unsigned int size, unsigned int verbose);
+extern unsigned int get_uint(void);
+extern void put_uint(unsigned int val);
 
 static int gdStatus = 0;
 
@@ -27,19 +26,15 @@ struct TOC {
 
 int gdGdcReqCmd(int cmd, int *param)
 {
-    net_command_3int_t *command = (net_command_3int_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
     struct TOC *toc;
     int i;
 
     switch (cmd) {
     case 16: /* read sectors */
-        memcpy(command->id, NET_SYSCALL_CDFSREAD, 4);
-        command->value0 = htonl(param[0]);
-        command->value1 = htonl(param[2]);
-        command->value2 = htonl(param[1] * 2048);
-        build_send_packet(sizeof(net_command_3int_t));
-        bb->loop(0);
-
+        serial_io_putchar(SERIAL_SYSCALL_CDFSREAD);
+        put_uint(param[0]); /* starting sector */
+        put_uint(param[1]); /* number of sectors */
+        load_data_block_general((unsigned char *)param[2], param[1] * 2048, 0);
         param[3] = 0;
         gdStatus = 2;
         return 0;

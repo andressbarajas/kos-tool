@@ -1,4 +1,4 @@
-/* client/serial/serial_internal.h */
+/* client/common/serial/serial_internal.h */
 /*
  * Shared declarations between serial_transport.c and serial_syscalls.c.
  * Not part of the public client API — internal to the serial transport.
