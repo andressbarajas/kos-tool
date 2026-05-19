@@ -13,7 +13,7 @@
 #include "net.h"
 #include "adapter.h"
 #include "rtl8139.h"
-#include "dcload.h"
+#include "kosload.h"
 
 #include <kosload/dhcp.h>
 #include "memfuncs.h"
@@ -570,7 +570,7 @@ int rtl_bb_tx(unsigned char * pkt, int len) // pg. 15 in RTL8139C datasheet: htt
 
 // Tx time
 #ifdef TX_LOOP_TIMING
-		unsigned long long int first_array = PMCR_RegRead(DCLOAD_PMCR);
+		unsigned long long int first_array = PMCR_RegRead(KOSLOAD_PMCR);
 #endif
 
 	unsigned char *copyback_pkt_base = to_p1(&pkt[-2]); // copyback base in cached memory area
@@ -682,7 +682,7 @@ int rtl_bb_tx(unsigned char * pkt, int len) // pg. 15 in RTL8139C datasheet: htt
 
 // Tx time end
 #ifdef TX_LOOP_TIMING
-		unsigned long long int second_array = PMCR_RegRead(DCLOAD_PMCR);
+		unsigned long long int second_array = PMCR_RegRead(KOSLOAD_PMCR);
 		unsigned int loop_difference = (unsigned int)(second_array - first_array);
 
 		clear_lines(222, 24, global_bg_color);
@@ -765,7 +765,7 @@ static int rtl_bb_rx()
 
 // Full loop timing
 #ifdef FULL_TRIP_TIMING
-    unsigned long long int first_array1 = PMCR_RegRead(DCLOAD_PMCR);
+    unsigned long long int first_array1 = PMCR_RegRead(KOSLOAD_PMCR);
 #endif
 
 		if ((rx_status & RT_RX_STATUS_OK) && (pkt_size <= RX_PKT_BUF_SIZE))
@@ -774,14 +774,14 @@ static int rtl_bb_rx()
 
 // Rx time
 #ifdef RX_LOOP_TIMING
-			unsigned long long int first_array = PMCR_RegRead(DCLOAD_PMCR);
+			unsigned long long int first_array = PMCR_RegRead(KOSLOAD_PMCR);
 #endif
 
 			pktcpy(raw_current_pkt, pkt, pkt_size); // SH4_pkt_to_mem() will shift it by 2 for current_pkt
 
 // Rx time end
 #ifdef RX_LOOP_TIMING
-		unsigned long long int second_array = PMCR_RegRead(DCLOAD_PMCR);
+		unsigned long long int second_array = PMCR_RegRead(KOSLOAD_PMCR);
 		unsigned int loop_difference = (unsigned int)(second_array - first_array);
 
 		clear_lines(246, 24, global_bg_color);
@@ -792,7 +792,7 @@ static int rtl_bb_rx()
 // Process time
 #ifdef PKT_PROCESS_TIMING
 			__asm__ volatile ("nop\n" : : : "memory");
-		unsigned long long int	first_array2 = PMCR_RegRead(DCLOAD_PMCR);
+		unsigned long long int	first_array2 = PMCR_RegRead(KOSLOAD_PMCR);
 #endif
 
 			//process_pkt(current_pkt);
@@ -800,7 +800,7 @@ static int rtl_bb_rx()
 
 // Process time end
 #ifdef PKT_PROCESS_TIMING
-		unsigned long long int second_array2 = PMCR_RegRead(DCLOAD_PMCR);
+		unsigned long long int second_array2 = PMCR_RegRead(KOSLOAD_PMCR);
 		unsigned int loop_difference2 = (unsigned int)(second_array2 - first_array2);
 
 		clear_lines(270, 24, global_bg_color);
@@ -854,7 +854,7 @@ static int rtl_bb_rx()
 		processed++;
 
 #ifdef FULL_TRIP_TIMING
-		unsigned long long int second_array1 = PMCR_RegRead(DCLOAD_PMCR);
+		unsigned long long int second_array1 = PMCR_RegRead(KOSLOAD_PMCR);
 		unsigned int loop_difference1 = (unsigned int)(second_array1 - first_array1);
 
 		clear_lines(412, 24, global_bg_color);

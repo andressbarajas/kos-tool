@@ -101,7 +101,7 @@ typedef struct {
     int            st_blksize;
     int            st_blocks;
     int            st_spare4[2];
-} dcload_stat_t;
+} kosload_stat_t;
 
 /* dcload dirent structure */
 typedef struct {
@@ -110,7 +110,7 @@ typedef struct {
     unsigned short d_reclen;
     unsigned char  d_type;
     char           d_name[256];
-} dcload_dirent_t;
+} kosload_dirent_t;
 
 /* ===== Syscall wrappers ===== */
 
@@ -184,11 +184,11 @@ static int kl_lseek(int fd, int offset, int whence)
     return sc(SYSCALL_LSEEK, fd, offset, whence);
 }
 
-static int kl_fstat(int fd, dcload_stat_t *buf)
+static int kl_fstat(int fd, kosload_stat_t *buf)
 {
     kosload_syscall_fn sc = get_syscall();
     if (!sc) return -1;
-    return sc(SYSCALL_FSTAT, fd, (int)buf, (int)sizeof(dcload_stat_t));
+    return sc(SYSCALL_FSTAT, fd, (int)buf, (int)sizeof(kosload_stat_t));
 }
 
 static int kl_time(void)
@@ -198,11 +198,11 @@ static int kl_time(void)
     return sc(SYSCALL_TIME, 0, 0, 0);
 }
 
-static int kl_stat(const char *path, dcload_stat_t *buf)
+static int kl_stat(const char *path, kosload_stat_t *buf)
 {
     kosload_syscall_fn sc = get_syscall();
     if (!sc) return -1;
-    return sc(SYSCALL_STAT, (int)path, (int)buf, (int)sizeof(dcload_stat_t));
+    return sc(SYSCALL_STAT, (int)path, (int)buf, (int)sizeof(kosload_stat_t));
 }
 
 static int kl_utime(const char *path, unsigned int *times)
@@ -226,11 +226,11 @@ static int kl_closedir(unsigned int dir)
     return sc(SYSCALL_CLOSEDIR, (int)dir, 0, 0);
 }
 
-static dcload_dirent_t *kl_readdir(unsigned int dir)
+static kosload_dirent_t *kl_readdir(unsigned int dir)
 {
     kosload_syscall_fn sc = get_syscall();
-    if (!sc) return (dcload_dirent_t *)0;
-    return (dcload_dirent_t *)sc(SYSCALL_READDIR, (int)dir, 0, 0);
+    if (!sc) return (kosload_dirent_t *)0;
+    return (kosload_dirent_t *)sc(SYSCALL_READDIR, (int)dir, 0, 0);
 }
 
 static int kl_rewinddir(unsigned int dir)
@@ -328,8 +328,8 @@ void start(void)
     char buf[256];
     char numbuf[12];
     int fd, n, ret;
-    dcload_stat_t st;
-    dcload_dirent_t *dent;
+    kosload_stat_t st;
+    kosload_dirent_t *dent;
     unsigned int dir;
     unsigned int ip, port;
     unsigned int times[2];
@@ -454,7 +454,7 @@ void start(void)
     /* Slot 18: readdir */
     if (dir) {
         dent = kl_readdir(dir);
-        result("readdir(dir) returns entry", dent != (dcload_dirent_t *)0);
+        result("readdir(dir) returns entry", dent != (kosload_dirent_t *)0);
         if (dent) {
             print("         d_name = \"");
             print(dent->d_name);
@@ -475,7 +475,7 @@ void start(void)
     /* readdir after rewind */
     if (dir) {
         dent = kl_readdir(dir);
-        result("readdir() after rewind", dent != (dcload_dirent_t *)0);
+        result("readdir() after rewind", dent != (kosload_dirent_t *)0);
     } else {
         result("readdir() after rewind", 0);
     }

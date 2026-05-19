@@ -33,7 +33,7 @@
 #include "adapter.h"
 #include <kosload/dhcp.h>
 #include <kosload/target.h>
-#include "dcload.h"
+#include "kosload.h"
 
 // Need to uniquely identify renewal in build_send_dhcp_packet(),
 // so for internal purposes use an invalid DHCP type for that.

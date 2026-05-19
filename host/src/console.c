@@ -1358,7 +1358,7 @@ static void net_syscall_fstat(kostool_context_t *ctx, uint8_t *pkt) {
     uint32_t sz = ntohl(cmd->value2);
     struct stat st = {0};
     int ret = fstat(fd, &st);
-    dcload_stat_t ds = {0};
+    kosload_stat_t ds = {0};
     ds.st_dev = target_order16(ctx, st.st_dev);
     ds.st_ino = target_order16(ctx, st.st_ino);
     ds.st_mode = target_order32(ctx, st.st_mode);
@@ -1512,7 +1512,7 @@ static void net_syscall_stat(kostool_context_t *ctx, uint8_t *pkt) {
     char buf[MAX_PATH_LEN];
     const char *resolved = resolve_path(ctx, cmd->string, buf, sizeof(buf));
     int ret = stat(resolved, &st);
-    dcload_stat_t ds = {0};
+    kosload_stat_t ds = {0};
     ds.st_dev = target_order16(ctx, st.st_dev);
     ds.st_ino = target_order16(ctx, st.st_ino);
     ds.st_mode = target_order32(ctx, st.st_mode);
@@ -1586,7 +1586,7 @@ static void net_syscall_readdir(kostool_context_t *ctx, uint8_t *pkt) {
     if (i >= DIRENT_OFFSET && i < MAX_OPEN_DIRS + DIRENT_OFFSET)
         de = readdir(opendirs[i - DIRENT_OFFSET]);
     if (de) {
-        dcload_dirent_t dd = {0};
+        kosload_dirent_t dd = {0};
         dd.d_ino = target_order32(ctx, de->d_ino);
 #if defined(__APPLE__) || defined(__FreeBSD__)
         dd.d_off = 0;

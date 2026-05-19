@@ -23,7 +23,7 @@
 #include "enc28j60.h"
 #include "packet.h"
 #include "net.h"
-#include "dcload.h"
+#include "kosload.h"
 #include <kosload/dhcp.h>
 #include <kosload/target.h>
 #include "../exi.h"

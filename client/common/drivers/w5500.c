@@ -18,7 +18,7 @@
 #include <kosload/net_stack.h>
 #include "w5500.h"
 #include "packet.h"
-#include "dcload.h"
+#include "kosload.h"
 #include <kosload/dhcp.h>
 #include <kosload/target.h>
 #include <kosload/screensaver.h>

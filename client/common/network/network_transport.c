@@ -18,7 +18,7 @@
 #include <kosload/info.h>
 #include <kosload/net_adapter.h>
 #include <kosload/net_stack.h>
-#include "dcload.h"
+#include "kosload.h"
 #include "packet.h"
 #include <kosload/screensaver.h>
 

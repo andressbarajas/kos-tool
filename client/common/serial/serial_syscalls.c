@@ -145,7 +145,7 @@ int lseek(int fd, int offset, int whence)
 
 int fstat(int fd, void *buf)
 {
-    dcload_stat_t *ds = (dcload_stat_t *)buf;
+    kosload_stat_t *ds = (kosload_stat_t *)buf;
     unsigned int blksize_val, blocks_val;
 
     serial_io_putchar(SERIAL_SYSCALL_FSTAT);
@@ -154,7 +154,7 @@ int fstat(int fd, void *buf)
     /* Host sends 13 stat fields as individual uint32s in order:
      * dev, ino, mode, nlink, uid, gid, rdev, size,
      * blksize, blocks, atime, mtime, ctime.
-     * Map to dcload_stat_t layout (uint16 for dev/ino/nlink/uid/gid/rdev,
+     * Map to kosload_stat_t layout (uint16 for dev/ino/nlink/uid/gid/rdev,
      * and blksize/blocks come after time fields with spare slots). */
     ds->st_dev = (unsigned short)get_uint();
     ds->st_ino = (unsigned short)get_uint();
@@ -196,7 +196,7 @@ int time(unsigned int *t)
 int stat(const char *pathname, void *buf)
 {
     unsigned int namelen = strlen(pathname) + 1;
-    dcload_stat_t *ds = (dcload_stat_t *)buf;
+    kosload_stat_t *ds = (kosload_stat_t *)buf;
     unsigned int blksize_val, blocks_val;
 
     serial_io_putchar(SERIAL_SYSCALL_STAT);

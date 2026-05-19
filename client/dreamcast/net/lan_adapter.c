@@ -12,7 +12,7 @@
 #include "net.h"
 #include "adapter.h"
 #include "lan_adapter.h"
-#include "dcload.h" // clear_lines is in here
+#include "kosload.h" // clear_lines is in here
 #include "video.h" // for draw_string
 
 #include <kosload/dhcp.h>
@@ -419,7 +419,7 @@ int la_bb_tx(unsigned char *pkt, int len)
 
 // Tx time
 #ifdef LAN_TX_LOOP_TIMING
-		unsigned long long int first_array = PMCR_RegRead(DCLOAD_PMCR);
+		unsigned long long int first_array = PMCR_RegRead(KOSLOAD_PMCR);
 #endif
 
 	/* Is the length less than the minimum? */
@@ -461,7 +461,7 @@ int la_bb_tx(unsigned char *pkt, int len)
 
 // Tx time end
 #ifdef LAN_TX_LOOP_TIMING
-		unsigned long long int second_array = PMCR_RegRead(DCLOAD_PMCR);
+		unsigned long long int second_array = PMCR_RegRead(KOSLOAD_PMCR);
 		unsigned int loop_difference = (unsigned int)(second_array - first_array);
 
 		clear_lines(222, 24, global_bg_color);
@@ -523,7 +523,7 @@ static int la_bb_rx(void)
 
 // Full loop timing
 #ifdef LAN_FULL_TRIP_TIMING
-    unsigned long long int first_array1 = PMCR_RegRead(DCLOAD_PMCR);
+    unsigned long long int first_array1 = PMCR_RegRead(KOSLOAD_PMCR);
 #endif
 
 		/* Get the receive status byte */
@@ -563,7 +563,7 @@ static int la_bb_rx(void)
 
 // Rx time
 #ifdef LAN_RX_LOOP_TIMING
-			unsigned long long int first_array = PMCR_RegRead(DCLOAD_PMCR);
+			unsigned long long int first_array = PMCR_RegRead(KOSLOAD_PMCR);
 #endif
 
 		// This loop is dumb, but we are able to max out the LAN adapter with it, so that's neat
@@ -577,7 +577,7 @@ static int la_bb_rx(void)
 
 // Rx time end
 #ifdef LAN_RX_LOOP_TIMING
-		unsigned long long int second_array = PMCR_RegRead(DCLOAD_PMCR);
+		unsigned long long int second_array = PMCR_RegRead(KOSLOAD_PMCR);
 		unsigned int loop_difference = (unsigned int)(second_array - first_array);
 
 		clear_lines(246, 24, global_bg_color);
@@ -595,7 +595,7 @@ static int la_bb_rx(void)
 			draw_total(); */
 
 #ifdef LAN_FULL_TRIP_TIMING
-		unsigned long long int second_array1 = PMCR_RegRead(DCLOAD_PMCR);
+		unsigned long long int second_array1 = PMCR_RegRead(KOSLOAD_PMCR);
 		unsigned int loop_difference1 = (unsigned int)(second_array1 - first_array1);
 
 		clear_lines(412, 24, global_bg_color);

@@ -1,4 +1,4 @@
-/* client/dreamcast/net/dcload.h */
+/* client/dreamcast/net/kosload.h */
 /*
  * Compatibility header for ported dcload-ip network stack files.
  * Provides the defines and declarations that dcload.h originally supplied.
@@ -6,13 +6,13 @@
  * Based on dcload-ip: dcload-ip/target-src/dcload/dcload.h
  */
 
-#ifndef __DCLOAD_H__
-#define __DCLOAD_H__
+#ifndef __KOSLOAD_H__
+#define __KOSLOAD_H__
 
 #include <stdbool.h>
 
 /* Performance counter configuration (used by adapter timeout loops and cmd_pmcr) */
-#define DCLOAD_PMCR 1
+#define KOSLOAD_PMCR 1
 
 /* Background colors (RGB565 format) — black like dcload-serial */
 #define BBA_BG_COLOR   0x0010
@@ -58,4 +58,4 @@ extern void __call_builtin_sh_set_fpscr(unsigned int value);
 extern void STARTUP_Init_Video(unsigned char fbuffer_color_mode);
 extern void STARTUP_Set_Video(unsigned char fbuffer_color_mode);
 
-#endif /* __DCLOAD_H__ */
+#endif /* __KOSLOAD_H__ */

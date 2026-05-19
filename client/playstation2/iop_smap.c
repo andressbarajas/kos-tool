@@ -157,26 +157,6 @@ int ps2_smap_init(void)
                               SMAP_BIND_ATTEMPTS) < 0)
         return -1;
 
-    /* Defensive secondary net: a healthy bind yields IOP-RAM pointers
-     * (cold-boot reference buf ~0x0004CC8C).  Reject an obviously bad
-     * server/buf (0 or outside the 2 MB IOP RAM window) rather than let
-     * ee_sif_rpc_call() DMA through it — its only guard is buf != 0.
-     * NOTE: this is intentionally coarse; it catches 0 / out-of-RAM but
-     * NOT the resident-SIFCMD-range garbage (~0x3590) seen on -F, which
-     * is in-range.  The sentinel gate above is what actually prevents
-     * that case; this check is belt-and-suspenders. */
-    {
-        uint32_t srv = (uint32_t)(uintptr_t)smap_client.server;
-        uint32_t buf = (uint32_t)(uintptr_t)smap_client.buf;
-        if (srv == 0 || srv >= 0x00200000 ||
-            buf == 0 || buf >= 0x00200000)
-            return -7;
-    }
-
-    /* (SMAP BIND DIAG dump+halt removed 2026-05-18 — hardware-confirmed
-     * that -F now binds the real server: buf=0x0004CC8C / server=0x0004CD8C,
-     * matching the cold-boot reference.) */
-
     memset(&smap_layout_rsp, 0, sizeof(smap_layout_rsp));
     rc = rpc_call_sync(PS2_SMAP_FNO_GET_LAYOUT,
                        0, 0,

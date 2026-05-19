@@ -1,10 +1,10 @@
-/* client/playstation2/net/dcload.h */
-#ifndef __DCLOAD_H__
-#define __DCLOAD_H__
+/* client/playstation2/net/kosload.h */
+#ifndef __KOSLOAD_H__
+#define __KOSLOAD_H__
 
 #include <stdbool.h>
 
-#define DCLOAD_PMCR 1
+#define KOSLOAD_PMCR 1
 
 /* Colors in 0x00RRGGBB format */
 #define BBA_BG_COLOR   0x001C81B3   /* PlayStation 2 blue */

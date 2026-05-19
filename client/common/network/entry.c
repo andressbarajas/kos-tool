@@ -25,7 +25,7 @@
 #include <kosload/net_stack.h>
 
 #include <kosload/dhcp.h>
-#include "dcload.h"
+#include "kosload.h"
 
 #include <kosload/screensaver.h>
 #include <kosload/divutil.h>

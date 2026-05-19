@@ -24,7 +24,7 @@
 
 #include "scif.h"
 #include "maple.h"
-#include "dcload.h"
+#include "kosload.h"
 #include "perfctr.h"
 #include "commands.h"
 
@@ -46,7 +46,7 @@ static unsigned char dbg_hex2[12];
 /* Syscall state (defined in network syscalls) */
 extern unsigned int syscall_retval;
 extern unsigned char *syscall_data;
-extern unsigned short dcload_syscall_port;
+extern unsigned short kosload_syscall_port;
 
 
 /* Forward declarations for syscalls used in error paths */
@@ -458,7 +458,7 @@ void cmd_capabilities(ip_header_t *ip, udp_header_t *udp, command_t *command)
 	make_ip(ntohl(ip->src), our_ip, UDP_H_LEN + COMMAND_LEN,
 	        IP_UDP_PROTOCOL, (ip_header_t *)(pkt_buf + ETHER_H_LEN),
 	        ip->packet_id);
-	make_udp(ntohs(udp->src), dcload_syscall_port, COMMAND_LEN,
+	make_udp(ntohs(udp->src), kosload_syscall_port, COMMAND_LEN,
 	         (ip_header_t *)(pkt_buf + ETHER_H_LEN),
 	         (udp_header_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN));
 	bb->tx(pkt_buf, ETHER_H_LEN + IP_H_LEN + UDP_H_LEN + COMMAND_LEN);
@@ -481,9 +481,9 @@ void cmd_version(ip_header_t *ip, udp_header_t *udp, command_t *command)
 
 	/* New versions get the syscall port from the UDP dest port */
 	if (DCTOOL_MAJOR >= 2)
-		dcload_syscall_port = ntohs(udp->dest);
+		kosload_syscall_port = ntohs(udp->dest);
 	else
-		dcload_syscall_port = 31313;
+		kosload_syscall_port = 31313;
 
 	datalength = strlen(LOADER_NAME " " KOSLOAD_VERSION_STRING " using ");
 	memcpy(response, command, COMMAND_LEN);
@@ -499,7 +499,7 @@ void cmd_version(ip_header_t *ip, udp_header_t *udp, command_t *command)
 	response->address = htonl(installed_adapter);
 
 	make_ip(ntohl(ip->src), our_ip, UDP_H_LEN + COMMAND_LEN + datalength, IP_UDP_PROTOCOL, (ip_header_t *)(pkt_buf + ETHER_H_LEN), ip->packet_id);
-	make_udp(ntohs(udp->src), dcload_syscall_port, COMMAND_LEN + datalength, (ip_header_t *)(pkt_buf + ETHER_H_LEN), (udp_header_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN));
+	make_udp(ntohs(udp->src), kosload_syscall_port, COMMAND_LEN + datalength, (ip_header_t *)(pkt_buf + ETHER_H_LEN), (udp_header_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN));
 	bb->tx(pkt_buf, ETHER_H_LEN + IP_H_LEN + UDP_H_LEN + COMMAND_LEN + datalength);
 
 #if CMD_DEBUG

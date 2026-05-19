@@ -28,7 +28,7 @@ typedef struct {
     int32_t  st_blksize;
     int32_t  st_blocks;
     int32_t  st_spare4[2];
-} dcload_stat_t;
+} kosload_stat_t;
 
 /* dcload dirent structure (matches KOS expectations) */
 typedef struct {
@@ -37,7 +37,7 @@ typedef struct {
     uint16_t d_reclen;
     uint8_t  d_type;
     char     d_name[256];
-} dcload_dirent_t;
+} kosload_dirent_t;
 
 /* SH4 exception frame (for exception reporting) */
 typedef struct {

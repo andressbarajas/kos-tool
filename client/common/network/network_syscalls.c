@@ -21,7 +21,7 @@
 
 /* ===== Syscall shared state ===== */
 
-unsigned short dcload_syscall_port = 31313;
+unsigned short kosload_syscall_port = 31313;
 unsigned int syscall_retval = 0;
 unsigned char *syscall_data = 0;
 
@@ -56,7 +56,7 @@ void build_send_packet(int command_len)
 
     make_ether(tool_mac, bb->mac, ether);
     make_ip(tool_ip, our_ip, UDP_H_LEN + command_len, IP_UDP_PROTOCOL, ip, 0);
-    make_udp(tool_port, dcload_syscall_port, command_len, ip, udp);
+    make_udp(tool_port, kosload_syscall_port, command_len, ip, udp);
     bb->start();
     bb->tx(pkt_buf, ETHER_H_LEN + IP_H_LEN + UDP_H_LEN + command_len);
 }
@@ -254,7 +254,7 @@ int fstat(int fd, void *buf)
     memcpy(command->id, NET_SYSCALL_FSTAT, 4);
     command->value0 = htonl(fd);
     command->value1 = htonl((unsigned int)buf);
-    command->value2 = htonl(sizeof(dcload_stat_t));
+    command->value2 = htonl(sizeof(kosload_stat_t));
 
     build_send_packet(sizeof(net_command_3int_t));
     bb->loop(0);
@@ -286,7 +286,7 @@ int stat(const char *pathname, void *buf)
     memcpy(command->id, NET_SYSCALL_STAT, 4);
     memcpy(command->string, pathname, namelen + 1);
     command->value0 = htonl((unsigned int)buf);
-    command->value1 = htonl(sizeof(dcload_stat_t));
+    command->value1 = htonl(sizeof(kosload_stat_t));
 
     build_send_packet(sizeof(net_command_2int_string_t) + namelen + 1);
     bb->loop(0);
