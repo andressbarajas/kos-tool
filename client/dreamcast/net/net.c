@@ -190,10 +190,12 @@ static void process_udp(ether_header_t *ether, ip_header_t *ip, udp_header_t *ud
 	{
 		command_t *command = (command_t *)udp->data;
 
-		/* Only wake screensaver for packets on dcload command ports;
-		 * ignore stray broadcast/unicast UDP traffic (NetBIOS, mDNS, etc.) */
+		/* Only host-directed command traffic should wake the screensaver.
+		 * Broadcast discovery/DHCP and stray LAN chatter are still handled,
+		 * but they should not dismiss the saver. */
 		unsigned short dest_port = ntohs(udp->dest);
-		if (dest_port == NET_LEGACY_PORT || dest_port == NET_DEFAULT_PORT)
+		if ((dest_port == NET_LEGACY_PORT || dest_port == NET_DEFAULT_PORT) &&
+		    !memcmp_16bit_eq(ether->dest, bb->mac, 6/2))
 			screensaver_wake();
 
 		// Only one of these will ever match at a time. What we can do is set this variable to 0 after compare succeeds.

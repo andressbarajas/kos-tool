@@ -38,11 +38,15 @@ start:
 kosloadmagic:
     .long   0xdeadbeef
 
-# Syscall entry pointer (at entry+0x08)
-kosloadsyscall_ptr:
+# Syscall entry pointer (entry+0x08)
+kosload_syscall_ptr:
     .long   kosloadsyscall
 
-# Function pointers for exception handler (at entry+0x0C, +0x10, +0x14, +0x18, +0x1C)
+# Pointer to kosload info block (entry+0x0C)
+kosload_info_ptr:
+    .long   kosload_info
+
+# Function pointers for exception handler (entry+0x10, +0x14, +0x18, +0x1C, +0x20)
 setup_video_ptr:
     .long   setup_video
 clear_screen_ptr:
@@ -53,10 +57,6 @@ uint_to_string_ptr:
     .long   uint_to_string
 exc_to_string_ptr:
     .long   exception_code_to_string
-
-# Pointer to kosload info block (at entry+0x20)
-kosload_info_ptr:
-    .long   kosload_info
 
 # End of kosload hardcoded header
 

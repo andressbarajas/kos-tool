@@ -32,17 +32,21 @@
 
 start:
 	bra	realstart
-	 nop
+	nop
 
 ! Magic value for detecting kosload
 kosloadmagic:
 	.long 0xdeadbeef
 
-! Normal programs use this call
-kosloadsyscall_k:
+! Normal programs use this call (entry+0x08)
+kosload_syscall_k:
 	.long _kosloadsyscall
 
-! Exception handler uses these calls
+! Pointer to kosload info block (entry+0x0C)
+kosload_info_k:
+	.long _kosload_info
+
+! Exception handler uses these calls (entry+0x10..+0x20)
 setup_video_k:
 	.long _setup_video
 clrscr_k:
@@ -53,10 +57,6 @@ uint_to_string_k:
 	.long _uint_to_string
 exc_to_string_k:
 	.long _exception_code_to_string
-
-! Pointer to kosload info block (at entry+0x20)
-kosload_info_k:
-	.long _kosload_info
 
 ! end of kosload hardcoded stuff
 

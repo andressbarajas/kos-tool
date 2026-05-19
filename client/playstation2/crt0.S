@@ -36,19 +36,27 @@ _start:
     j       realstart
     nop
 
-# Magic value for detecting kosload (at entry+0x08).
-# The nop delay slot at entry+0x04 is the console-flag word toggled by
-# ps2_set_console_enabled() between 0xdeadbeef and 0xfeedface.
-# KOSLOAD_BASE = entry+0x04, so loaded programs see BASE+4=magic, BASE+8=syscall,
-# matching the DC/GC layout.
+# entry+0x04 is the mandatory `j realstart` branch-delay slot: a real
+# nop. It is NOT the console flag (a stale comment used to claim that;
+# the flag is ps2loadmagic at entry+0x08, see below).
+#
+# ps2loadmagic (entry+0x08) is BOTH the kosload-detection magic AND the
+# console-enabled flag: ps2_set_console_enabled() writes 0xdeadbeef
+# (console on) / 0xfeedface (console off) here. Detectors must treat
+# BOTH values as "loader present". KOSLOAD_BASE = entry+0x04, so loaded
+# programs see BASE+4=magic, BASE+8=syscall, matching the DC/GC layout.
 ps2loadmagic:
     .word   0xdeadbeef
 
-# Syscall entry pointer (at entry+0x0C)
-kosloadsyscall_ptr:
+# Syscall entry pointer (entry+0x0C)
+kosload_syscall_ptr:
     .word   kosloadsyscall
 
-# Function pointers for exception handler (at entry+0x10, +0x14, +0x18, +0x1C, +0x20)
+# Pointer to kosload info block (entry+0x10)
+kosload_info_ptr:
+    .word   kosload_info
+
+# Function pointers for exception handler (entry+0x18, +0x1C, +0x20, +0x24, +0x28)
 setup_video_ptr:
     .word   setup_video
 clear_screen_ptr:
@@ -59,10 +67,6 @@ uint_to_string_ptr:
     .word   uint_to_string
 exc_to_string_ptr:
     .word   exception_code_to_string
-
-# Pointer to kosload info block (at entry+0x24)
-kosload_info_ptr:
-    .word   kosload_info
 
 # End of kosload hardcoded header
 
