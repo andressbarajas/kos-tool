@@ -428,7 +428,7 @@ $(IPDIR)/net.o: net/net.c $(VERSION_H) | $(IPDIR)
 $(IPDIR)/packet.o: net/packet.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/dhcp.o: net/dhcp.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/dhcp.o: $(CLIENTDIR)/network/dhcp.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
 # Stage 1: link the real loader at PS2_INNER_LOADER_BASE.

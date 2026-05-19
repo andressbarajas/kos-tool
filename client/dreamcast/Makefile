@@ -320,7 +320,7 @@ $(IPDIR)/packet.o: net/packet.c $(VERSION_H) | $(IPDIR)
 $(IPDIR)/packet_helpers.o: $(CLIENTDIR)/network/packet_helpers.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/dhcp.o: net/dhcp.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/dhcp.o: $(CLIENTDIR)/network/dhcp.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
 # IP ASM rules (no KOSLOAD_SERIAL_TRANSPORT define)

@@ -1,6 +1,8 @@
-/* client/dreamcast/net/dhcp.c */
+/* client/network/dhcp.c */
 /*
- * Copied from dcload-ip: dcload-ip/target-src/dcload/dhcp.c
+ * Shared DHCP client for the network transport.  Originally
+ * dcload-ip/target-src/dcload/dhcp.c; consolidated here so the same
+ * implementation runs on all consoles.
  */
 
 // As much as I'd love to put my name up here for 2019 copyright, uh, Internet
@@ -29,9 +31,8 @@
 #include "packet.h"
 #include "net.h"
 #include "adapter.h"
-#include "dhcp.h"
+#include <kosload/dhcp.h>
 #include <kosload/target.h>
-#include "memfuncs.h"
 #include "dcload.h"
 
 // Need to uniquely identify renewal in build_send_dhcp_packet(),
@@ -230,7 +231,8 @@ int dhcp_go(unsigned int *dhcp_ip_address_buffer) // Address buffer comes in as 
 		}
 		if (timeout_loop < 0) // If timeout_loop is -1, we arrived here from a timeout waiting for a DHCP response
 		{
-			timeout_loop = (dhcp_attempts > 10 ? 30 : 3*(dhcp_attempts)); // Increase the timeout for the next attempt, max 30 secs
+			/* Attempts 1 and 2 wait 3 s; then ramp 6, 9, 12, ..., capped at 30. */
+			timeout_loop = (dhcp_attempts <= 2 ? 3 : (dhcp_attempts > 11 ? 30 : 3*(dhcp_attempts - 1)));
 		}
 		build_send_dhcp_packet(DHCP_MSG_DHCPDISCOVER);
 		bb->loop(0); // Wait for DHCP OFFER packet
@@ -339,7 +341,7 @@ int dhcp_renew(unsigned int *dhcp_ip_address_buffer)
 static int kos_net_dhcp_fill_options(unsigned char *bbmac, dhcp_pkt_t *req, uint8 msgtype)
 {
 		// Zero out the TX packet buffer, that way we don't need to explicitly set zeros later
-		memset_zeroes_64bit(raw_pkt_buf, DHCP_TX_PKT_BUF_ZEROING_SIZE/8);
+		memset(raw_pkt_buf, 0, DHCP_TX_PKT_BUF_ZEROING_SIZE);
 
 		uint32 serverid = 0, reqip = 0;
     int pos = 0;

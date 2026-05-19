@@ -24,7 +24,7 @@
 #include <kosload/net_adapter.h>
 #include <kosload/net_stack.h>
 
-#include "dhcp.h"
+#include <kosload/dhcp.h>
 #include "dcload.h"
 
 #include <kosload/screensaver.h>
@@ -217,6 +217,10 @@ void disp_info(void)
     if (our_ip && our_ip != 0xffffffff) {
         ip_to_string(our_ip, ip_str);
         t->draw_string(NETWORK_DISPLAY_X, 126, ip_str, 0xffff);
+    } else if (our_ip == 0) {
+        /* DHCP mode, no lease yet — pre-show the "Waiting For IP..." line
+         * so the IP row isn't blank during link/PHY/settle bring-up. */
+        dhcp_waiting_mode_display();
     }
 
     if (phase_status != 0 && phase_status[0] != '\0')
@@ -281,13 +285,38 @@ static void lease_resync_from_rtc(void)
 }
 
 /* ===== DHCP management ===== */
+
+/* Lease-countdown tick.  Pure timer work — never sends packets, never
+ * touches DMA — so it's safe to call every loop iteration regardless of
+ * link state.  Keeps the displayed "DHCP Lease Time" decrementing while
+ * the cable is unplugged, which dhcp_poll() can't because the bb->loop
+ * caller gates the full poll on link-up. */
+void dhcp_tick(void)
+{
+    const target_ops_t *t = common_get_target();
+    uint64_t now;
+    uint64_t delta;
+
+    if (lease_display_secs == 0)
+        return;
+
+    now = t->get_ticks();
+    delta = now - last_display_tick;
+    if (delta < t->ticks_per_second)
+        return;
+
+    last_display_tick = now;
+    lease_display_secs--;
+    if (!screensaver_is_active())
+        update_lease_time_display(lease_display_secs);
+}
+
 void dhcp_poll(void)
 {
     const target_ops_t *t = common_get_target();
 
     if (__builtin_expect(!booted, 0)) {
         disp_info();
-        disp_status("idle...");
     }
 
     /* --- Renewal check (50% of lease elapsed) --- */
@@ -298,7 +327,6 @@ void dhcp_poll(void)
         dhcp_lease_time = 0;
 
         dhcp_waiting_mode_display();
-        disp_status("DHCP renewing...");
         int renew_result = dhcp_renew((unsigned int *)&our_ip);
 
         if (renew_result == -2)
@@ -332,21 +360,6 @@ void dhcp_poll(void)
             update_ip_display(our_ip, dhcp_mode_string);
             update_lease_time_display(lease_display_secs);
         }
-
-        disp_status("idle...");
-    }
-    /* --- ~1Hz lease countdown --- */
-    else if (lease_display_secs > 0)
-    {
-        uint64_t now = t->get_ticks();
-        uint64_t delta = now - last_display_tick;
-
-        if (delta >= t->ticks_per_second) {
-            last_display_tick = now;
-            lease_display_secs--;
-            if (!screensaver_is_active())
-                update_lease_time_display(lease_display_secs);
-        }
     }
 
     /* --- Discovery check (no IP, or NAK'd and lease fully expired) --- */
@@ -356,7 +369,6 @@ void dhcp_poll(void)
         dont_renew = false;
         dhcp_waiting_mode_display();
 
-        disp_status("Acquiring new IP address via DHCP...");
         int dhcp_result = dhcp_go((unsigned int *)&our_ip);
         if (dhcp_result == -1 || dhcp_nest_counter_maxed)
         {
@@ -377,8 +389,6 @@ void dhcp_poll(void)
             update_ip_display(our_ip, dhcp_mode_string);
             update_lease_time_display(lease_display_secs);
         }
-
-        disp_status("idle...");
     }
 }
 

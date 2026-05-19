@@ -24,7 +24,7 @@
 #include "packet.h"
 #include "net.h"
 #include "dcload.h"
-#include "dhcp.h"
+#include <kosload/dhcp.h>
 #include <kosload/target.h>
 #include "../exi.h"
 #include "../cache.h"
@@ -57,6 +57,18 @@ static unsigned char current_bank;
 
 /* Next packet pointer for RX ring buffer */
 static unsigned short next_pkt_ptr;
+
+/* PHY link state — updated once per second. */
+static int enc_link_up = 0;
+
+/* Set once link has been UP this session.  Picks "link lost..." over
+ * "link change..." for later DOWN transitions.  Reset on loader entry. */
+static int enc_link_seen_up = 0;
+
+/* Sticky across program returns; zero only for a fresh loader instance
+ * (cold boot / FW update — BSS-init).  Gates the one-shot
+ * "link change..." → 2s settle → "idle..." sequence at entry. */
+static int enc_loader_settled = 0;
 
 /* ===== Low-level EXI/SPI access ===== */
 
@@ -854,22 +866,86 @@ void enc28j60_loop(bool is_main_loop)
 {
     const target_ops_t *t = target_get_ops();
     uint64_t last_sec_tick = 0;
+    uint64_t last_link_poll = 0;
     unsigned int loop_secs_elapsed = 0;
 
     if (is_main_loop) {
         if (!(booted || running))
             disp_info();
+        /* Loader-entry reset */
+        enc_link_seen_up = 0;
     }
 
     if (timeout_loop > 0) {
         last_sec_tick = t->get_ticks();
     }
 
+    /* Seed the link state from a single PHY read so the very first
+     * dhcp_poll() iteration is correctly gated. */
+    enc_link_up = (enc_phy_read(PHSTAT2) & PHSTAT2_LSTAT) != 0;
+    last_link_poll = t->get_ticks();
+
+    /* One-shot link-change → settle → idle sequence for fresh loader
+     * instances (cold boot / FW update). */
+    if (is_main_loop && !enc_loader_settled) {
+        if (booted && !running)
+            disp_status("link change...");
+
+        while (!(enc_phy_read(PHSTAT2) & PHSTAT2_LSTAT))
+            ;
+
+        enc_link_up = 1;
+        last_link_poll = t->get_ticks();
+        enc_loader_settled = 1;
+        enc_link_seen_up = 1;
+        if (booted && !running)
+            disp_status("idle...");
+    }
+
     while (!escape_loop) {
         /* Poll for received packets */
         enc28j60_rx();
 
-        if (is_main_loop) {
+        /* Once-per-second PHY link poll. */
+        uint64_t now = t->get_ticks();
+        if ((now - last_link_poll) >= t->ticks_per_second) {
+            int new_link = (enc_phy_read(PHSTAT2) & PHSTAT2_LSTAT) != 0;
+            last_link_poll = now;
+            if (new_link != enc_link_up) {
+                screensaver_wake();
+                if (new_link) {
+                    /* Switch port settling delay; see BBA loop. */
+
+                    if (booted && !running)
+                        disp_status("idle...");
+
+                    enc_link_seen_up = 1;
+
+                    /* Drop any in-flight DHCP retry timeout so we
+                       try immediately from a clean attempt count. */
+                    if (timeout_loop > 0) {
+                        dhcp_attempts = 0;
+                        timeout_loop = -1;
+                        escape_loop = 1;
+                    }
+                } else if (booted && !running) {
+                    /* Mid-session DOWN → "link lost..." once we've seen
+                       UP, otherwise still in the entry-time wait. */
+                    if (enc_link_seen_up)
+                        disp_status("link lost...");
+                    else
+                        disp_status("link change...");
+                }
+                enc_link_up = new_link;
+            }
+        }
+
+        /* Lease countdown ticks regardless of link state — keeps the
+         * displayed lease decrementing when the cable is unplugged. */
+        if (is_main_loop)
+            dhcp_tick();
+
+        if (is_main_loop && enc_link_up) {
             dhcp_poll();
             screensaver_poll();
         }

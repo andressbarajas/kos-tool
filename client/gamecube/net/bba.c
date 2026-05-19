@@ -29,7 +29,7 @@
 #include "packet.h"
 #include "net.h"
 #include "dcload.h"
-#include "dhcp.h"
+#include <kosload/dhcp.h>
 #include "../exi.h"
 #include "../cache.h"
 
@@ -44,6 +44,16 @@ adapter_t adapter_bba = {
     bba_loop,
     bba_tx
 };
+
+/* Set once link has been UP this session.  Picks "link lost..." over
+ * "link change..." for later DOWN transitions.  Reset on loader entry. */
+static int bba_link_seen_up = 0;
+
+/* Sticky across program returns; only zero on a fresh loader instance
+ * (cold boot or firmware update — BSS-init handles both).  Gates the
+ * one-shot "link change..." → 2s settle → "idle..." sequence so it
+ * runs once per loader instance, not once per program return. */
+static int bba_loader_settled = 0;
 
 /* ===== Low-level EXI register access =====
  *
@@ -529,6 +539,25 @@ void bba_loop(bool is_main_loop) {
     {
         if(!(booted || running))
             disp_info();
+        /* Loader-entry reset. */
+        bba_link_seen_up = 0;
+
+        /* One-shot link-change → settle → idle sequence for fresh loader
+         * instances (cold boot / FW update). */
+        if(!bba_loader_settled)
+        {
+            if(booted && !running)
+                disp_status("link change...");
+
+            while(!(bba_in8(GCBBA_NWAYS) & GCBBA_NWAYS_LINK_UP))
+                ;
+
+
+            bba_loader_settled = 1;
+            bba_link_seen_up = 1;
+            if(booted && !running)
+                disp_status("idle...");
+        }
     }
 
     if(timeout_loop > 0)
@@ -561,19 +590,33 @@ void bba_loop(bool is_main_loop) {
         }
 
         /* Poll for link change.  NWAYS bits 0/1 report 10/100 link-
-         * status; either bit set means link is up.  Once RX is
-         * enabled, these bits become sticky — mid-session cable
-         * removal is NOT detected (accepted tradeoff). */
-        if(__builtin_expect(!(bba_in8(GCBBA_NWAYS) & GCBBA_NWAYS_LINK_UP), 0))
+         * status; either bit set means link is up.  Mid-session cable
+         * removal IS reflected here (the link bits clear once carrier
+         * is lost), so we use this as the live link signal. */
+        int link_up = (bba_in8(GCBBA_NWAYS) & GCBBA_NWAYS_LINK_UP) != 0;
+
+        if(__builtin_expect(!link_up, 0))
         {
             screensaver_wake();
 
-            if(booted && !running)
-                disp_status("link change...");
+            if(booted && !running) {
+                if (bba_link_seen_up)
+                    disp_status("link lost...");
+                else
+                    disp_status("link change...");
+            }
 
-            while(!(bba_in8(GCBBA_NWAYS) & GCBBA_NWAYS_LINK_UP))
-                ;
+            /* Wait for the cable.  Keep the lease countdown ticking
+             * while we spin — otherwise the displayed lease freezes
+             * while the cable is unplugged, which is exactly the
+             * case the user wants to see continue. */
+            while(!(bba_in8(GCBBA_NWAYS) & GCBBA_NWAYS_LINK_UP)) {
+                if(is_main_loop)
+                    dhcp_tick();
+            }
 
+            bba_link_seen_up = 1;
+            link_up = 1;
             if(booted && !running)
                 disp_status("idle...");
 
@@ -589,7 +632,9 @@ void bba_loop(bool is_main_loop) {
 
         if(is_main_loop)
         {
-            dhcp_poll();
+            dhcp_tick();   /* lease countdown — always, no network ops */
+            if(link_up)
+                dhcp_poll();
             screensaver_poll();
         }
 

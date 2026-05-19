@@ -19,7 +19,7 @@
 #include "w5500.h"
 #include "packet.h"
 #include "dcload.h"
-#include "dhcp.h"
+#include <kosload/dhcp.h>
 #include <kosload/target.h>
 #include <kosload/screensaver.h>
 
@@ -287,8 +287,8 @@ static void w5500_link_change(int old_link_up, int link_up)
         if (booted && !running && !receiving)
             disp_status("idle...");
 
-        /* Match the BBA/LAN behavior: if DHCP was waiting for link, break
-         * the timeout loop so it can retry immediately after link comes up. */
+        /* If DHCP was waiting for link, break the timeout loop so it can 
+           retry immediately after link comes up. */
         if (timeout_loop > 0) {
             dhcp_attempts = 0;
             timeout_loop = -1;
@@ -597,7 +597,11 @@ void w5500_loop(bool is_main_loop)
         w5500_poll_link_change();
 
         if (is_main_loop) {
-            dhcp_poll();
+            /* Lease countdown ticks regardless of link state — keeps the
+             * displayed lease decrementing when the cable is unplugged. */
+            dhcp_tick();
+            if (w5500_last_link > 0)
+                dhcp_poll();
             screensaver_poll();
         }
 

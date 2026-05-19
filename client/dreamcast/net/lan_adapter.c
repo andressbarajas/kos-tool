@@ -15,7 +15,7 @@
 #include "dcload.h" // clear_lines is in here
 #include "video.h" // for draw_string
 
-#include "dhcp.h"
+#include <kosload/dhcp.h>
 #include "memfuncs.h"
 #include <kosload/target.h>
 #include <kosload/screensaver.h>
@@ -727,6 +727,11 @@ void la_bb_loop(bool is_main_loop)
 		uint_to_string(reg_aggregate, (unsigned char*)reg_agg_temp);
 		draw_string(126, 198, reg_agg_temp, STR_COLOR);
 #endif
+
+		/* Lease countdown ticks regardless of link state — keeps the
+		 * displayed lease decrementing when the cable is unplugged. */
+		if(is_main_loop)
+			dhcp_tick();
 
 		if(is_main_loop && lan_link_up) // Only want this to run in main loop
 		{

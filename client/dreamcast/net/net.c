@@ -9,7 +9,7 @@
 #include "adapter.h"
 #include "scif.h"
 #include "net.h"
-#include "dhcp.h"
+#include <kosload/dhcp.h>
 #include "memfuncs.h"
 #include <kosload/screensaver.h>
 

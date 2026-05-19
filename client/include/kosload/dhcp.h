@@ -204,4 +204,7 @@ int handle_dhcp_reply(unsigned char *routersrcmac, dhcp_pkt_t *pkt_data,
 int dhcp_go(unsigned int *dhcp_ip_address_buffer);
 int dhcp_renew(unsigned int *dhcp_ip_address_buffer);
 
+/* Lease-time countdown only — no network operations. */
+void dhcp_tick(void);
+
 #endif /* KOSLOAD_DHCP_H */

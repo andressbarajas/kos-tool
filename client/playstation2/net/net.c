@@ -10,7 +10,7 @@
 #include "packet.h"
 #include "adapter.h"
 #include "net.h"
-#include "dhcp.h"
+#include <kosload/dhcp.h>
 #include <kosload/screensaver.h>
 
 static void process_broadcast(unsigned char *pkt);

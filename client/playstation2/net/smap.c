@@ -25,7 +25,7 @@
 #include "adapter.h"
 #include "net.h"
 #include "dcload.h"
-#include "dhcp.h"
+#include <kosload/dhcp.h>
 #include "../iop_dev9.h"
 #include "../iop_smap.h"
 #include "../iop/smap_protocol.h"
@@ -155,9 +155,23 @@ static int smap_tx_adapter(unsigned char *pkt, int len) {
     return ps2_smap_send(pkt, (uint32_t)len);
 }
 
+#define LINK_SETTLE_SECS 2u
+
+/* Link-status tracking, file-scope so loader-entry reset (smap_loop_adapter)
+ * can clear them.  `g_link_seen_up` is per-loader-entry: it controls whether
+ * a DOWN transition reads as "link change..." (haven't seen UP since the
+ * loader regained control) or "link lost..." (link was up earlier in this
+ * session).  Reset on every cold boot and every return from a uploaded
+ * program. */
+static uint32_t g_last_link_state = 0xffffffffu;
+static int      g_link_seen_up    = 0;
+
+/* Sticky across program returns; zero only on a fresh loader instance
+ * (cold boot / FW update — BSS-init).  Gates the one-shot
+ * "link change..." → 2s settle → "idle..." sequence at entry. */
+static int      g_loader_settled  = 0;
+
 static void smap_update_link_status(void) {
-    static uint32_t last_link_state = 0xffffffffu;
-    static int ever_had_link = 0;
     ps2_smap_hot_snapshot_t hot;
     uint32_t link_state;
 
@@ -165,23 +179,23 @@ static void smap_update_link_status(void) {
         return;
 
     link_state = hot.link_state;
-    if (link_state == last_link_state)
+    if (link_state == g_last_link_state)
         return;
 
     if (link_state == PS2_SMAP_LINK_DOWN) {
         screensaver_wake();
-        if (ever_had_link)
+        if (g_link_seen_up)
             disp_status("link lost...");
         else
             disp_status("link change...");
     } else {
-        ever_had_link = 1;
+        g_link_seen_up = 1;
         screensaver_wake();
         if (booted && !running)
             disp_status("idle...");
     }
 
-    last_link_state = link_state;
+    g_last_link_state = link_state;
 }
 
 /*--------------------------------------------------------------------------*/
@@ -294,6 +308,42 @@ static void smap_loop_adapter(bool is_main_loop) {
     if(is_main_loop) {
         if(!(booted || running))
             disp_info();
+
+        /* Loader-entry reset.  Each time we (re-)enter the main loop —
+         * cold boot or after a uploaded program returns — the status row
+         * should read "link change..." if the link is currently DOWN,
+         * regardless of whether it was UP earlier in this session. */
+        g_last_link_state = 0xffffffffu;
+        g_link_seen_up = 0;
+
+        /* One-shot link-change → settle → idle sequence for fresh loader
+         * instances (cold boot / FW update).  Forces "link change..." to be
+         * visible even when the IRX already reports link-up (FW update
+         * with cable plugged); skipped on program-return entries so the
+         * user doesn't see a 2-second pause after every upload. */
+        if(!g_loader_settled) {
+            ps2_smap_hot_snapshot_t hot;
+
+            if(booted && !running)
+                disp_status("link change...");
+
+            for(;;) {
+                if(ps2_smap_get_hot_snapshot(&hot) >= 0 &&
+                   hot.link_state != PS2_SMAP_LINK_DOWN)
+                    break;
+            }
+
+            uint64_t deadline = t->get_ticks() +
+                (uint64_t)t->ticks_per_second * LINK_SETTLE_SECS;
+            while(t->get_ticks() < deadline)
+                ;
+
+            g_loader_settled = 1;
+            g_link_seen_up = 1;
+            g_last_link_state = hot.link_state;
+            if(booted && !running)
+                disp_status("idle...");
+        }
     }
 
     if(timeout_loop > 0)
@@ -326,7 +376,15 @@ static void smap_loop_adapter(bool is_main_loop) {
             smap_diag_dump();
 #endif
             smap_update_link_status();
-            dhcp_poll();
+            dhcp_tick();   /* lease countdown — always, no network ops */
+            /* g_last_link_state reflects the IRX-reported link snapshot
+             * (refreshed by the smap_update_link_status() call above).
+             * The 0xffffffff sentinel means "never read yet" — treat as
+             * not-up so we don't waste DISCOVER attempts before the IRX
+             * has reported in. */
+            if(g_last_link_state != 0xffffffffu &&
+               g_last_link_state != PS2_SMAP_LINK_DOWN)
+                dhcp_poll();
             screensaver_poll();
         }
 
