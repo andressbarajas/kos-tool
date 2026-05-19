@@ -115,6 +115,17 @@
 
 #define KOSLOAD_EXCEPTION_TAG "EXPT"    /* Exception frame marker (both serial and network) */
 
+/* ===== NET_CMD_EXECUTE flag bits (carried in command->size) ===== */
+
+#define KOSLOAD_EXEC_CONSOLE   (1 << 0)  /* enable console redirection while program runs */
+#define KOSLOAD_EXEC_CDFS      (1 << 1)  /* enable CDFS redir while program runs */
+#define KOSLOAD_EXEC_FW_UPDATE (1 << 2)  /* target is firmware-update trampoline:
+                                          * skip console/CDFS setup, do platform-
+                                          * specific pre-handoff quiesce (PS2: IOP
+                                          * reset), use execute_handoff() so the
+                                          * old loader leaves no dirty cache lines
+                                          * from go()'s register saves. */
+
 /* ===== Network Packet Structures ===== */
 
 #define NET_COMMAND_LEN     12

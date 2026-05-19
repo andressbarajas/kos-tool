@@ -15,6 +15,8 @@
 #include "video.h"
 #include "cache.h"
 #include "ee_cop0.h"
+#include "ee_sif.h"
+#include "iop_handoff_marker.h"
 #include "iop_smap.h"
 
 /* From go.S */
@@ -203,6 +205,53 @@ static void ps2_execute(uint32_t address)
     go(address);
 }
 
+/* Firmware-update handoff variant.  Differs from ps2_execute in two ways:
+ *
+ *   1. Issues a SifIopReset equivalent first.  After this, the IOP is back
+ *      in BIOS-default state — same as cold boot — and the new loader's
+ *      transport->init runs against a fresh SIFCMD/SIFRPC session, IRX set,
+ *      and bus state, instead of the half-conversation that's been the root
+ *      cause of -F flakiness.
+ *
+ *   2. Does NOT call go().  go() saves the loader's register file to
+ *      __go_save_sp / __go_save_regs in .bss so a returning program can
+ *      resume.  But a firmware-update trampoline ERETs into a new loader
+ *      and never returns — the saved context is dead state, and those
+ *      cache-line writes land in physical addresses that overlap the
+ *      trampoline's destination range, which is exactly the bug the
+ *      cache-reorder fix in mips_r5900_trampoline addresses defensively. */
+static void ps2_execute_handoff(uint32_t address)
+{
+    (void)ps2_smap_release_pending();
+
+    /* Reset the IOP back to BIOS state before handing off.  Guarantees the 
+     * new loader sees the same fresh IOP cold-boot would. */
+    (void)ee_sif_iop_reset(0);
+
+    /* Flush caches over the upload region: the 256-byte trampoline plus
+     * the new loader image, which is bounded to <=1 MiB.  (ps2_execute
+     * flushes much more because it runs variable-size user programs; the
+     * handoff target is only ever the loader.) */
+    cache_flush_range((const void *)address, 0x00100000);
+
+    /* Tell the incoming loader the IOP was already reset, so its bootstrap
+     * can skip the redundant SifIopReset (~1.5 s).  Write must happen AFTER
+     * cache_flush_range — otherwise dirty KUSEG lines for the trampoline
+     * bytes (left by CMD_SENDBIN's writes) would overwrite the magic when
+     * flushed.  KSEG1 lands directly in physical RAM, no D-cache involved. */
+    *(volatile uint32_t *)KOSLOAD_IOP_HANDOFF_ADDR = KOSLOAD_IOP_HANDOFF_MAGIC;
+
+    /* Direct unconditional jump — bypasses go()'s context-save path so no
+     * dirty D-cache lines end up at addresses overlapping the trampoline
+     * destination. */
+    __asm__ volatile (
+        "jr     %0\n"
+        "nop\n"
+        :: "r"(address)
+    );
+    __builtin_unreachable();
+}
+
 static void ps2_disable_cache(void)
 {
     cache_disable();
@@ -324,6 +373,7 @@ const target_ops_t playstation2_target_ops = {
     .clear_screen = ps2_clear_screen,
     .setup_video = ps2_setup_video,
     .execute = ps2_execute,
+    .execute_handoff = ps2_execute_handoff,
     .disable_cache = ps2_disable_cache,
     .reboot = ps2_reboot,
     .cdfs_redir_save = NULL,

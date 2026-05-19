@@ -287,8 +287,8 @@ void ps2_video_init(void)
 
     gif_dma_send(p, 5);
 
-    /* Clear screen to black */
-    ps2_video_clear(0);
+    /* Clear screen to the loader's standard background colour. */
+    ps2_video_clear(0x001C81B3);
 }
 
 void ps2_video_clear(uint32_t color)

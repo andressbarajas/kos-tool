@@ -390,6 +390,7 @@ IP_LOADER_IMAGE_BIN    := $(IPDIR)/ps2-load-ip-image.bin
 IP_LOADER_BLOB_O       := $(IPDIR)/ps2-load-ip-image-blob.o
 IP_BOOTSTRAP_MAIN_OBJ  := $(IPDIR)/bootstrap_main.o
 IP_ELF                 := $(IPDIR)/ps2-load-ip.elf
+IP_BIN                 := $(IPDIR)/ps2-load-ip.bin
 
 # IP C object rules
 $(IPDIR)/main.o: $(CLIENTDIR)/common/main.c $(VERSION_H) | $(IPDIR)
@@ -463,6 +464,11 @@ $(IP_ELF): $(IP_BOOTSTRAP_MAIN_OBJ) $(IP_LOADER_BLOB_O) $(COMMON_A) $(PROBE_LD)
 	    -Wl,--start-group $(COMMON_A) -lgcc -Wl,--end-group \
 	    -o $@
 
+# Stage 4: flat binary for kos-tool firmware embedding.
+$(IP_BIN): $(IP_ELF)
+	@$(PS2_EE_TOOLCHAIN)/$(PREFIX)objcopy -O binary $< $@
+	@echo "  OBJCOPY $@"
+
 # ============================================================
 # Examples (freestanding test programs)
 # ============================================================
@@ -506,7 +512,7 @@ examples: $(PS2_EXAMPLE_ELFS)
 
 all: ip examples
 
-ip: $(IP_ELF)
+ip: $(IP_ELF) $(IP_BIN)
 	@$(SIZE) $(IP_ELF)
 
 # Directory creation

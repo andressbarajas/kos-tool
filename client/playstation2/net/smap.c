@@ -17,15 +17,15 @@
 #include <stdint.h>
 #include <string.h>
 
-#include <kosload/protocol.h>
+#include <kosload/dhcp.h>
 #include <kosload/target.h>
+#include <kosload/protocol.h>
 #include <kosload/screensaver.h>
 
 #include "smap.h"
 #include "adapter.h"
 #include "net.h"
 #include "dcload.h"
-#include <kosload/dhcp.h>
 #include "../iop_dev9.h"
 #include "../iop_smap.h"
 #include "../iop/smap_protocol.h"

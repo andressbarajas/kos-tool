@@ -12,6 +12,7 @@
 
 #include <stdbool.h>
 #include <string.h>
+#include <kosload/protocol.h>
 #include <kosload/target.h>
 #include <kosload/info.h>
 #include <kosload/screensaver.h>
@@ -159,26 +160,31 @@ void cmd_execute(ether_header_t *ether, ip_header_t *ip, udp_header_t *udp, comm
 			}
 		}
 
+		int fw_update = (cmd_size & KOSLOAD_EXEC_FW_UPDATE) != 0;
+
 		if (!booted)
 			disp_info();
 		else
-			disp_status("executing...");
+			disp_status(fw_update ? "updating firmware..." : "executing...");
 
-		{
-			const target_ops_t *t = target_get_ops();
-			t->set_console_enabled(cmd_size & 1);
+		const target_ops_t *t = target_get_ops();
 
-			if ((cmd_size >> 1) && t->cdfs_redir_enable)
+		/* Firmware-update handoffs aren't user programs — skip
+			* the console/CDFS plumbing meant for them. */
+		if (!fw_update) {
+			t->set_console_enabled((cmd_size & KOSLOAD_EXEC_CONSOLE) != 0);
+			if ((cmd_size & KOSLOAD_EXEC_CDFS) && t->cdfs_redir_enable)
 				t->cdfs_redir_enable();
 		}
 
 		running = true;
 
-		{
-			const target_ops_t *t = target_get_ops();
+		/* Firmware-update path takes the no-save variant. */
+		if (fw_update)
+			t->execute_handoff(ntohl(command->address));
+		else
 			t->execute(ntohl(command->address));
-			t->restart_timer();
-		}
+		t->restart_timer();
 
 		/* Adapter hardware state may have been modified by the executed
 		 * program (e.g. KOS networking).  Do a full re-init so receive
