@@ -10,13 +10,15 @@
  */
 
 #if defined(__PPC__) || defined(__powerpc__)
-#ifdef GC_KOSLOAD_BASE
+#if defined(WII_KOSLOAD_BASE)
+#define KOSLOAD_BASE    WII_KOSLOAD_BASE
+#elif defined(GC_KOSLOAD_BASE)
 #define KOSLOAD_BASE    GC_KOSLOAD_BASE
 #else
 #define KOSLOAD_BASE    0x817EC000
 #endif
 #else
-#error "font-test is GameCube-only"
+#error "font-test is GameCube/Wii-only"
 #endif
 
 #define KOSLOAD_MAGIC_ADDR         (*(volatile unsigned int *)(KOSLOAD_BASE + 4))

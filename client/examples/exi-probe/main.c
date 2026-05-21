@@ -17,7 +17,9 @@
 #define SYSCALL_EXIT      15
 
 #if defined(__PPC__) || defined(__powerpc__)
-#ifdef GC_KOSLOAD_BASE
+#if defined(WII_KOSLOAD_BASE)
+#define KOSLOAD_BASE    WII_KOSLOAD_BASE
+#elif defined(GC_KOSLOAD_BASE)
 #define KOSLOAD_BASE    GC_KOSLOAD_BASE
 #else
 #define KOSLOAD_BASE    0x817EC000
