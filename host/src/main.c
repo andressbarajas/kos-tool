@@ -465,9 +465,12 @@ int main(int argc, char *argv[]) {
                ctx.rx_fifo_delay, ctx.rx_fifo_delay_count);
     }
 
-    /* Detect target endianness from version string (gc-load = BE, dc-load = LE) */
+    /* Detect target endianness from version string.  Big-endian: GameCube
+     * and Wii (both PowerPC).  Little-endian: Dreamcast (SH4) and PS2 (MIPS
+     * EL), which fall through to 0. */
     ctx.target_big_endian = (strncmp(ctx.remote_version_string, "gc-load-", 8) == 0 ||
-                             strncmp(ctx.remote_version_string, "gcload-", 7) == 0);
+                             strncmp(ctx.remote_version_string, "gcload-", 7) == 0 ||
+                             strncmp(ctx.remote_version_string, "wii-load-", 9) == 0);
 
     /* Firmware update if requested */
     if (!ctx.skip_update || ctx.firmware_path) {

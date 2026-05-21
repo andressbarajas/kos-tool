@@ -87,6 +87,16 @@ static int adapter_is_spi(uint32_t adapter) {
     return adapter_is_w5500(adapter) || adapter == ADAPTER_GC_ENC;
 }
 
+/* The Wii has no NIC FIFO — every incoming UDP datagram is drained by a
+ * synchronous IOS IPC recvfrom — and IOS-side handling is fussier about
+ * non-4-byte-aligned UDP payloads after the first round of traffic.  These
+ * call sites pad outbound commands and disable host-side auto_fast.  Keyed
+ * on the VERS name rather than installed_adapter so it works even when the
+ * post-VERS adapter-ID fallback hasn't recognised ADAPTER_WII_LAN. */
+static int is_wii_loader(const kostool_context_t *ctx) {
+    return ctx && strncmp(ctx->remote_version_string, "wii-load-ip ", 12) == 0;
+}
+
 /* ===== Low-level UDP helpers ===== */
 
 /*
@@ -97,10 +107,12 @@ static int send_cmd(kostool_context_t *ctx, const char cmd[4],
                     uint32_t addr, uint32_t size,
                     const uint8_t *data, uint32_t dsize) {
     uint8_t buf[2048];
+    uint32_t wire_size;
     uint32_t tmp;
 
-    if (dsize > sizeof(buf) - 12)
-        dsize = sizeof(buf) - 12;
+    /* Reserve 3 extra bytes for the Wii 4-byte tail-pad below. */
+    if (dsize > sizeof(buf) - 12 - 3)
+        dsize = sizeof(buf) - 12 - 3;
 
     memcpy(buf, cmd, 4);
     tmp = htonl(addr);
@@ -110,7 +122,22 @@ static int send_cmd(kostool_context_t *ctx, const char cmd[4],
     if (data && dsize > 0)
         memcpy(buf + 12, data, dsize);
 
-    int ret = ctx->socket_ops->send(ctx->global_socket, buf, 12 + dsize);
+    wire_size = 12 + dsize;
+    /* Wii: pad the wire size up to a multiple of 4.  HW-confirmed required
+     * for repeat -t <ip> uploads: without this, the second kos-tool
+     * invocation gets "No network loader response" even though the first
+     * succeeded.  The actual symptom is in IOS-side recvfrom handling of
+     * trailing non-word bytes (e.g. the 30-byte EXEC + 14-byte argv that
+     * fires on every run).  Header is already 4-byte aligned; the pad
+     * only fires when dsize is non-word and zero-fills the slop. */
+    if (is_wii_loader(ctx)) {
+        uint32_t padded = (wire_size + 3) & ~3u;
+        if (padded > wire_size)
+            memset(buf + wire_size, 0, padded - wire_size);
+        wire_size = padded;
+    }
+
+    int ret = ctx->socket_ops->send(ctx->global_socket, buf, wire_size);
     if (ret < 0) return -1;
     return 0;
 }
@@ -172,7 +199,8 @@ static int send_and_wait(kostool_context_t *ctx, const char cmd[4],
 static bool network_remote_supports_capabilities(const kostool_context_t *ctx) {
     return strncmp(ctx->remote_version_string, "dc-load-ip ", 11) == 0 ||
            strncmp(ctx->remote_version_string, "gc-load-ip ", 11) == 0 ||
-           strncmp(ctx->remote_version_string, "ps2-load-ip ", 12) == 0;
+           strncmp(ctx->remote_version_string, "ps2-load-ip ", 12) == 0 ||
+           strncmp(ctx->remote_version_string, "wii-load-ip ", 12) == 0;
 }
 
 static int query_capabilities(kostool_context_t *ctx, uint32_t *capabilities) {
@@ -331,6 +359,16 @@ got_version:
         // } else {
         //     ctx->rx_fifo_delay = 0;
         // }
+    } else if (is_wii_loader(ctx)) {
+        /* Wii reports ADAPTER_WII_LAN (0x0E58); none of the DC/GC/PS2
+         * is_bba/is_lan/is_spi predicates match, so without this branch
+         * we'd fall through and clobber the adapter ID to ADAPTER_DC_BBA.
+         * Keep the reported ID and apply Wii's structural IOS-IPC pacing:
+         * 4000us after every chunk, not relaxed by -F/fast_mode (legacy
+         * 1024-byte payloads). */
+        ctx->legacy_mode = 1;
+        ctx->rx_fifo_delay = 4000;
+        ctx->rx_fifo_delay_count = 1;
     } else {
         ctx->installed_adapter = ADAPTER_DC_BBA;
         ctx->legacy_mode = 1;
@@ -503,8 +541,11 @@ static int network_send_data_once(kostool_context_t *ctx, const uint8_t *data,
 #endif
 
     /* Auto-fast: skip FIFO pacing for small transfers (e.g. syscall I/O).
-     * These fit in the BBA's RX FIFO without loss, so pacing is pure waste. */
+     * These fit in the BBA's RX FIFO without loss, so pacing is pure waste.
+     * The Wii has no such FIFO (synchronous IOS IPC per datagram), so even
+     * a few-chunk burst can overrun it — never auto_fast that path. */
     int auto_fast = (!adapter_is_spi(ctx->installed_adapter) &&
+                     !is_wii_loader(ctx) &&
                      num_chunks <= AUTO_FAST_CHUNK_THRESHOLD);
     if (auto_fast)
         current_fifo_delay = 0;

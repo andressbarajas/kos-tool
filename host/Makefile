@@ -79,6 +79,7 @@ DC_IP_BIN  := $(ROOT)/client/dreamcast/build/ip/dc-load-ip.bin
 GC_SER_BIN := $(ROOT)/client/gamecube/build/serial/gc-load-ser.bin
 GC_IP_BIN  := $(ROOT)/client/gamecube/build/ip/gc-load-ip.bin
 PS2_IP_BIN := $(ROOT)/client/playstation2/build/ip/ps2-load-ip-image.bin
+WII_IP_BIN := $(ROOT)/client/wii/build/ip/wii-load-ip.bin
 
 FW_OBJS :=
 FW_DEFS :=
@@ -102,6 +103,10 @@ endif
 ifneq ($(wildcard $(PS2_IP_BIN)),)
   FW_OBJS += $(BUILDDIR)/firmware_ps2_ip_data.o
   FW_DEFS += -DHAS_FIRMWARE_PS2_IP
+endif
+ifneq ($(wildcard $(WII_IP_BIN)),)
+  FW_OBJS += $(BUILDDIR)/firmware_wii_ip_data.o
+  FW_DEFS += -DHAS_FIRMWARE_WII_IP
 endif
 
 CFLAGS += $(FW_DEFS)
@@ -199,6 +204,10 @@ $(BUILDDIR)/firmware_gc_ip_data.c: $(GC_IP_BIN) $(BIN2C) | $(BUILDDIR)
 $(BUILDDIR)/firmware_ps2_ip_data.c: $(PS2_IP_BIN) $(BIN2C) | $(BUILDDIR)
 	@echo "  BIN2C   $<"
 	@$(BIN2C) $< firmware_ps2_ip $@
+
+$(BUILDDIR)/firmware_wii_ip_data.c: $(WII_IP_BIN) $(BIN2C) | $(BUILDDIR)
+	@echo "  BIN2C   $<"
+	@$(BIN2C) $< firmware_wii_ip $@
 
 $(BUILDDIR)/firmware_%_data.o: $(BUILDDIR)/firmware_%_data.c
 	@$(CC) $(CFLAGS) -c $< -o $@

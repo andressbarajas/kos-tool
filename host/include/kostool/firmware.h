@@ -17,6 +17,8 @@ extern const uint8_t firmware_gc_ip_data[];
 extern const uint32_t firmware_gc_ip_size;
 extern const uint8_t firmware_ps2_ip_data[];
 extern const uint32_t firmware_ps2_ip_size;
+extern const uint8_t firmware_wii_ip_data[];
+extern const uint32_t firmware_wii_ip_size;
 
 /*
  * Check remote loader version and auto-update if needed.
