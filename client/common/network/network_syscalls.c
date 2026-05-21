@@ -70,8 +70,24 @@ void assign_wrkmem(unsigned char *user_buffer)
 
 /* ===== Syscall implementations ===== */
 
+/* progexit is the one syscall with no request/response round-trip: it
+ * fires the PROGEXIT notification and the guest halts immediately, so
+ * there is no bb->loop(0) parked to recover a dropped datagram the way
+ * every other syscall implicitly does.  On wired raw-Ethernet that lone
+ * datagram effectively never goes missing; on a lossy/offloaded path
+ * (Wii IOS/WiFi) it can, and the host then waits for it forever.
+ *
+ * Give the notification delivery robustness equivalent to the implicit
+ * retransmit every other syscall gets: emit it several times before
+ * halting.  This is idempotent — the host terminates on the first copy
+ * received and has already left its console loop, so the duplicates are
+ * discarded. */
+#define PROGEXIT_RETRANSMIT_COUNT 5
+
 void progexit(int ret_code)
 {
+    int i;
+
     bb->stop();
 
     net_command_t *command = (net_command_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
@@ -79,7 +95,9 @@ void progexit(int ret_code)
     memcpy(command->id, NET_SYSCALL_PROGEXIT, 4);
     command->address = htonl((unsigned int)ret_code);
     command->size = 0;
-    build_send_packet(COMMAND_LEN);
+
+    for (i = 0; i < PROGEXIT_RETRANSMIT_COUNT; i++)
+        build_send_packet(COMMAND_LEN);
 }
 
 int read(int fd, void *buf, unsigned int count)
