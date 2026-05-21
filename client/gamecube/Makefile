@@ -351,7 +351,7 @@ EXBUILD := $(BUILDDIR)/examples
 GC_EXAMPLES := \
     bba-test console-test download-test exception-test exception-frame-test \
     enc28j60-reset-test exit-test exi-probe file-test gdb-test \
-    font-test rainbow-test syscall-test
+    font-test rainbow-test syscall-test ip-calibrator
 
 GC_EXAMPLE_ELFS := $(addprefix $(EXBUILD)/,$(addsuffix .elf,$(GC_EXAMPLES)))
 

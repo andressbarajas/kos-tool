@@ -368,7 +368,7 @@ MKISO_LITE := $(HOSTDIR)/mkiso-lite
 DC_EXAMPLES := \
     cdfs-test console-test dc-probe download-test exception-test \
     exception-frame-test exit-test file-test gdb-test maple-test \
-    rainbow-test syscall-test
+    rainbow-test syscall-test ip-calibrator
 
 DC_EXAMPLE_ELFS := $(addprefix $(EXBUILD)/,$(addsuffix .elf,$(DC_EXAMPLES)))
 

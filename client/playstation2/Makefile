@@ -492,7 +492,7 @@ EXBUILD := $(BUILDDIR)/examples
 
 PS2_EXAMPLES := \
     console-test download-test exception-test \
-    exit-test file-test gdb-test syscall-test
+    exit-test file-test gdb-test syscall-test ip-calibrator
 # exception-frame-test is excluded — the host's frame parser
 # (handle_dc_exception / handle_gc_exception in host/src/console.c) has
 # no R5900 case yet, so a synthetic PS2 frame would fail to render.
