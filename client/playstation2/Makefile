@@ -102,6 +102,16 @@ MEMORY_DEFS := -DPS2_LOADER_BASE=$(PS2_LOADER_BASE) \
 CFLAGS  := $(ARCH_CFLAGS) $(FREE_CFLAGS) $(INCLUDES) $(MEMORY_DEFS) -DKOSLOAD_VERSION_STRING=\"$(KOSLOAD_VERSION)\"
 ASFLAGS := $(ARCH_ASFLAGS) $(INCLUDES) $(MEMORY_DEFS)
 
+# Automatic header-dependency tracking.  -MMD writes a .d file alongside each
+# .o listing every (non-system) header pulled in by the preprocessor; -MP adds
+# phony targets for those headers so a renamed/deleted header doesn't break
+# the build.  The .d files are then -include'd at the bottom, which makes
+# `touch include/kosload/target.h` (or any shared header) reliably rebuild
+# every TU that uses it.  Without this, editing a shared struct silently
+# leaves half the binary stale (see feedback_target_ops_append_only).
+CFLAGS  += -MMD -MP
+ASFLAGS += -MMD -MP
+
 # IP-additional includes
 IP_INCLUDES := -I$(CURDIR)/net -I$(IOPDIR)
 
@@ -212,7 +222,7 @@ $(COMMON_A): $(COMMON_OBJS)
 # elf2irx does an additional cleanup pass for modern GCC output.  Without
 # these guards, different references to the same global can land at different
 # runtime addresses and the IRX can hang with no useful error.
-IOP_CFLAGS  := $(IOP_ABI_FLAGS) -march=r3000 -msoft-float -nostdlib -nostartfiles -ffreestanding -O2 -Wall -G 0 -mno-explicit-relocs
+IOP_CFLAGS  := $(IOP_ABI_FLAGS) -march=r3000 -msoft-float -nostdlib -nostartfiles -ffreestanding -O2 -Wall -G 0 -mno-explicit-relocs -MMD -MP
 
 # kosdev9 EEPROM bit-bang variant matrix.  Default 0 = baseline
 # protocol (DIR=0xe0, no dummy-zero, fast udelay).  Set on the
@@ -525,3 +535,13 @@ $(COMMONDIR) $(IPDIR) $(IOPDIR) $(EXBUILD):
 
 clean:
 	rm -rf $(BUILDDIR) $(KOSDEV9_IRX_HDR)
+
+# Auto-generated header deps (-MMD).  `-include` (leading dash) is silent on
+# missing files, so the first build after `clean` works without any .d files.
+# Covers EE-side .o (loader + bootstrap + ee_sif), IOP-side .o (DEV9 + SMAP
+# IRXs), and shared common objects.  loader_blob.o is assembled from .S with
+# no #include and is intentionally excluded.
+IOP_DEP_OBJS := $(IOPDIR)/dev9_init.o $(IOPDIR)/kosdev9_irx.o $(SMAP_IRX_OBJ)
+-include $(COMMON_OBJS:.o=.d) $(IP_OBJS:.o=.d) \
+         $(IP_BOOTSTRAP_MAIN_OBJ:.o=.d) $(EE_SIF_LIB_OBJ:.o=.d) \
+         $(IOP_DEP_OBJS:.o=.d)

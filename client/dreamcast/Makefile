@@ -58,6 +58,16 @@ INCLUDES := -I$(ROOT)/include -I$(CLIENTDIR)/include -I$(CURDIR) -I$(CURDIR)/ser
 CFLAGS  := $(ARCH_CFLAGS) $(FREE_CFLAGS) $(INCLUDES) -DKOSLOAD_VERSION_STRING=\"$(KOSLOAD_VERSION)\"
 ASFLAGS := $(ARCH_ASFLAGS) $(INCLUDES)
 
+# Automatic header-dependency tracking.  -MMD writes a .d file alongside each
+# .o listing every (non-system) header pulled in by the preprocessor; -MP adds
+# phony targets for those headers so a renamed/deleted header doesn't break
+# the build.  The .d files are then -include'd at the bottom, which makes
+# `touch include/kosload/target.h` (or any shared header) reliably rebuild
+# every TU that uses it.  Without this, editing a shared struct silently
+# leaves half the binary stale (see feedback_target_ops_append_only).
+CFLAGS  += -MMD -MP
+ASFLAGS += -MMD -MP
+
 # Optional VGA-only (Naomi / System SP)
 ifdef VGAONLY
 CFLAGS += -DFORCE_VGA
@@ -409,3 +419,7 @@ $(COMMONDIR) $(SERIALDIR) $(IPDIR) $(HOSTDIR) $(EXBUILD):
 clean:
 	rm -rf $(BUILDDIR)
 	$(MAKE) -C $(MINILZO_DIR) BUILDDIR=build-dc clean
+
+# Auto-generated header deps (-MMD).  `-include` (leading dash) is silent on
+# missing files, so the first build after `clean` works without any .d files.
+-include $(COMMON_OBJS:.o=.d) $(SERIAL_OBJS:.o=.d) $(IP_OBJS:.o=.d)
