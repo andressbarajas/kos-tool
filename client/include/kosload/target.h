@@ -48,6 +48,10 @@ typedef struct target_ops {
 
     /* Memory detection */
     uint32_t    (*detect_ram_size)(void); /* Detect total usable RAM in bytes */
+
+    /* Optional: called right before execute() when the EXEC command carries
+     * KOSLOAD_EXEC_FW_UPDATE. */
+    void        (*fw_update_prepare)(void);
 } target_ops_t;
 
 /* Target implementations */

@@ -172,11 +172,15 @@ void cmd_execute(ether_header_t *ether, ip_header_t *ip, udp_header_t *udp, comm
 		const target_ops_t *t = target_get_ops();
 
 		/* Firmware-update handoffs aren't user programs — skip
-			* the console/CDFS plumbing meant for them. */
+			* the console/CDFS plumbing meant for them, and give the
+			* target a chance to tear down state that won't survive the
+			* one-way handoff into the replacement loader. */
 		if (!fw_update) {
 			t->set_console_enabled((cmd_size & KOSLOAD_EXEC_CONSOLE) != 0);
 			if ((cmd_size & KOSLOAD_EXEC_CDFS) && t->cdfs_redir_enable)
 				t->cdfs_redir_enable();
+		} else if (t->fw_update_prepare) {
+			t->fw_update_prepare();
 		}
 
 		running = true;
