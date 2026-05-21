@@ -192,7 +192,7 @@ static void dhcp_waiting_mode_display(void)
     t->draw_string(NETWORK_DISPLAY_X + 204, 126, dhcp_mode_string, STR_COLOR);
 }
 
-static void update_lease_time_display(unsigned int new_time)
+void update_lease_time_display(unsigned int new_time)
 {
     const target_ops_t *t = common_get_target();
     uint_to_string_dec(new_time, dhcp_lease_time_string);

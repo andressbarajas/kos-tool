@@ -199,6 +199,7 @@ typedef struct {
 #define ADAPTER_GC_ENC      0x2860  /* GameCube ENC28J60 (EXI-SPI) */
 #define ADAPTER_GC_W5500    0x5501  /* GameCube W5500 (EXI-SPI) */
 #define ADAPTER_PS2_BBA     0x0500  /* PlayStation 2 Broadband Adapter */
+#define ADAPTER_WII_LAN     0x0E58  /* Wii LAN Adapter (USB) / IOS net */
 
 /* ===== Serial Constants ===== */
 
@@ -208,11 +209,14 @@ typedef struct {
 /* Default load addresses */
 #define DC_DEFAULT_LOAD_ADDR    0x8c010000
 #define GC_DEFAULT_LOAD_ADDR    0x80003100
+#define WII_DEFAULT_LOAD_ADDR   0x80004000
 #define PS2_DEFAULT_LOAD_ADDR   0x00100000
 
 /* Memory layout constants */
 #define DC_RAM_TOP          0x8d000000  /* 16 MB SH4 RAM */
 #define GC_RAM_TOP          0x81800000  /* 24 MB MEM1 */
+#define WII_MEM1_TOP        0x81800000  /* 24 MB MEM1 */
+#define WII_MEM2_TOP        0x94000000  /* 64 MB MEM2 cached upper bound */
 #define PS2_RAM_TOP         0x02000000  /* 32 MB EE RAM */
 
 #ifndef GC_LOADER_BASE

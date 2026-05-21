@@ -57,6 +57,7 @@ typedef struct target_ops {
 /* Target implementations */
 extern const target_ops_t dreamcast_target_ops;
 extern const target_ops_t gamecube_target_ops;
+extern const target_ops_t wii_target_ops;
 extern const target_ops_t playstation2_target_ops;
 
 /* Gets the target_ops for the current build */
