@@ -5,7 +5,7 @@
 # this region (code + data + BSS + stack).
 #
 # Before launching a loaded program, ArenaHi is set to the loader base so
-# that libogc/devkitPPC heaps stay below the loader.
+# guest-side heap allocators stay below the loader.
 
 GC_MEM1_TOP    := 0x81800000
 GC_LOADER_SIZE := 0x14000    # 80 KB

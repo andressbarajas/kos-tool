@@ -16,7 +16,6 @@
  * References:
  *   - Microchip DS39662E (datasheet)
  *   - Microchip DS80349C (silicon errata, all revisions B1-B7)
- *   - swiss-gc / libogc2 ENC28J60 drivers
  */
 
 #include <string.h>
@@ -477,8 +476,8 @@ static void enc_rearm_runtime(void)
  *
  * The ENC28J60 has no factory-programmed MAC address.
  * Generate one deterministically from the GameCube's ECID
- * (Electronic Chip ID) hardware registers, matching libogc2's
- * approach. OUI = 00:09:BF (Nintendo).
+ * (Electronic Chip ID) hardware registers.
+ * OUI = 00:09:BF (Nintendo).
  */
 
 static inline unsigned int mfspr_ecid0(void)
@@ -523,7 +522,7 @@ static void enc_generate_mac(unsigned char *mac)
     ecid.cid[2] = mfspr_ecid2();
     ecid.cid[3] = mfspr_ecid3();
 
-    /* Mix in a fixed salt (matches libogc2) */
+    /* Mix in a fixed salt to differentiate generated MACs */
     ecid.data[15] ^= 0x00;
     ecid.data[16] ^= 0x04;
     ecid.data[17] ^= 0xA3;
@@ -555,8 +554,8 @@ static void enc_generate_mac(unsigned char *mac)
  *
  * The ENC28J60 returns 0xFA050000 from the standard EXI ID command,
  * but only when its ERDPT registers are at power-on defaults (0x05FA).
- * If swiss-gc or another loader previously initialized the chip, those
- * registers will have been modified and the ID won't match.
+ * If a previous loader / homebrew initialized the chip, those registers
+ * will have been modified and the ID won't match.
  *
  * Strategy: try the standard ID first (fast), then soft-reset and retry.
  */
@@ -576,8 +575,8 @@ static int enc_probe(int channel, int device)
     if (id == ENC28J60_EXI_ID)
         goto found;
 
-    /* Soft-reset potential ENC28J60 and retry. After swiss-gc uses the
-     * chip, ERDPT registers are modified so exi_get_id() returns a
+    /* Soft-reset potential ENC28J60 and retry. If a previous loader used
+     * the chip, ERDPT registers are modified so exi_get_id() returns a
      * different value (could even be 0x00000000). Clear PWRSV first so
      * the reset still works if a prior program left the chip asleep.
      * Harmless to non-ENC28J60 devices (undefined SPI command). */

@@ -1,8 +1,6 @@
 /* client/playstation2/ee_cop0.h
  *
  * Cleanroom EE COP0 register, exception, TLB, timer, and cache constants.
- *
- * Evidence and caveats: AGENT/ps2-ee-cop0.md.
  */
 
 #ifndef KOSLOAD_PS2_EE_COP0_H

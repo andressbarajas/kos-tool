@@ -211,9 +211,7 @@ enum {
  * 20-byte struct passed by pointer to CreateThread.  Layout RE'd
  * from binary disassembly of thbase's CreateThread (LOADCORE
  * extracted/11_Multi_Thread_Manager.bin .text 0xc5c) plus a worked
- * call site in extracted/22_RebootByEE.bin _start (see
- * AGENT/docs/re/cleanroom-iop-loader/10-thbase-imports.md for the byte-by-
- * byte trace).
+ * call site in extracted/22_RebootByEE.bin _start.
  *
  * Field constraints (validated by CreateThread):
  *   attr      — `(attr & 0x1cfffff7) == 0` required.
@@ -270,7 +268,6 @@ typedef struct kosload_iop_thread {
  * Symmetric with the import block above (same 20-byte header layout)
  * but with the magic flipped C↔E. RE'd from BIOS LOADCORE's
  * `RegisterLibraryEntries` (export #6) + the LinkImports walker.
- * See AGENT/ps2-iop-module-linking.md.
  *
  * Format (each `KOSLOAD_EXPORT_TABLE` macro emits this header into
  * a per-library section that the EXPORT macros below extend):

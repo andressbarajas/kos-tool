@@ -5,7 +5,7 @@
 # (target_ops->execute calls cache_flush then go).
 #
 # Sets ArenaHi (OS low mem 0x80000034) to the loader base so
-# that libogc/devkitPPC heaps stay below the loader, then sets
+# guest-side heap allocators stay below the loader, then sets
 # r1 (stack pointer) just below the loader region.
 #
 # Saves the loader's stack pointer and return address so that if
@@ -40,8 +40,8 @@ go:
     addi    r11, r11, .Lgo_return@l
     mtlr    r11
 
-    # Set ArenaHi (OS low mem 0x80000034) = GC_LOADER_BASE so that
-    # libogc heaps stay below the loader reservation.
+    # Set ArenaHi (OS low mem 0x80000034) = GC_LOADER_BASE so guest-side
+    # heap allocators stay below the loader reservation.
     lis     r11, (GC_LOADER_BASE >> 16)
     ori     r11, r11, (GC_LOADER_BASE & 0xFFFF)
     lis     r12, 0x8000

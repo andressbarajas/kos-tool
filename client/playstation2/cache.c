@@ -141,8 +141,7 @@ void cache_flush_dc(const void *addr, size_t size) {
      * cache, the IOP can receive old bytes.  A full 8 KB D-cache purge is
      * simple and reliable here, and the cost is tiny compared with the DMA
      * work this protects.  The narrower per-line flush was sensitive to cache
-     * set conflicts on real hardware; see
-     * AGENT/docs/ps2-layout-shift-investigation-prompt.md. */
+     * set conflicts on real hardware. */
     (void)addr;
     (void)size;
     arch_dcache_purge_all();
