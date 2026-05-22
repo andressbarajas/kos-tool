@@ -43,11 +43,13 @@ static inline int link(const char *oldpath, const char *newpath) {
 #include <kostool/platform.h>
 #include <kostool/gdb.h>
 #include <kostool/cdfs.h>
+#include <kostool/dedup.h>
 #include "minilzo.h"
 
 #define MAX_PATH_LEN 4096
 #define MAX_SYSCALL_SIZE (32 * 1024 * 1024)  /* 32MB sanity cap for remote malloc */
 #define SERIAL_EXIT_CODE_PROBE_USEC 100000
+#define NET_INLINE_RET_MAX 512
 
 static int host_mkdir(const char *path, int mode) {
 #ifdef _WIN32
@@ -273,6 +275,29 @@ static void console_write_line(const char *addr2line_cmd, const char *elf_path,
 
     /* Default: pass through unchanged */
     write(fd, line, len);
+}
+
+/* write(2) that completes the full buffer.  A bare write() may return
+ * fewer than `count` bytes (or -1/EINTR when a signal — e.g. SIGCHLD from
+ * the forked addr2line helper — lands mid-call); returning that short
+ * count straight to the guest makes its fs_write() see a mismatch and
+ * report a spurious write failure.  Loop until everything is out, retrying
+ * EINTR, and return the total (or -1 on a real error). */
+static int write_full(int fd, const uint8_t *data, uint32_t count) {
+    uint32_t off = 0;
+
+    while (off < count) {
+        ssize_t n = write(fd, data + off, count - off);
+        if (n < 0) {
+            if (errno == EINTR)
+                continue;
+            return -1;
+        }
+        if (n == 0)
+            break;
+        off += (uint32_t)n;
+    }
+    return (int)off;
 }
 
 /* Write console output, annotating stack trace addresses with addr2line.
@@ -807,18 +832,78 @@ static int net_send_cmd(kostool_context_t *ctx, const char cmd[4],
                         const uint8_t *data, uint32_t dsize) {
     uint8_t buf[2048];
     uint32_t tmp;
-    if (dsize > sizeof(buf) - 12)
-        dsize = sizeof(buf) - 12;
+    size_t wire_len;
+    int append_trailer;
+
+    /* Reserve trailer headroom up front so dsize never overruns buf. */
+    if (dsize > sizeof(buf) - 12 - NET_SEQ_TRAILER_LEN)
+        dsize = (uint32_t)(sizeof(buf) - 12 - NET_SEQ_TRAILER_LEN);
     memcpy(buf, cmd, 4);
     tmp = htonl(addr); memcpy(buf + 4, &tmp, 4);
     tmp = htonl(size); memcpy(buf + 8, &tmp, 4);
     if (data && dsize > 0) memcpy(buf + 12, data, dsize);
+    wire_len = 12 + dsize;
+
+    /* Echo the KSQ0 trailer on the RETVAL when a syscall dispatch is
+     * actively capturing.  Lets the client's cmd_retval drop stale
+     * RETVALs from a previously-completed syscall that arrives late.
+     * Other commands (LOADBIN ACK, etc.) don't carry the trailer; the
+     * client only inspects it on RETVAL, so untrailered command
+     * responses are unaffected. */
+    append_trailer = (dedup_is_capturing() &&
+                      memcmp(cmd, NET_CMD_RETVAL, 4) == 0);
+    if (append_trailer) {
+        uint32_t seq = dedup_current_seq();
+        memcpy(buf + wire_len, NET_SEQ_MAGIC, NET_SEQ_MAGIC_LEN);
+        buf[wire_len + NET_SEQ_MAGIC_LEN + 0] = (uint8_t)(seq >> 24);
+        buf[wire_len + NET_SEQ_MAGIC_LEN + 1] = (uint8_t)(seq >> 16);
+        buf[wire_len + NET_SEQ_MAGIC_LEN + 2] = (uint8_t)(seq >> 8);
+        buf[wire_len + NET_SEQ_MAGIC_LEN + 3] = (uint8_t)seq;
+        wire_len += NET_SEQ_TRAILER_LEN;
+    }
+
     if (ctx->installed_adapter == ADAPTER_GC_ENC &&
         memcmp(cmd, NET_CMD_RETVAL, 4) == 0 &&
         ctx->time_ops && ctx->time_ops->sleep_usec) {
         ctx->time_ops->sleep_usec(GC_ENC_RETVAL_DELAY_USEC);
     }
-    return ctx->socket_ops->send(ctx->global_socket, buf, 12 + dsize);
+    int ret = ctx->socket_ops->send(ctx->global_socket, buf, wire_len);
+    if (ret >= 0)
+        dedup_capture_pkt(buf, wire_len);
+    return ret;
+}
+
+/* True iff the request packet carried a KIR0 inline-return magic at
+ * `magic_offset` (right after the legacy command struct but before the
+ * KSQ0 trailer).  Used by fstat/stat/readdir to decide between the
+ * single-packet inline-return reply and the legacy 2-packet path. */
+static int net_has_inline_ret_request(const uint8_t *pkt, int pkt_len,
+                                      size_t magic_offset) {
+    if (pkt_len < 0 || (size_t)pkt_len < magic_offset + NET_INLINE_RET_MAGIC_LEN)
+        return 0;
+    return memcmp(pkt + magic_offset, NET_INLINE_RET_MAGIC,
+                  NET_INLINE_RET_MAGIC_LEN) == 0;
+}
+
+/* Send the RETVAL with the small fixed-size out-buffer inlined right
+ * after the KIR0 magic.  Returns 1 on success, 0 if the buffer would
+ * exceed NET_INLINE_RET_MAX (caller then falls back to the 2-packet
+ * SENDBINQ + DONEBIN path).  See network_syscalls.c copy_inline_ret. */
+static int net_send_ret_inline(kostool_context_t *ctx, int ret,
+                               const uint8_t *data, uint32_t dsize) {
+    uint8_t inline_data[NET_INLINE_RET_MAGIC_LEN + NET_INLINE_RET_MAX];
+
+    if (dsize > NET_INLINE_RET_MAX)
+        return 0;
+
+    memcpy(inline_data, NET_INLINE_RET_MAGIC, NET_INLINE_RET_MAGIC_LEN);
+    if (dsize > 0)
+        memcpy(inline_data + NET_INLINE_RET_MAGIC_LEN, data, dsize);
+
+    net_send_cmd(ctx, NET_CMD_RETVAL, (uint32_t)ret,
+                 NET_INLINE_RET_MAGIC_LEN + dsize,
+                 inline_data, NET_INLINE_RET_MAGIC_LEN + dsize);
+    return 1;
 }
 
 static int net_recv_resp(kostool_context_t *ctx, uint8_t *buffer,
@@ -867,7 +952,9 @@ static void ser_syscall_write(kostool_context_t *ctx) {
     ser_recv_data(ctx, data, count);
 
     int ret;
-    if (count >= 8 && !memcmp(data, KOSLOAD_EXCEPTION_TAG, 4)) {
+    if (fd != STDOUT_FILENO && fd != STDERR_FILENO) {
+        ret = count ? write_full(fd, data, count) : 0;
+    } else if (count >= 8 && !memcmp(data, KOSLOAD_EXCEPTION_TAG, 4)) {
         if (ctx->target_big_endian)
             handle_gc_exception(ctx, data, count);
         else
@@ -1351,11 +1438,13 @@ static int ser_try_recv_uint(kostool_context_t *ctx, uint32_t *value,
 
 /* ===== Network console syscall handlers ===== */
 
-static void net_syscall_fstat(kostool_context_t *ctx, uint8_t *pkt) {
+static void net_syscall_fstat(kostool_context_t *ctx, uint8_t *pkt, int pkt_len) {
     net_command_3int_t *cmd = (net_command_3int_t *)pkt;
     int fd = ntohl(cmd->value0);
     uint32_t addr = ntohl(cmd->value1);
     uint32_t sz = ntohl(cmd->value2);
+    int inline_ret = net_has_inline_ret_request(pkt, pkt_len,
+                                                sizeof(net_command_3int_t));
     struct stat st = {0};
     int ret = fstat(fd, &st);
     kosload_stat_t ds = {0};
@@ -1374,11 +1463,16 @@ static void net_syscall_fstat(kostool_context_t *ctx, uint8_t *pkt) {
     ds.st_atime_val = target_order32(ctx, st.st_atime);
     ds.st_mtime_val = target_order32(ctx, st.st_mtime);
     ds.st_ctime_val = target_order32(ctx, st.st_ctime);
+    /* KIR0 fast path: inline the stat result in the RETVAL.  Collapses
+     * 2-packet exchange to 1, halving loss probability on lossy links. */
+    if (inline_ret && ret >= 0 && sz <= sizeof(ds) &&
+        net_send_ret_inline(ctx, ret, (uint8_t *)&ds, sz))
+        return;
     ctx->transport->send_data(ctx, (uint8_t *)&ds, addr, sz);
     net_send_cmd(ctx, NET_CMD_RETVAL, ret, ret, NULL, 0);
 }
 
-static void net_syscall_write(kostool_context_t *ctx, uint8_t *pkt) {
+static void net_syscall_write(kostool_context_t *ctx, uint8_t *pkt, int pkt_len) {
     net_command_3int_t *cmd = (net_command_3int_t *)pkt;
     int fd = ntohl(cmd->value0);
     uint32_t addr = ntohl(cmd->value1);
@@ -1392,10 +1486,26 @@ static void net_syscall_write(kostool_context_t *ctx, uint8_t *pkt) {
         net_send_cmd(ctx, NET_CMD_RETVAL, (uint32_t)-1, (uint32_t)-1, NULL, 0);
         return;
     }
-    ctx->transport->recv_data(ctx, data, addr, count, 1);
+
+    /* Dedup-aware clients inline small write buffers right after the
+     * command struct.  When present, skip the recv_data round-trip and
+     * use the bytes already in `pkt`. */
+    size_t inline_off = sizeof(net_command_3int_t);
+    int have_inline =
+        (pkt_len >= 0 &&
+         (size_t)pkt_len >= inline_off + count &&
+         count <= NET_PAYLOAD_SIZE - sizeof(net_command_3int_t));
+
+    if (have_inline) {
+        memcpy(data, pkt + inline_off, count);
+    } else {
+        ctx->transport->recv_data(ctx, data, addr, count, 1);
+    }
 
     int ret;
-    if (count >= 8 && !memcmp(data, KOSLOAD_EXCEPTION_TAG, 4)) {
+    if (fd != STDOUT_FILENO && fd != STDERR_FILENO) {
+        ret = count ? write_full(fd, data, count) : 0;
+    } else if (count >= 8 && !memcmp(data, KOSLOAD_EXCEPTION_TAG, 4)) {
         if (ctx->target_big_endian)
             handle_gc_exception(ctx, data, count);
         else
@@ -1504,7 +1614,7 @@ static void net_syscall_time(kostool_context_t *ctx, uint8_t *pkt) {
     net_send_cmd(ctx, NET_CMD_RETVAL, (uint32_t)t, (uint32_t)t, NULL, 0);
 }
 
-static void net_syscall_stat(kostool_context_t *ctx, uint8_t *pkt) {
+static void net_syscall_stat(kostool_context_t *ctx, uint8_t *pkt, int pkt_len) {
     net_command_2int_string_t *cmd = (net_command_2int_string_t *)pkt;
     uint32_t addr = ntohl(cmd->value0);
     uint32_t sz = ntohl(cmd->value1);
@@ -1513,6 +1623,9 @@ static void net_syscall_stat(kostool_context_t *ctx, uint8_t *pkt) {
     const char *resolved = resolve_path(ctx, cmd->string, buf, sizeof(buf));
     int ret = stat(resolved, &st);
     kosload_stat_t ds = {0};
+    /* KIR0 magic sits AFTER the variable-length path string. */
+    int inline_ret = net_has_inline_ret_request(
+        pkt, pkt_len, sizeof(net_command_2int_string_t) + strlen(cmd->string) + 1);
     ds.st_dev = target_order16(ctx, st.st_dev);
     ds.st_ino = target_order16(ctx, st.st_ino);
     ds.st_mode = target_order32(ctx, st.st_mode);
@@ -1528,6 +1641,9 @@ static void net_syscall_stat(kostool_context_t *ctx, uint8_t *pkt) {
     ds.st_atime_val = target_order32(ctx, st.st_atime);
     ds.st_mtime_val = target_order32(ctx, st.st_mtime);
     ds.st_ctime_val = target_order32(ctx, st.st_ctime);
+    if (inline_ret && ret >= 0 && sz <= sizeof(ds) &&
+        net_send_ret_inline(ctx, ret, (uint8_t *)&ds, sz))
+        return;
     ctx->transport->send_data(ctx, (uint8_t *)&ds, addr, sz);
     net_send_cmd(ctx, NET_CMD_RETVAL, ret, ret, NULL, 0);
 }
@@ -1577,11 +1693,13 @@ static void net_syscall_closedir(kostool_context_t *ctx, uint8_t *pkt) {
     net_send_cmd(ctx, NET_CMD_RETVAL, ret, ret, NULL, 0);
 }
 
-static void net_syscall_readdir(kostool_context_t *ctx, uint8_t *pkt) {
+static void net_syscall_readdir(kostool_context_t *ctx, uint8_t *pkt, int pkt_len) {
     net_command_3int_t *cmd = (net_command_3int_t *)pkt;
     uint32_t i = ntohl(cmd->value0);
     uint32_t addr = ntohl(cmd->value1);
     uint32_t sz = ntohl(cmd->value2);
+    int inline_ret = net_has_inline_ret_request(pkt, pkt_len,
+                                                sizeof(net_command_3int_t));
     struct dirent *de = NULL;
     if (i >= DIRENT_OFFSET && i < MAX_OPEN_DIRS + DIRENT_OFFSET)
         de = readdir(opendirs[i - DIRENT_OFFSET]);
@@ -1602,6 +1720,9 @@ static void net_syscall_readdir(kostool_context_t *ctx, uint8_t *pkt) {
         dd.d_type = de->d_type;
 #endif
         compat_str_copy(dd.d_name, sizeof(dd.d_name), de->d_name);
+        if (inline_ret && sz <= sizeof(dd) &&
+            net_send_ret_inline(ctx, 1, (uint8_t *)&dd, sz))
+            return;
         ctx->transport->send_data(ctx, (uint8_t *)&dd, addr, sz);
         net_send_cmd(ctx, NET_CMD_RETVAL, 1, 1, NULL, 0);
     } else {
@@ -1799,6 +1920,7 @@ static int do_serial_console(kostool_context_t *ctx) {
 
 static int do_network_console(kostool_context_t *ctx) {
     uint8_t buffer[2048];
+    int pkt_len;
 
     if (ctx->cdfs_enabled && ctx->iso_filename) {
         ctx->cdfs_fd = open(ctx->iso_filename, O_RDONLY | O_BINARY);
@@ -1809,11 +1931,47 @@ static int do_network_console(kostool_context_t *ctx) {
     while (1) {
         fflush(stdout);
 
-        while (net_recv_resp(ctx, buffer, sizeof(buffer), NET_PACKET_TIMEOUT_USEC) == -1)
+        while ((pkt_len = net_recv_resp(ctx, buffer, sizeof(buffer),
+                                         NET_PACKET_TIMEOUT_USEC)) == -1)
             ;
+        if (pkt_len < 4)
+            continue;
+
+        /* Dedup: extract trailing KSQ0 seq id if present, replay on
+         * duplicate, or set up capture for a fresh request.  Untrailered
+         * packets (legacy dc-load-ip 2.0.1, dc-tool 2.0.x, anything
+         * predating kosload 3.0.0) bypass the cache entirely — preserving
+         * byte-for-byte the legacy behavior.  Strip the trailer from
+         * pkt_len so the per-syscall dispatchers see the legacy payload
+         * size they expect; the trailing null below also lands at the
+         * right offset for string-bearing commands. */
+        int dedup_active = 0;
+        uint32_t seq = 0;
+        if (dedup_extract_seq(buffer, (size_t)pkt_len, &seq)) {
+            pkt_len -= (int)NET_SEQ_TRAILER_LEN;
+            uint64_t now = ctx->time_ops->time_usec();
+            if (dedup_try_replay(seq, now, ctx->socket_ops,
+                                 ctx->global_socket)) {
+                /* Replayed cached response set — skip dispatch entirely. */
+                continue;
+            }
+            /* Superseded duplicate (a late retransmit the guest has
+             * already moved past): drop it.  Re-dispatching would advance
+             * host-side state — read() would bump the file pointer and its
+             * PARTBINs would overwrite the guest's current read buffer.
+             * Only fresh (seq > high-water) requests fall through. */
+            if (dedup_is_stale(seq))
+                continue;
+            dedup_begin_capture(seq, now);
+            dedup_active = 1;
+        }
+
         /* Guarantee null termination so strlen() on string commands
          * can never walk past the buffer. */
-        buffer[sizeof(buffer) - 1] = '\0';
+        if ((size_t)pkt_len < sizeof(buffer))
+            buffer[pkt_len] = '\0';
+        else
+            buffer[sizeof(buffer) - 1] = '\0';
 
         if (!memcmp(buffer, NET_SYSCALL_EXIT, 4) || !memcmp(buffer, NET_SYSCALL_PROGEXIT, 4)) {
             net_command_t *exit_cmd = (net_command_t *)buffer;
@@ -1822,9 +1980,9 @@ static int do_network_console(kostool_context_t *ctx) {
             gdb_report_program_exit(ctx, ret_code);
             return 0;
         }
-        if (!memcmp(buffer, NET_SYSCALL_FSTAT, 4))      net_syscall_fstat(ctx, buffer);
-        else if (!memcmp(buffer, NET_SYSCALL_WRITE, 4))  net_syscall_write(ctx, buffer);
-        else if (!memcmp(buffer, "DD02", 4))         net_syscall_write(ctx, buffer); /* legacy */
+        if (!memcmp(buffer, NET_SYSCALL_FSTAT, 4))      net_syscall_fstat(ctx, buffer, pkt_len);
+        else if (!memcmp(buffer, NET_SYSCALL_WRITE, 4))  net_syscall_write(ctx, buffer, pkt_len);
+        else if (!memcmp(buffer, "DD02", 4))         net_syscall_write(ctx, buffer, pkt_len); /* legacy */
         else if (!memcmp(buffer, NET_SYSCALL_READ, 4))   net_syscall_read(ctx, buffer);
         else if (!memcmp(buffer, NET_SYSCALL_OPEN, 4))   net_syscall_open(ctx, buffer);
         else if (!memcmp(buffer, NET_SYSCALL_CLOSE, 4))  net_syscall_close(ctx, buffer);
@@ -1835,17 +1993,24 @@ static int do_network_console(kostool_context_t *ctx) {
         else if (!memcmp(buffer, NET_SYSCALL_CHMOD, 4))  net_syscall_chmod(ctx, buffer);
         else if (!memcmp(buffer, NET_SYSCALL_LSEEK, 4))  net_syscall_lseek(ctx, buffer);
         else if (!memcmp(buffer, NET_SYSCALL_TIME, 4))   net_syscall_time(ctx, buffer);
-        else if (!memcmp(buffer, NET_SYSCALL_STAT, 4))   net_syscall_stat(ctx, buffer);
+        else if (!memcmp(buffer, NET_SYSCALL_STAT, 4))   net_syscall_stat(ctx, buffer, pkt_len);
         else if (!memcmp(buffer, NET_SYSCALL_UTIME, 4))  net_syscall_utime(ctx, buffer);
         else if (!memcmp(buffer, NET_SYSCALL_BAD, 4))
             fprintf(stderr, "command 15 should not happen... (but it did)\n");
         else if (!memcmp(buffer, NET_SYSCALL_OPENDIR, 4))   net_syscall_opendir(ctx, buffer);
         else if (!memcmp(buffer, NET_SYSCALL_CLOSEDIR, 4))  net_syscall_closedir(ctx, buffer);
-        else if (!memcmp(buffer, NET_SYSCALL_READDIR, 4))   net_syscall_readdir(ctx, buffer);
+        else if (!memcmp(buffer, NET_SYSCALL_READDIR, 4))   net_syscall_readdir(ctx, buffer, pkt_len);
         else if (!memcmp(buffer, NET_SYSCALL_CDFSREAD, 4))  net_syscall_cdfs_read(ctx, buffer);
         else if (!memcmp(buffer, NET_SYSCALL_GDBPACKET, 4)) net_syscall_gdbpacket(ctx, buffer);
         else if (!memcmp(buffer, NET_SYSCALL_REWINDDIR, 4)) net_syscall_rewinddir(ctx, buffer);
         else if (!memcmp(buffer, NET_SYSCALL_MKDIR, 4))     net_syscall_mkdir(ctx, buffer);
+
+        /* Commit the captured response set as the live cache.  If a
+         * retransmit of this same seq id arrives within
+         * DEDUP_WINDOW_USEC, dedup_try_replay() above will resend the
+         * captured packets verbatim instead of re-running the syscall. */
+        if (dedup_active)
+            dedup_end_capture();
     }
 
     return 0;

@@ -128,6 +128,7 @@ CORE_SRCS := \
     src/gdb.c \
     src/cdfs.c \
     src/syscalls.c \
+    src/dedup.c \
     src/firmware_update.c \
     src/transport/serial.c \
     src/transport/network.c \

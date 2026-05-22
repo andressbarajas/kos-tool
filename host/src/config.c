@@ -35,6 +35,8 @@ static const char default_config[] =
     "# gc_serial = /dev/ttyUSB1\n"
     "# dc_ip = 172.16.0.10\n"
     "# gc_ip = dhcp\n"
+    "# ps2_ip = dhcp\n"
+    "# wii_ip = dhcp\n"
     "# serial_baud = 1562500\n"
     "\n"
     "# Full paths to addr2line for each target architecture.\n"
@@ -108,6 +110,10 @@ static void apply_config_value(struct kostool_context *ctx,
         compat_str_copy(ctx->dc_ip, sizeof(ctx->dc_ip), value);
     } else if (strcmp(key, "gc_ip") == 0) {
         compat_str_copy(ctx->gc_ip, sizeof(ctx->gc_ip), value);
+    } else if (strcmp(key, "ps2_ip") == 0) {
+        compat_str_copy(ctx->ps2_ip, sizeof(ctx->ps2_ip), value);
+    } else if (strcmp(key, "wii_ip") == 0) {
+        compat_str_copy(ctx->wii_ip, sizeof(ctx->wii_ip), value);
     } else if (strcmp(key, "serial_baud") == 0) {
         uint32_t baud = (uint32_t)strtoul(value, NULL, 0);
         if (baud)

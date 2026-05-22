@@ -25,10 +25,12 @@ static uint64_t wii_next_link_poll;
 static int wii_last_link = -1;
 static int wii_interface_type = WII_NET_INTERFACE_UNKNOWN;
 
-/* Tick when it's safe to resume IOS IPCs after a link-up event.  IOS spends
- * several seconds internally re-running DHCP DISCOVER/OFFER/REQUEST/ACK once
- * the cable is replugged. */
-static uint64_t wii_resume_ipcs_at;
+/* After the cable is replugged (link goes down→up), IOS spends several
+ * seconds internally re-running DHCP (DISCOVER/OFFER/REQUEST/ACK).  Making
+ * IOS network calls during that window corrupts the shared IOS request
+ * buffer, so we hold them off until this tick (0 = not armed).  The settle
+ * length is WII_LINK_UP_SETTLE_MS. */
+static uint64_t wii_link_up_settle_until;
 #define WII_LINK_UP_SETTLE_MS 5000
 
 adapter_t *bb;
@@ -110,13 +112,21 @@ static int wii_adapter_init(void)
     memcpy(adapter_wii_ios.mac, config.mac, sizeof(adapter_wii_ios.mac));
     our_ip = config.ip;
 
+    /* The internal Wi-Fi drops/offloads packets, so it needs the syscall
+     * layer's bounded-wait retransmit; the wired USB LAN Adapter is treated
+     * as reliable (wait-forever).  Anything we couldn't positively identify
+     * as wired falls on the safe side (lossy → retransmit).  This is the
+     * sole place the bounded-wait is enabled — the common syscall code just
+     * checks bb->lossy, no per-console #ifdef. */
+    adapter_wii_ios.lossy = (config.interface_type != WII_NET_INTERFACE_WIRED);
+
     bb = &adapter_wii_ios;
     /* Self-report the adapter ID like every other platform's NIC driver.
      * Without this it stays 0, which the host's prepare_comms() treats as
      * its "not yet initialized" sentinel — defeating the one-shot VERS
      * handshake cache, so it re-handshakes (and reprints the version
      * banner) on every round-trip. */
-    installed_adapter = ADAPTER_WII_LAN;
+    installed_adapter = ADAPTER_WII_LAN_WIFI;
     if (config.ip_source_dhcp)
         kosload_info.capabilities |= KOSLOAD_CAP_DHCP;
     escape_loop = 0;
@@ -169,41 +179,34 @@ static void wii_poll_link_change(void)
              * initial wii_last_link = -1 → 1 path is the cold-boot init, not
              * a recovery, so no settle needed there. */
             if (was_down)
-                wii_resume_ipcs_at = now + wii_ms_to_ticks(t, WII_LINK_UP_SETTLE_MS);
+                wii_link_up_settle_until = now + wii_ms_to_ticks(t, WII_LINK_UP_SETTLE_MS);
         } else {
             disp_status("link lost...");
         }
     }
 }
 
-/* Mirror the DC/GC/BBA adapter .loop contract (cf. bba_loop): a syscall
- * does build_send_packet(...); bb->loop(0); and relies on that single
- * call servicing inbound packets until the host's NET_CMD_RETVAL sets
- * escape_loop (cmd_retval, commands.c).  The host pulls every
- * write()/read() buffer back with a re-requestable, multi-packet
- * download — a single recvfrom cannot service that, so the old
- * single-shot version collapsed any exchange needing more than one
- * inbound packet: the host's re-requests went unanswered and it gave
- * up after 10 passes.  Spin until escape_loop, then clear it for the
- * next call, exactly as bba_loop does.  At the top (idle) level
- * escape_loop is never set, so this is the main loop and never
- * returns; nested syscall waits exit when cmd_retval fires.
+/* Mirror the DC/GC/BBA adapter .loop contract: spin until escape_loop is
+ * set (by cmd_retval for nested syscalls, by the upload handlers from
+ * the host commands.c, etc.), then clear it for the next call.  Same
+ * single-while-loop shape the wired-NIC adapters use, with
+ * is_main_loop gating the housekeeping that only the idle loop should
+ * do (link-change polling, DHCP-lease repaint, screensaver).
  *
- * Two distinct shapes, by design:
- *   - is_main_loop=true  : non-blocking SOPoll check + ~1 Hz lease/link
- *                          refresh + screensaver_poll.  The 1 Hz tick
- *                          owns the DHCP-lease display directly — IOS
- *                          handles renewal, we just paint the current
- *                          remaining seconds via SOGetInterfaceOpt
- *                          0xC001 each second, no seed-and-decrement
- *                          state machine like the other consoles.
- *   - is_main_loop=false : pure blocking recvfrom in a tight loop, no
- *                          IPC overhead beyond what each inbound packet
- *                          costs.  This is the known-good cb176b5
- *                          baseline.  SOPoll's struct shape (and the
- *                          ip/top ioctl 0x0B cmd id) was never verified
- *                          against an allowed binary; do not guess this
- *                          in the upload path. */
+ * Wii-specific bits:
+ *   - The "RX FIFO" is an IOS IPC; we poll with a non-blocking SOPoll
+ *     (ioctl 0x0B, timeout=0).
+ *   - loop_deadline_ticks lets a nested syscall wait time out and
+ *     retransmit (see kos_syscall_wait_for_retval).  Wired-NIC consoles
+ *     don't need this because their links don't drop packets in
+ *     practice.
+ *   - The DHCP-lease line is repainted at ~1 Hz directly from IOS's
+ *     remaining-seconds via SOGetInterfaceOpt 0xC001 — no seed-and-
+ *     decrement state machine like the other consoles, because IOS
+ *     owns lease renewal.
+ *   - After a cable replug, IOS is internally busy re-running DHCP for
+ *     several seconds; the wii_link_up_settle_until gate keeps hot-path IOS
+ *     calls out of that window. */
 static void wii_adapter_loop(bool is_main_loop)
 {
     static uint64_t last_sec_tick = 0;
@@ -213,44 +216,45 @@ static void wii_adapter_loop(bool is_main_loop)
     uint16_t src_port = 0;
     int received;
 
-    if (!is_main_loop) {
-        /* Nested syscall wait: pure blocking recvfrom in a tight loop. */
-        while (!escape_loop) {
-            received = wii_ios_net_recvfrom(payload, sizeof(payload),
-                                            &src_ip, &src_port);
-            if (received > 0)
-                synthesize_udp_frame(payload, (uint32_t)received,
-                                     src_ip, src_port);
-        }
-        escape_loop = 0;
-        return;
-    }
-
     while (!escape_loop) {
-        uint64_t now = (t != 0) ? t->get_ticks() : 0;
-        /* After a cable-replug, IOS is internally busy re-running DHCP for
-         * several seconds. Pause every hot-path IOS call during the settle window. */
-        int ipcs_paused = (t != 0 && wii_resume_ipcs_at && now < wii_resume_ipcs_at);
+        uint64_t now = t->get_ticks();
+        int got_rx = 0;
+        /* The post-replug settle only applies to the idle main loop.
+         * During a nested syscall wait, RETVAL recovery takes priority
+         * over the settle. */
+        int settling = is_main_loop &&
+                          (wii_link_up_settle_until && now < wii_link_up_settle_until);
 
-        /* Non-blocking SOPoll (ioctl 0x0B with timeout=0): asks IOS
-         * "is data ready?". */
-        if (!ipcs_paused && wii_ios_net_poll_recv(0) > 0) {
+        if (!settling && wii_ios_net_poll_recv(0) > 0) {
             received = wii_ios_net_recvfrom(payload, sizeof(payload),
                                             &src_ip, &src_port);
-            if (received > 0)
+            if (received > 0) {
                 synthesize_udp_frame(payload, (uint32_t)received,
                                      src_ip, src_port);
+                got_rx = 1;
+            }
         }
 
-        if (!ipcs_paused)
-            wii_poll_link_change();
+        /* Bounded-wait support for the syscall layer's retransmit loop:
+         * if loop_deadline_ticks is armed and we've passed it, exit
+         * with escape_loop still clear so the caller can re-tx the
+         * saved request packet (see kos_syscall_wait_for_retval).  On
+         * the idle main loop loop_deadline_ticks is always 0 so this
+         * is a no-op.  Gated on no RX this pass (matches the wired
+         * adapters) so an in-progress download isn't abandoned with a
+         * packet still waiting to be drained. */
+        if (!got_rx && loop_deadline_ticks && now >= loop_deadline_ticks)
+            break;
 
-        /* ~1 Hz: repaint the DHCP-lease line from IOS's current
-         * remaining-seconds (also gated by the post-replug settle). */
-        if (!ipcs_paused && t != 0) {
-            if (now - last_sec_tick >= t->ticks_per_second) {
+        if (is_main_loop) {
+            if (!settling)
+                wii_poll_link_change();
+
+            /* ~1 Hz: repaint the DHCP-lease line from IOS's current
+             * remaining-seconds (also gated by the post-replug settle). */
+            if (!settling &&
+                now - last_sec_tick >= t->ticks_per_second) {
                 last_sec_tick = now;
-
                 if ((kosload_info.capabilities & KOSLOAD_CAP_DHCP) &&
                     !screensaver_is_active()) {
                     int lease = wii_ios_net_lease_secs();
@@ -258,9 +262,9 @@ static void wii_adapter_loop(bool is_main_loop)
                         update_lease_time_display((unsigned int)lease);
                 }
             }
-        }
 
-        screensaver_poll();
+            screensaver_poll();
+        }
     }
     escape_loop = 0;
 }

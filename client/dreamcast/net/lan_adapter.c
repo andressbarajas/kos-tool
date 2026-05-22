@@ -53,7 +53,8 @@ adapter_t adapter_la = {
 	la_bb_start,
 	la_bb_stop,
 	la_bb_loop,
-	la_bb_tx
+	la_bb_tx,
+	false		/* not lossy: reliable raw NIC, wait forever for RETVAL */
 };
 
 static volatile unsigned char lan_link_up = 0;
@@ -762,8 +763,6 @@ void la_bb_loop(bool is_main_loop)
 		if(is_main_loop && !escape_loop)
 			screensaver_poll();
 	}
-
-	DEBUG("bb_loop exited\r\n");
 
 	escape_loop = 0;
 }

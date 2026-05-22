@@ -45,7 +45,8 @@ adapter_t adapter_bba = {
 	rtl_bb_start,
 	rtl_bb_stop,
 	rtl_bb_loop,
-	rtl_bb_tx
+	rtl_bb_tx,
+	false		/* not lossy: reliable raw NIC, wait forever for RETVAL */
 };
 
 static rtl_status_t rtl = {0};
@@ -892,7 +893,6 @@ void rtl_bb_loop(bool is_main_loop)
 	// OMG this is polling the network adapter. Well, ok then.
 	while(!escape_loop)
 	{
-
 		/* Check interrupt status */
 		if (nic16[RT_INTRSTATUS/2] != intr)
 		{

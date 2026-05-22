@@ -38,7 +38,8 @@ adapter_t adapter_enc28j60 = {
     enc28j60_start,
     enc28j60_stop,
     enc28j60_loop,
-    enc28j60_tx
+    enc28j60_tx,
+    false       /* not lossy: reliable raw NIC, wait forever for RETVAL */
 };
 
 /* Runtime EXI location (set by detection) */
@@ -905,8 +906,9 @@ void enc28j60_loop(bool is_main_loop)
         /* Poll for received packets */
         enc28j60_rx();
 
-        /* Once-per-second PHY link poll. */
         uint64_t now = t->get_ticks();
+
+        /* Once-per-second PHY link poll. */
         if ((now - last_link_poll) >= t->ticks_per_second) {
             int new_link = (enc_phy_read(PHSTAT2) & PHSTAT2_LSTAT) != 0;
             last_link_poll = now;

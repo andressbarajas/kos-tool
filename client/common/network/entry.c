@@ -225,6 +225,9 @@ void disp_info(void)
     if (our_ip && our_ip != 0xffffffff) {
         ip_to_string(our_ip, ip_str);
         t->draw_string(NETWORK_DISPLAY_X, 126, ip_str, 0xffff);
+        /* Re-show the "(DHCP Mode)" suffix on this redraw. */
+        if (kosload_info.capabilities & KOSLOAD_CAP_DHCP)
+            t->draw_string(NETWORK_DISPLAY_X + 180, 126, dhcp_mode_string, 0xffff);
     } else if (our_ip == 0) {
         /* DHCP mode, no lease yet — pre-show the "Waiting For IP..." line
          * so the IP row isn't blank during link/PHY/settle bring-up. */

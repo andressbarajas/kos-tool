@@ -58,7 +58,8 @@ adapter_t adapter_w5500 = {
     w5500_start,
     w5500_stop,
     w5500_loop,
-    w5500_tx
+    w5500_tx,
+    false       /* not lossy: reliable raw NIC, wait forever for RETVAL */
 };
 
 /* ===== Soft delay ===== */

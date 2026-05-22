@@ -24,6 +24,7 @@
 #include <kostool/gdb.h>
 #include <kostool/transport.h>
 #include <kostool/platform.h>
+#include <kostool/dedup.h>
 
 /* Host-side pacing.  Some adapters drop packets if the host sends a long
  * burst with no pause.  After N packets, sleep for the matching delay. */
@@ -50,6 +51,17 @@
 #define MAX_CMD_RETRIES       20   /* max retries for command ack (LOADBIN, DONEBIN, etc.) */
 #define MAX_RECV_REREQUESTS   10   /* max full passes over recv bitmap */
 #define NET_HANDSHAKE_TIMEOUT_USEC 10000000  /* 10s to find loader at static IP */
+
+/* Wii download (SENDBINQ) tuning.  IOS replies to memory-read requests in
+ * single-digit milliseconds when the chunk lands; on a dropped chunk the
+ * generic 250 ms wait used to be pure dead time.  Use a short 50 ms
+ * timeout for the first N rerequest passes (fast recovery), then fall
+ * back to the legacy 250 ms for the final retry so a genuinely slow
+ * reply still has time to land.  DC/GC/PS2 with hardware NICs don't have
+ * the same asymmetry, so they keep the original 250 ms throughout. */
+#define WII_RECV_REREQUEST_TIMEOUT_USEC 50000   /* 50 ms */
+#define WII_RECV_FAST_REREQUESTS        10
+#define WII_RECV_SLOW_REREQUESTS        1
 
 /* Drain delay after a LOADBIN retry to let stale in-flight PARTBINs expire.
  * This mitigates silent data corruption from attempt N-1's packets arriving
@@ -92,9 +104,72 @@ static int adapter_is_spi(uint32_t adapter) {
  * non-4-byte-aligned UDP payloads after the first round of traffic.  These
  * call sites pad outbound commands and disable host-side auto_fast.  Keyed
  * on the VERS name rather than installed_adapter so it works even when the
- * post-VERS adapter-ID fallback hasn't recognised ADAPTER_WII_LAN. */
+ * post-VERS adapter-ID fallback hasn't recognised ADAPTER_WII_LAN_WIFI. */
 static int is_wii_loader(const kostool_context_t *ctx) {
     return ctx && strncmp(ctx->remote_version_string, "wii-load-ip ", 12) == 0;
+}
+
+/* Initial streaming-wait timeout for the SENDBIN/SENDBINQ download path.
+ * Wii: chunks arrive fast or not at all, so we lower the wait that gates
+ * "give up streaming and start re-requesting".  Other consoles keep the
+ * legacy 250 ms. */
+static uint32_t recv_data_timeout_usec(const kostool_context_t *ctx) {
+    return ctx->installed_adapter == ADAPTER_WII_LAN_WIFI
+        ? WII_RECV_REREQUEST_TIMEOUT_USEC
+        : NET_PACKET_TIMEOUT_USEC;
+}
+
+/* Per-pass timeout for the re-request loop.  Wii uses fast 50 ms passes
+ * for the first WII_RECV_FAST_REREQUESTS attempts, then falls back to
+ * the conservative 250 ms for the last WII_RECV_SLOW_REREQUESTS.  All
+ * other consoles stay on the unchanged 250 ms for every pass. */
+static uint32_t recv_data_rerequest_timeout_usec(const kostool_context_t *ctx,
+                                                 int pass) {
+    if (ctx->installed_adapter == ADAPTER_WII_LAN_WIFI &&
+        pass < WII_RECV_FAST_REREQUESTS)
+        return WII_RECV_REREQUEST_TIMEOUT_USEC;
+    return NET_PACKET_TIMEOUT_USEC;
+}
+
+/* Total rerequest-pass budget.  Wii gets the extra slow pass on top of
+ * the fast batch; everyone else stays at MAX_RECV_REREQUESTS = 10. */
+static int recv_data_max_rerequests(const kostool_context_t *ctx) {
+    if (ctx->installed_adapter == ADAPTER_WII_LAN_WIFI)
+        return WII_RECV_FAST_REREQUESTS + WII_RECV_SLOW_REREQUESTS;
+    return MAX_RECV_REREQUESTS;
+}
+
+/*
+ * Decide whether a freshly-received packet is the ACK we're waiting for.
+ *
+ * Plain memcmp on the command id isn't enough on a lossy link: a delayed
+ * duplicate of a previous LOADBIN/EXEC/SETRTC reply (same 4-byte id, but
+ * for the prior request's addr/size) would otherwise satisfy the match
+ * and either be misread as the current ACK or — more commonly — consume
+ * the recv slot for this attempt, burning the full 250 ms timeout before
+ * the next retry.
+ *
+ * Filter on addr/size for the commands that have a deterministic echo
+ * (LOADBIN ACK echoes back load_address + load_size; EXEC ACK echoes
+ * back the exec address + flags; SETRTC echoes back the timestamp).
+ * Other commands (DONEBIN, VERSION, ...) are still id-matched only
+ * because their replies don't carry a meaningful addr/size.
+ */
+static int command_ack_matches(const uint8_t *buffer, int rv,
+                               const char expected[4],
+                               uint32_t addr, uint32_t size) {
+    const net_command_t *reply;
+
+    if (rv < NET_COMMAND_LEN || memcmp(buffer, expected, 4) != 0)
+        return 0;
+
+    reply = (const net_command_t *)buffer;
+    if (memcmp(expected, NET_CMD_LOADBIN, 4) == 0 ||
+        memcmp(expected, NET_CMD_EXECUTE, 4) == 0 ||
+        memcmp(expected, NET_CMD_SETRTC, 4) == 0)
+        return ntohl(reply->address) == addr && ntohl(reply->size) == size;
+
+    return 1;
 }
 
 /* ===== Low-level UDP helpers ===== */
@@ -131,7 +206,7 @@ static int send_cmd(kostool_context_t *ctx, const char cmd[4],
      * fires on every run).  Header is already 4-byte aligned; the pad
      * only fires when dsize is non-word and zero-fills the slop. */
     if (is_wii_loader(ctx)) {
-        uint32_t padded = (wire_size + 3) & ~3u;
+        uint32_t padded = (wire_size + 3) & ~3;
         if (padded > wire_size)
             memset(buf + wire_size, 0, padded - wire_size);
         wire_size = padded;
@@ -139,6 +214,17 @@ static int send_cmd(kostool_context_t *ctx, const char cmd[4],
 
     int ret = ctx->socket_ops->send(ctx->global_socket, buf, wire_size);
     if (ret < 0) return -1;
+    /* During a dedup capture, save outbound packets so dedup_try_replay()
+     * can resend them on a retransmit (only the Wii retransmits; wired
+     * consoles wait forever, so this is dormant there, not dead).
+     *
+     * But never save SENDBINQ/SENDBIN: replays must have no side effects,
+     * and these *pull* guest memory — replaying one makes the guest re-send
+     * its whole buffer.  read()'s LOADBIN/PARTBIN *pushes* to a fixed
+     * address, so it's safe to replay; the write() pull is not. */
+    if (memcmp(cmd, NET_CMD_SENDBINQ, 4) != 0 &&
+        memcmp(cmd, NET_CMD_SENDBIN, 4) != 0)
+        dedup_capture_pkt(buf, wire_size);
     return 0;
 }
 
@@ -176,6 +262,15 @@ static void drain_rx_buffer(kostool_context_t *ctx, uint32_t drain_usec) {
 /*
  * Send a command and wait for a matching response, with retry limit.
  * Returns 0 on success (buffer contains the response), -1 on failure.
+ *
+ * Within each 250 ms attempt window, this drains every datagram that
+ * arrives and filters with command_ack_matches() — instead of stopping
+ * at the first packet recv_resp() hands back.  Critical on lossy links
+ * (Wii internal Wi-Fi especially): a single stray duplicate from a
+ * prior command used to consume the recv slot, fail the memcmp, and
+ * waste the rest of the timeout before the next retry, which is what
+ * stretched LOADBIN/DONEBIN into 5–15-retry territory and made EXEC
+ * fail outright when the channel had any backlog.
  */
 static int send_and_wait(kostool_context_t *ctx, const char cmd[4],
                          uint32_t addr, uint32_t size,
@@ -183,10 +278,20 @@ static int send_and_wait(kostool_context_t *ctx, const char cmd[4],
                          uint8_t *buffer, size_t buffer_size,
                          const char expected[4]) {
     for (int attempt = 0; attempt < MAX_CMD_RETRIES; attempt++) {
+        uint64_t start;
+
         send_cmd(ctx, cmd, addr, size, data, dsize);
-        if (recv_resp(ctx, buffer, buffer_size, NET_PACKET_TIMEOUT_USEC) > 0 &&
-            memcmp(buffer, expected, 4) == 0)
-            return 0;
+        start = ctx->time_ops->time_usec();
+        while ((ctx->time_ops->time_usec() - start) < NET_PACKET_TIMEOUT_USEC) {
+            int rv = ctx->socket_ops->recv(ctx->global_socket,
+                                           buffer, buffer_size);
+            if (rv <= 0)
+                continue;
+            if (command_ack_matches(buffer, rv, expected, addr, size))
+                return 0;
+            /* Wrong-id or wrong-addr/size packet: drop it and keep
+             * looking within this attempt's window. */
+        }
         if (!ctx->fast_mode && attempt > 0 && (attempt % 5) == 0)
             fprintf(stderr, "send_and_wait: retrying %s (attempt %d/%d)...\n",
                     cmd, attempt + 1, MAX_CMD_RETRIES);
@@ -235,18 +340,30 @@ static int query_capabilities(kostool_context_t *ctx, uint32_t *capabilities) {
 }
 
 /*
- * Encode dc-tool version into a uint32 for handshake: (major<<16)|(minor<<8)|patch
+ * Encode kos-tool version into a uint32 for handshake: (major<<16)|(minor<<8)|patch
  * Returns 0 if force_legacy is set.
  *
  * send_cmd() already applies htonl() to the address field, so we must NOT
  * apply htonl() here — that would double byte-swap and corrupt the version.
  * Version must be >= 2.0.0 so firmware's DCTOOL_MAJOR >= 2 for v2 features
  * (1440-byte payloads, v2 syscall port, "DC02" write commands).
+ *
+ * 3.0.0 is the version that introduced the KSQ0 syscall-sequencing trailer
+ * and per-seq dedup cache (see include/kosload/protocol.h).  Clients gate
+ * their bounded-wait retransmit on tool_version >= 0x00030000; against an
+ * older host they emit the harmless trailer but keep the legacy
+ * wait-forever semantics, since the legacy host has no dedup cache and a
+ * retransmit would re-run non-idempotent syscalls.
+ *
+ * Sourced from version.mk via the generated <kosload/version.h> so the
+ * VERS-encoded protocol version tracks the release version automatically.
  */
+#include <kosload/version.h>
 static uint32_t make_encoded_version(int force_legacy) {
     if (force_legacy) return 0;
-    /* kostool version 2.0.0 → 0x00020000 */
-    return (2 << 16) | (0 << 8) | 0;
+    return ((uint32_t)KOSLOAD_VERSION_MAJOR << 16) |
+           ((uint32_t)KOSLOAD_VERSION_MINOR << 8)  |
+           ((uint32_t)KOSLOAD_VERSION_PATCH);
 }
 
 /*
@@ -360,7 +477,7 @@ got_version:
         //     ctx->rx_fifo_delay = 0;
         // }
     } else if (is_wii_loader(ctx)) {
-        /* Wii reports ADAPTER_WII_LAN (0x0E58); none of the DC/GC/PS2
+        /* Wii reports ADAPTER_WII_LAN_WIFI (0x0E58); none of the DC/GC/PS2
          * is_bba/is_lan/is_spi predicates match, so without this branch
          * we'd fall through and clobber the adapter ID to ADAPTER_DC_BBA.
          * Keep the reported ID and apply Wii's structural IOS-IPC pacing:
@@ -801,7 +918,7 @@ static int network_send_data(kostool_context_t *ctx, const uint8_t *data,
 }
 
 /*
- * Receive binary data from DC via UDP.
+ * Receive binary data from console via UDP.
  * Protocol:
  * 1. Send SENDBIN/SENDBINQ with src_addr and size
  * 2. Receive PARTBIN packets, track which chunks arrived in a map
@@ -813,6 +930,8 @@ static int network_recv_data(kostool_context_t *ctx, uint8_t *data,
                              uint32_t src_addr, uint32_t size, int quiet) {
     uint8_t buffer[2048];
     int retval;
+    uint32_t recv_timeout;
+    int max_rerequests;
     uint64_t diag_total_start = 0;
     uint64_t diag_stream_start = 0;
     uint64_t diag_stream_end = 0;
@@ -820,6 +939,8 @@ static int network_recv_data(kostool_context_t *ctx, uint8_t *data,
     uint32_t diag_rerequests = 0;
 
     prepare_comms(ctx);
+    recv_timeout   = recv_data_timeout_usec(ctx);
+    max_rerequests = recv_data_max_rerequests(ctx);
 
     if (ctx->diagnostics_enabled)
         diag_total_start = ctx->time_ops->time_usec();
@@ -840,27 +961,40 @@ static int network_recv_data(kostool_context_t *ctx, uint8_t *data,
     int packets = 0;
     uint64_t start = ctx->time_ops->time_usec();
 
-    while ((ctx->time_ops->time_usec() - start) < NET_PACKET_TIMEOUT_USEC &&
+    while ((ctx->time_ops->time_usec() - start) < recv_timeout &&
            packets < (int)(num_chunks + 1)) {
         memset(buffer, 0, 2048);
 
         while ((retval = ctx->socket_ops->recv(ctx->global_socket, buffer, 2048)) < 0 &&
-               (ctx->time_ops->time_usec() - start) < NET_PACKET_TIMEOUT_USEC)
+               (ctx->time_ops->time_usec() - start) < recv_timeout)
             ;
 
         if (retval > 0) {
             start = ctx->time_ops->time_usec();
             net_command_t *pkt = (net_command_t *)buffer;
 
-            if (memcmp(pkt->id, NET_CMD_DONEBIN, 4) != 0) {
+            if (memcmp(pkt->id, NET_CMD_SENDBIN, 4) == 0) {
                 uint32_t pkt_addr = ntohl(pkt->address);
                 uint32_t pkt_size = ntohl(pkt->size);
                 uint32_t chunk_idx = (pkt_addr - src_addr) / chunk_size;
 
-                if (chunk_idx < num_chunks) {
-                    map[chunk_idx] = 1;
-                    memcpy(data + (pkt_addr - src_addr), buffer + NET_COMMAND_LEN, pkt_size);
-                }
+                /* Drop SENDBINs whose addr/size doesn't fall inside the
+                 * transfer we asked for — a stray duplicate from a prior
+                 * read() would otherwise scribble random offsets of
+                 * `data`. */
+                if (pkt_addr < src_addr ||
+                    pkt_addr >= src_addr + size ||
+                    pkt_size > chunk_size ||
+                    pkt_size > src_addr + size - pkt_addr ||
+                    chunk_idx >= num_chunks)
+                    continue;
+
+                map[chunk_idx] = 1;
+                memcpy(data + (pkt_addr - src_addr), buffer + NET_COMMAND_LEN, pkt_size);
+            } else if (memcmp(pkt->id, NET_CMD_DONEBIN, 4) != 0) {
+                /* Neither SENDBIN nor DONEBIN: stray response from some
+                 * unrelated command.  Drop and keep waiting. */
+                continue;
             }
             packets++;
             diag_packets++;
@@ -876,38 +1010,53 @@ static int network_recv_data(kostool_context_t *ctx, uint8_t *data,
 
         uint32_t req_addr = src_addr + c * chunk_size;
         uint32_t req_size = ((size - c * chunk_size) >= chunk_size) ? chunk_size : (size - c * chunk_size);
+        uint32_t pass_timeout = recv_data_rerequest_timeout_usec(ctx, passes);
 
         send_cmd(ctx, NET_CMD_SENDBINQ, req_addr, req_size, NULL, 0);
         diag_rerequests++;
 
         start = ctx->time_ops->time_usec();
-        while ((retval = ctx->socket_ops->recv(ctx->global_socket, buffer, 2048)) < 0 &&
-               (ctx->time_ops->time_usec() - start) < NET_PACKET_TIMEOUT_USEC)
-            ;
+        while ((ctx->time_ops->time_usec() - start) < pass_timeout) {
+            while ((retval = ctx->socket_ops->recv(ctx->global_socket, buffer, 2048)) < 0 &&
+                   (ctx->time_ops->time_usec() - start) < pass_timeout)
+                ;
 
-        if (retval > 0) {
+            if (retval <= 0)
+                break;
+
             net_command_t *pkt = (net_command_t *)buffer;
-            if (memcmp(pkt->id, NET_CMD_DONEBIN, 4) != 0) {
+            if (memcmp(pkt->id, NET_CMD_SENDBIN, 4) == 0) {
                 uint32_t pkt_addr = ntohl(pkt->address);
                 uint32_t pkt_size = ntohl(pkt->size);
                 uint32_t idx = (pkt_addr - src_addr) / chunk_size;
-                if (idx < num_chunks) {
-                    map[idx] = 1;
-                    memcpy(data + (pkt_addr - src_addr), buffer + NET_COMMAND_LEN, pkt_size);
-                }
+                if (pkt_addr < src_addr ||
+                    pkt_addr >= src_addr + size ||
+                    pkt_size > chunk_size ||
+                    pkt_size > src_addr + size - pkt_addr ||
+                    idx >= num_chunks)
+                    continue;
+
+                map[idx] = 1;
+                memcpy(data + (pkt_addr - src_addr), buffer + NET_COMMAND_LEN, pkt_size);
+            } else if (memcmp(pkt->id, NET_CMD_DONEBIN, 4) == 0) {
+                /* DONEBIN is the "end of stream" marker.  If our target
+                 * chunk has landed, we're done with this pass. */
+                if (map[c])
+                    break;
+            } else {
+                /* Unrelated reply — keep draining. */
+                continue;
             }
 
-            /* Consume the DONEBIN */
-            while ((retval = ctx->socket_ops->recv(ctx->global_socket, buffer, 2048)) < 0 &&
-                   (ctx->time_ops->time_usec() - start) < NET_PACKET_TIMEOUT_USEC)
-                ;
+            if (map[c])
+                break;
         }
 
         /* Restart check from beginning, but limit total passes */
         passes++;
-        if (passes >= MAX_RECV_REREQUESTS) {
+        if (passes >= max_rerequests) {
             fprintf(stderr, "recv_data: exceeded %d re-request passes, transfer may be incomplete\n",
-                    MAX_RECV_REREQUESTS);
+                    max_rerequests);
             break;
         }
         c = (uint32_t)-1;

@@ -189,17 +189,53 @@ typedef struct {
 
 #define NET_GDB_PORT            2159
 
+/* ===== Optional syscall extensions ===== */
+/*
+ * Two optional trailers may follow the legacy syscall payload of a UDP
+ * datagram.  Old hosts/clients (e.g. dc-load-ip 2.0.1) size the payload
+ * from its in-band length fields and ignore trailing bytes, so both are
+ * safe to add in either direction.
+ *
+ * KSQ0 (8 bytes: magic + big-endian seq id)
+ *   A request tag.  The client puts a unique seq id on each syscall
+ *   request; a 3.0.0+ host echoes it on the RETVAL and caches the reply
+ *   under that id (host/src/dedup.c).  If the same request arrives again
+ *   (its first copy or the reply was lost), the host replays the cached
+ *   reply instead of re-running the syscall — which is what keeps
+ *   non-idempotent calls (read, lseek, readdir) correct under packet
+ *   loss.  The client only retransmits against a 3.0.0+ host; against a
+ *   legacy host it sends the tag but never retries (a retry there would
+ *   re-run the syscall).  Same idea as NFS's reply cache (RFC 1813) and
+ *   CoAP's message-id dedup (RFC 7252).
+ *
+ * KIR0 (4-byte magic)
+ *   Added to fstat/stat/readdir requests: "you may inline the result in
+ *   the RETVAL instead of a separate SENDBINQ+DONEBIN trip."  Turns a
+ *   2-packet reply into 1, halving loss odds.  Like CoAP's piggybacked
+ *   response.
+ *
+ * Both sit at the very end of the UDP payload, after any inline data:
+ *   request:  [legacy payload] [KIR0?] [KSQ0]
+ *   response: [legacy payload] [KIR0 + inline buffer?] [KSQ0]
+ */
+#define NET_SEQ_MAGIC            "KSQ0"
+#define NET_SEQ_MAGIC_LEN        4
+#define NET_SEQ_TRAILER_LEN      8   /* magic (4) + seq id BE (4) */
+
+#define NET_INLINE_RET_MAGIC     "KIR0"
+#define NET_INLINE_RET_MAGIC_LEN 4
+
 /* ===== Adapter Type Constants ===== */
 
-#define ADAPTER_NONE        0x0000
-#define ADAPTER_DC_BBA      0x0400  /* Dreamcast Broadband Adapter (RTL8139C) */
-#define ADAPTER_DC_LAN      0x0300  /* Dreamcast LAN Adapter */
-#define ADAPTER_DC_W5500    0x5500  /* Dreamcast W5500 (SCIF-SPI) */
-#define ADAPTER_GC_BBA      0x0015  /* GameCube Broadband Adapter */
-#define ADAPTER_GC_ENC      0x2860  /* GameCube ENC28J60 (EXI-SPI) */
-#define ADAPTER_GC_W5500    0x5501  /* GameCube W5500 (EXI-SPI) */
-#define ADAPTER_PS2_BBA     0x0500  /* PlayStation 2 Broadband Adapter */
-#define ADAPTER_WII_LAN     0x0E58  /* Wii LAN Adapter (USB) / IOS net */
+#define ADAPTER_NONE         0x0000
+#define ADAPTER_DC_BBA       0x0400  /* Dreamcast Broadband Adapter (RTL8139C) */
+#define ADAPTER_DC_LAN       0x0300  /* Dreamcast LAN Adapter */
+#define ADAPTER_DC_W5500     0x5500  /* Dreamcast W5500 (SCIF-SPI) */
+#define ADAPTER_GC_BBA       0x0015  /* GameCube Broadband Adapter */
+#define ADAPTER_GC_ENC       0x2860  /* GameCube ENC28J60 (EXI-SPI) */
+#define ADAPTER_GC_W5500     0x5501  /* GameCube W5500 (EXI-SPI) */
+#define ADAPTER_PS2_BBA      0x0500  /* PlayStation 2 Broadband Adapter */
+#define ADAPTER_WII_LAN_WIFI 0x0E58  /* Wii IOS net — USB LAN Adapter (RVL-015) or internal Wi-Fi */
 
 /* ===== Serial Constants ===== */
 

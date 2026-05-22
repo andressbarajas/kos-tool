@@ -46,7 +46,13 @@ static unsigned char dbg_hex2[12];
 /* Syscall state (defined in network syscalls) */
 extern unsigned int syscall_retval;
 extern unsigned char *syscall_data;
+extern unsigned int syscall_data_len;
 extern unsigned short kosload_syscall_port;
+extern unsigned int kos_syscall_seq;
+
+/* Push the syscall bounded-wait deadline forward on bulk-transfer
+ * progress (defined in network_syscalls.c).  No-op outside a wait. */
+extern void net_bump_syscall_deadline(void);
 
 
 /* Forward declarations for syscalls used in error paths */
@@ -205,6 +211,9 @@ void cmd_execute(ether_header_t *ether, ip_header_t *ip, udp_header_t *udp, comm
 
 void cmd_loadbin(ip_header_t *ip, udp_header_t *udp, command_t *command)
 {
+	/* Start of a read() bulk transfer — keep the syscall wait alive. */
+	net_bump_syscall_deadline();
+
 #if CMD_DEBUG
 	scif_puts((unsigned char *)"LBIN: enter\n");
 	clear_lines(222, 24, 0x0000);
@@ -295,6 +304,10 @@ void cmd_partbin(command_t *command)
 	unsigned int cmd_addr = ntohl(command->address);
 	unsigned int cmd_size = ntohl(command->size);
 
+	/* Progress during a read() bulk transfer — keep the syscall
+	 * bounded-wait alive so a long transfer doesn't time out. */
+	net_bump_syscall_deadline();
+
 #if CMD_DEBUG
 	dbg_partbin_count++;
 	/* Show every 10th PARTBIN to avoid flooding the display */
@@ -326,6 +339,10 @@ void cmd_partbin(command_t *command)
 
 void cmd_donebin(ip_header_t *ip, udp_header_t *udp, command_t *command)
 {
+	/* End of a read() bulk transfer (or a re-request round) — keep the
+	 * syscall wait alive until the RETVAL lands. */
+	net_bump_syscall_deadline();
+
 #if CMD_DEBUG
 	scif_puts((unsigned char *)"DBIN: enter\n");
 	clear_lines(222, 24, 0x0000);
@@ -381,6 +398,10 @@ void cmd_donebin(ip_header_t *ip, udp_header_t *udp, command_t *command)
 
 void cmd_sendbinq(ip_header_t *ip, udp_header_t *udp, command_t *command)
 {
+	/* Host is pulling guest memory (large write()/download) — progress,
+	 * so keep the syscall bounded-wait alive. */
+	net_bump_syscall_deadline();
+
 	our_ip = ntohl(ip->dest);
 
 	unsigned int payload_size, numpackets, i;
@@ -563,6 +584,38 @@ void cmd_retval(ip_header_t *ip, udp_header_t *udp, command_t *command)
 {
 	if (running)
 	{
+		unsigned int udp_payload_len;
+		unsigned int data_len;
+		int trailer_ok = 0;
+		unsigned char *trailer;
+
+		/* The host echoes our KSQ0 trailer at the very end of the UDP
+		 * payload when it serviced (or dedup-replayed) this exact
+		 * request.  Validate it BEFORE touching syscall_retval so a
+		 * stale RETVAL — e.g. a delayed reply to a previously-completed
+		 * syscall on a flaky link — can't be misread as the answer to
+		 * the in-flight one. */
+		udp_payload_len = ntohs(udp->length);
+		if (udp_payload_len < UDP_H_LEN)
+			return;
+		udp_payload_len -= UDP_H_LEN;
+
+		if (tool_version >= 0x00030000 &&
+		    udp_payload_len >= COMMAND_LEN + NET_SEQ_TRAILER_LEN) {
+			trailer = (unsigned char *)command +
+			          udp_payload_len - NET_SEQ_TRAILER_LEN;
+			if (memcmp(trailer, NET_SEQ_MAGIC, NET_SEQ_MAGIC_LEN) == 0) {
+				unsigned int echoed =
+				    ((unsigned int)trailer[NET_SEQ_MAGIC_LEN + 0] << 24) |
+				    ((unsigned int)trailer[NET_SEQ_MAGIC_LEN + 1] << 16) |
+				    ((unsigned int)trailer[NET_SEQ_MAGIC_LEN + 2] << 8)  |
+				    ((unsigned int)trailer[NET_SEQ_MAGIC_LEN + 3]);
+				if (echoed != kos_syscall_seq)
+					return;   /* stale duplicate of an older RETVAL */
+				trailer_ok = 1;
+			}
+		}
+
 		bb->stop();
 
 		unsigned char *buffer = pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN;
@@ -576,8 +629,18 @@ void cmd_retval(ip_header_t *ip, udp_header_t *udp, command_t *command)
 		syscall_retval = ntohl(command->address);
 		/* Points into the RX buffer — safe because bb->stop() above
 		 * disables hardware RX, and gdbpacket() copies immediately
-		 * after the loop exits (single-threaded, no DMA/interrupts). */
+		 * after the loop exits (single-threaded, no DMA/interrupts).
+		 *
+		 * syscall_data_len bounds the inline payload that follows the
+		 * 12-byte command header: total UDP payload minus the command
+		 * header minus the seq trailer (if present).  KIR0 inline
+		 * returns and gdbpacket replies read from this region. */
 		syscall_data = command->data;
+		data_len = (udp_payload_len > COMMAND_LEN)
+		           ? udp_payload_len - COMMAND_LEN : 0;
+		if (trailer_ok && data_len >= NET_SEQ_TRAILER_LEN)
+			data_len -= NET_SEQ_TRAILER_LEN;
+		syscall_data_len = data_len;
 		escape_loop = 1;
 	}
 }

@@ -16,10 +16,6 @@
 #define WII_TBR_FREQUENCY 60750000u
 #define PERFCOUNTER_SCALE WII_TBR_FREQUENCY
 
-#define BBA_MODEL ADAPTER_WII_LAN
-#define ENC_MODEL ADAPTER_WII_LAN
-#define W5500_MODEL ADAPTER_WII_LAN
-
 extern volatile bool booted;
 extern volatile bool running;
 extern volatile bool receiving;
