@@ -69,6 +69,16 @@ MEMORY_DEFS := -DGC_LOADER_BASE=$(GC_LOADER_BASE) \
 CFLAGS  := $(ARCH_CFLAGS) $(FREE_CFLAGS) $(INCLUDES) $(MEMORY_DEFS) -DKOSLOAD_VERSION_STRING=\"$(KOSLOAD_VERSION)\"
 ASFLAGS := $(ARCH_ASFLAGS) $(INCLUDES) $(MEMORY_DEFS)
 
+# Automatic header-dependency tracking.  -MMD writes a .d file alongside each
+# .o listing every (non-system) header pulled in by the preprocessor; -MP adds
+# phony targets for those headers so a renamed/deleted header doesn't break
+# the build.  The .d files are then -include'd at the bottom, which makes
+# `touch include/kosload/target.h` (or any shared header) reliably rebuild
+# every TU that uses it.  Without this, editing a shared struct silently
+# leaves half the binary stale (see feedback_target_ops_append_only).
+CFLAGS  += -MMD -MP
+ASFLAGS += -MMD -MP
+
 # IP-additional includes
 IP_INCLUDES := -I$(CURDIR)/net
 
@@ -341,7 +351,7 @@ EXBUILD := $(BUILDDIR)/examples
 GC_EXAMPLES := \
     bba-test console-test download-test exception-test exception-frame-test \
     enc28j60-reset-test exit-test exi-probe file-test gdb-test \
-    font-test rainbow-test syscall-test
+    font-test rainbow-test syscall-test ip-calibrator
 
 GC_EXAMPLE_ELFS := $(addprefix $(EXBUILD)/,$(addsuffix .elf,$(GC_EXAMPLES)))
 
@@ -374,3 +384,7 @@ $(COMMONDIR) $(SERIALDIR) $(IPDIR) $(EXBUILD):
 clean:
 	rm -rf $(BUILDDIR)
 	$(MAKE) -C $(MINILZO_DIR) BUILDDIR=build-gc clean
+
+# Auto-generated header deps (-MMD).  `-include` (leading dash) is silent on
+# missing files, so the first build after `clean` works without any .d files.
+-include $(COMMON_OBJS:.o=.d) $(SERIAL_OBJS:.o=.d) $(IP_OBJS:.o=.d)

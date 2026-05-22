@@ -102,10 +102,10 @@ int usbgecko_init(void)
         return -1;
 
     /* Flush any stale data in the RX FIFO.
-     * When booting from Swiss/SD card, leftover bytes from a previous
-     * kos-tool session can sit in the USB FIFO. If a stale byte matches
-     * a multi-byte command (e.g. 'B' for load), the command loop would
-     * deadlock waiting for data that never comes. */
+     * When booting from an SD card / external loader, leftover bytes
+     * from a previous kos-tool session can sit in the USB FIFO.  If a
+     * stale byte matches a multi-byte command (e.g. 'B' for load), the
+     * command loop would deadlock waiting for data that never comes. */
     while (check_rx_ready())
         usbgecko_getchar();
 

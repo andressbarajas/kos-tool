@@ -33,7 +33,9 @@
 #elif defined(__PPC__) || defined(__powerpc__)
 
 /* GC: 640x480i YCbYCr big-endian, XFB at 0xC0050000 (uncached MEM1) */
-#ifdef GC_KOSLOAD_BASE
+#if defined(WII_KOSLOAD_BASE)
+#define KOSLOAD_BASE    WII_KOSLOAD_BASE
+#elif defined(GC_KOSLOAD_BASE)
 #define KOSLOAD_BASE    GC_KOSLOAD_BASE
 #else
 #define KOSLOAD_BASE    0x817EC000

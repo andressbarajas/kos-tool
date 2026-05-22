@@ -5,8 +5,6 @@
  * This header contains addresses and simple address-conversion helpers only.
  * It is intentionally usable from both EE and cleanroom IOP translation units:
  * no libc headers, no inline code, and no SDK-owned names.
- *
- * Verification notes live in AGENT/ps2-memory-map.md.
  */
 
 #ifndef KOSLOAD_PS2_MEMORY_MAP_H

@@ -1,6 +1,6 @@
 # kos-tool 3.0.0
 
-**kos-tool** is a unified console loader for the **Sega Dreamcast**, **Nintendo GameCube**, and **Sony PlayStation 2**, combining the functionality of [dcload-serial](https://github.com/KallistiOS/dcload-serial) and [dcload-ip](https://github.com/KallistiOS/dcload-ip) into a single, clean codebase. It is a derivative of the original **dcload** by [Andrew Kieschnick](http://napalm-x.thegypsy.com/andrewk/dc/) (ADK/Napalm).
+**kos-tool** is a unified console loader for the **Sega Dreamcast**, **Nintendo GameCube**, **Sony PlayStation 2**, and **Nintendo Wii**, combining the functionality of [dcload-serial](https://github.com/KallistiOS/dcload-serial) and [dcload-ip](https://github.com/KallistiOS/dcload-ip) into a single, clean codebase. It is a derivative of the original **dcload** by [Andrew Kieschnick](http://napalm-x.thegypsy.com/andrewk/dc/) (ADK/Napalm).
 
 **kos-tool** is a set of programs used to send and receive data between your computer and your console. The classic use case is uploading and debugging homebrew programs. It consists of two parts:
 
@@ -8,6 +8,7 @@
 * `dc-load-serial` / `dc-load-ip` — the Dreamcast client firmware
 * `gc-load-serial` / `gc-load-ip` — the GameCube client firmware
 * `ps2-load-ip` — the PlayStation 2 client firmware
+* `wii-load-ip` — the Wii client firmware
 
 ## Supported Hardware
 
@@ -30,6 +31,20 @@
 | Connection | Client Firmware | Adapter |
 |---|---|---|
 | Ethernet | `ps2-load-ip` | Network Adapter / Broadband Adapter (DEV9 SMAP) |
+
+### Wii
+
+| Connection | Client Firmware | Adapter |
+|---|---|---|
+| Ethernet | `wii-load-ip` | Wii LAN Adapter (RVL-015, USB) |
+| Wi-Fi (experimental) | `wii-load-ip` | Internal Wi-Fi |
+
+Both Wii paths run over the console's IOS network stack. The wired LAN
+Adapter is the more reliable path; **internal Wi-Fi is experimental** — it
+works, but is more sensitive to packet loss (the loader and host carry
+syscall retransmit/dedup logic specifically to tolerate it). `wii-load-ip`
+is launched from the [Homebrew Channel](https://wiibrew.org/wiki/Homebrew_Channel)
+via the generated `wii-load-ip.dol`.
 
 ## Improvements over dcload-serial / dcload-ip
 
@@ -55,6 +70,13 @@
 * **PS2 network loader** — Ethernet transport through the official DEV9 SMAP network hardware
 * **Shared protocol** — PS2 uses the same network upload/download command protocol as Dreamcast and GameCube
 * **DHCP and static IP support** — PS2 network firmware can discover an address with DHCP or be built with a fixed IP
+
+### Wii Support
+* **Wii network loader** — Ethernet transport over the Wii LAN Adapter (RVL-015) and, experimentally, the internal Wi-Fi, both via the console's IOS network stack
+* **Homebrew Channel launch** — `wii-load-ip` ships as a `.dol` that boots from the Homebrew Channel
+* **Shared protocol** — Wii uses the same network upload/download command protocol as the other consoles
+* **Lossy-link resilience** — the syscall path adds opt-in request sequencing with host-side reply dedup and bounded retransmit, so a dropped request or reply recovers instead of wedging — important on the experimental Wi-Fi path
+* **DHCP support** — IOS handles address acquisition; the loader displays the current lease
 
 ### Host Tool Enhancements
 * **Automatic transport detection** — `kos-tool` infers serial vs network from `-t <device|ip|dhcp>`
@@ -83,7 +105,7 @@
 * GDB remote debugging via GDB-over-dcload
 * Exception handler with full register dump
 * DHCP/network discovery (`-t dhcp`)
-* Network firmware supports BBA/LAN/W5500 on Dreamcast, BBA/ENC28J60/W5500 on GameCube, and DEV9 SMAP on PlayStation 2
+* Network firmware supports BBA/LAN/W5500 on Dreamcast, BBA/ENC28J60/W5500 on GameCube, DEV9 SMAP on PlayStation 2, and LAN Adapter / Wi-Fi (experimental) on Wii
 * Runtime baud rate negotiation up to 1.5Mbaud (Dreamcast serial)
 * Cross-platform host tool: Linux, macOS, Windows (MSYS2)
 
@@ -96,33 +118,36 @@
 * Cross-compiler toolchains for client builds:
   * Dreamcast: `sh-elf-gcc`
   * GameCube: `powerpc-eabi-gcc`
+  * Wii: `powerpc-eabi-gcc` (same toolchain as GameCube)
   * PlayStation 2 EE: `mips64r5900el-ps2-elf-gcc`
   * PlayStation 2 IOP: `mipsel-elf-gcc`
 
 Toolchain locations are configured in [`mk/toolchains.mk`](mk/toolchains.mk).
-If your Dreamcast, GameCube, or PlayStation 2 toolchains are not installed under
-the default paths, edit that file before running `make dc`, `make gc`,
-`make ps2`, or `./build.sh`.
+If your Dreamcast, GameCube, Wii, or PlayStation 2 toolchains are not installed
+under the default paths, edit that file before running `make dc`, `make gc`,
+`make wii`, `make ps2`, or `./build.sh`.
 
 ### Build Everything
 
 ```bash
-make        # builds DC firmware, GC firmware, PS2 firmware, host tool, and examples
+make        # builds DC firmware, GC firmware, PS2 firmware, Wii firmware, host tool, and examples
 ```
 
 Output goes to `build/`:
 ```
 build/
-├── kos-tool              # host tool (with embedded firmware)
-├── dc-load-ser.{elf,bin} # Dreamcast serial firmware
-├── dc-load-ip.{elf,bin}  # Dreamcast network firmware
-├── gc-load-ser.{elf,bin} # GameCube serial firmware
-├── gc-load-ip.{elf,bin}  # GameCube network firmware
-├── ps2-load-ip.elf       # PlayStation 2 network firmware
+├── kos-tool                  # host tool (with embedded firmware)
+├── dc-load-ser.{elf,bin}     # Dreamcast serial firmware
+├── dc-load-ip.{elf,bin}      # Dreamcast network firmware
+├── gc-load-ser.{elf,bin}     # GameCube serial firmware
+├── gc-load-ip.{elf,bin}      # GameCube network firmware
+├── ps2-load-ip.elf           # PlayStation 2 network firmware
+├── wii-load-ip.{elf,bin,dol} # Wii network firmware (.dol boots from Homebrew Channel)
 └── examples/
-    ├── dc/               # Dreamcast example ELFs
-    ├── gc/               # GameCube example ELFs
-    └── ps2/              # PlayStation 2 example ELFs
+    ├── dc/                   # Dreamcast example ELFs
+    ├── gc/                   # GameCube example ELFs
+    ├── ps2/                  # PlayStation 2 example ELFs
+    └── wii/                  # Wii example ELFs
 ```
 
 ### Individual Targets
@@ -131,6 +156,7 @@ build/
 make dc       # Dreamcast firmware + examples + rebuild kos-tool
 make gc       # GameCube firmware + examples + rebuild kos-tool
 make ps2      # PlayStation 2 firmware + examples + rebuild kos-tool
+make wii      # Wii firmware + examples + rebuild kos-tool
 make host     # Host tool only (embeds whatever firmware bins exist)
 make disc     # Bootable disc images (CDI for DC, ISO for GC)
 make disc-dc  # Dreamcast-only bootable CDI images
@@ -143,6 +169,7 @@ You can also override toolchains per invocation:
 ```bash
 make gc GC_TOOLCHAIN=/path/to/powerpc-eabi/bin
 make dc DC_TOOLCHAIN=/path/to/sh-elf/bin
+make wii GC_TOOLCHAIN=/path/to/powerpc-eabi/bin
 make ps2 PS2_EE_TOOLCHAIN=/path/to/mips64r5900el-ps2-elf/bin PS2_IOP_TOOLCHAIN=/path/to/mipsel-elf/bin
 ```
 
@@ -199,6 +226,11 @@ make gc STATICIP=192.168.1.100
 make ps2 STATICIP=192.168.1.100
 ```
 
+The Wii has no `STATICIP` knob — IOS owns address acquisition, so a
+patched-in static IP would be ignored. For a stable Wii address, set a
+static IP in the Wii Settings UI (IOS picks it up via its NCD config) or
+use a DHCP reservation on your router.
+
 ## Usage
 
 ```
@@ -216,7 +248,7 @@ Options:
   -a <addr>    Set address (default: 0x8c010000)
   -s <size>    Set size for download
   -t <device>  Serial device, IP address, or 'dhcp'
-  -T <profile> Use configured target profile (dc_serial, gc_serial, dc_ip, gc_ip)
+  -T <profile> Use configured target profile (dc_serial, gc_serial, dc_ip, gc_ip, ps2_ip, wii_ip)
   -b <baud>    Serial baud rate (default: 57600)
   -n           Disable console/fileserver
   -p           Dumb terminal mode
@@ -248,6 +280,7 @@ gc_serial = /dev/ttyUSB1
 dc_ip = 172.16.0.10
 gc_ip = dhcp
 ps2_ip = dhcp
+wii_ip = dhcp
 serial_baud = 1562500
 ```
 
@@ -257,6 +290,7 @@ Then run:
 kos-tool -T dc_serial -x program.elf
 kos-tool -T gc_ip -x program.elf
 kos-tool -T ps2_ip -x program.elf
+kos-tool -T wii_ip -x program.elf
 ```
 
 `-t` overrides `-T` when both are present. `serial_baud` is used only for
@@ -293,6 +327,12 @@ kos-tool -t 192.168.1.50 -x program.elf
 kos-tool -t 172.16.0.10 -x program.elf
 
 # PlayStation 2 network — discover DHCP device on LAN
+kos-tool -t dhcp -x program.elf
+
+# Wii network — upload and run (LAN Adapter or internal Wi-Fi)
+kos-tool -t 192.168.1.95 -x program.elf
+
+# Wii network — discover DHCP device on LAN
 kos-tool -t dhcp -x program.elf
 
 # Enable performance diagnostics
@@ -346,6 +386,7 @@ kos-tool/
 │   ├── dreamcast/       # DC platform (SCIF, video, BBA/LA drivers)
 │   ├── gamecube/        # GC platform (USBGecko, EXI, BBA/ENC28J60/W5500 drivers)
 │   ├── playstation2/    # PS2 platform (DEV9, SMAP, IOP modules, video)
+│   ├── wii/             # Wii platform (IOS net sockets, HBC stub, video)
 │   └── examples/        # Freestanding test programs
 ├── host/                # Host tool (kos-tool)
 │   ├── src/             # Main, console, upload/download, discovery
@@ -369,7 +410,7 @@ kos-tool is derived from the original dcload by Andrew Kieschnick (ADK/Napalm), 
 * **Paul Boese** (Axlen) — serial protocol endian fixes
 * **Eric Fradella** (darcagn) — DHCP retry
 * **Lawrence Sebald**, **Donald Haase**, **Falco Girgis** — KallistiOS team contributions
-* **Andy Barajas** (BBHoodsta) — kos-tool unification, GameCube and PlayStation 2 support
+* **Andy Barajas** (BBHoodsta) — kos-tool unification, GameCube, PlayStation 2, and Wii support
 * **Paul Cercueil** (pcercuei) - Testing, feedback, bug fixes
 * **Ruslan Rostovtsev** (DC-SWAT) - W5500 driver
 

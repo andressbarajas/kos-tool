@@ -60,13 +60,19 @@ const uint8_t firmware_ps2_ip_data[] = {0};
 const uint32_t firmware_ps2_ip_size = 0;
 #endif
 
+#ifndef HAS_FIRMWARE_WII_IP
+const uint8_t firmware_wii_ip_data[] = {0};
+const uint32_t firmware_wii_ip_size = 0;
+#endif
+
 /* ===== Console detection ===== */
 
 typedef enum {
     CONSOLE_UNKNOWN,
     CONSOLE_DC,
     CONSOLE_GC,
-    CONSOLE_PS2
+    CONSOLE_PS2,
+    CONSOLE_WII
 } console_type_t;
 
 static console_type_t detect_console(const char *name) {
@@ -76,6 +82,8 @@ static console_type_t detect_console(const char *name) {
         return CONSOLE_GC;
     if (strncmp(name, "ps2-load-", 9) == 0)
         return CONSOLE_PS2;
+    if (strncmp(name, "wii-load-", 9) == 0)
+        return CONSOLE_WII;
 
     return CONSOLE_UNKNOWN;
 }
@@ -274,6 +282,93 @@ static const arch_update_params_t ppc_params = {
     .size_patch_offset = 0x98,
     .load_addr = GC_DEFAULT_LOAD_ADDR,
     .loader_base = GC_LOADER_BASE,
+    .big_endian = 1,
+};
+
+/* ===== PPC Trampoline (Wii) =====
+ *
+ * Same shape as the GameCube trampoline above but staged at the Wii's
+ * own WII_DEFAULT_LOAD_ADDR (0x80004000) and jumping to WII_LOADER_BASE
+ * (0x817C0000).  Six bytes-positions differ from the GC version:
+ *
+ *   - Four lwz displacements (0x1C/0x20/0x24/0x28) change from
+ *     0x3190..0x319C to 0x4090..0x409C.  The trampoline anchors its
+ *     constant-pool reads against `lis r7, 0x8000` (r7 = 0x80000000),
+ *     so the disp = (load_addr - 0x80000000) + (file-offset of pool).
+ *   - The `source` constant at file-offset 0x90 changes from 0x80003200
+ *     to 0x80004100 (= load_addr + 0x100, where the firmware blob is
+ *     staged immediately after the 256-byte trampoline).
+ *   - The `dest` and `entry` constants (0x94, 0x9C) change to
+ *     WII_LOADER_BASE (0x817C0000) instead of GC's 0x817EC000.
+ *
+ * Why land at WII_DEFAULT_LOAD_ADDR specifically: it's the Wii's own
+ * natural upload base (`target_ops.default_load`).  FW_UPDATE vs.
+ * EXECUTE is disambiguated by the FW_UPDATE_FLAG in the EXECUTE packet
+ * — `cmd_execute` checks the flag, not the address — so reusing the
+ * same staging address as user programs is fine.
+ *
+ * Behavior:
+ *   1. MSR = FP | IR | DR, EE off
+ *   2. Stack at 0x80200000
+ *   3. Copy firmware 0x80004100 -> 0x817C0000 (word-at-a-time)
+ *   4. dcbf + icbi over dest range
+ *   5. Jump to 0x817C0000 (= WII_LOADER_BASE — same entry hbc_stub.S
+ *      produces after a cold-boot relocation, so no need to re-run it).
+ *
+ * Size at offset 0x98 is patched by the host with the firmware byte count
+ * (big-endian uint32_t) before upload.
+ */
+static const uint8_t ppc_wii_trampoline[256] = {
+    0x3c, 0xe0, 0x80, 0x00,   /* 0x00: lis r7, 0x8000 */
+    0x38, 0x00, 0x20, 0x30,   /* 0x04: li r0, 0x2030 (FP|IR|DR, EE off) */
+    0x7c, 0x00, 0x01, 0x24,   /* 0x08: mtmsr r0 */
+    0x4c, 0x00, 0x01, 0x2c,   /* 0x0C: isync */
+    0x3c, 0x20, 0x80, 0x20,   /* 0x10: lis r1, 0x8020 */
+    0x60, 0x21, 0x00, 0x00,   /* 0x14: ori r1, r1, 0 */
+    0x94, 0x01, 0xff, 0xf0,   /* 0x18: stwu r0, -16(r1) */
+    0x80, 0x87, 0x40, 0x90,   /* 0x1C: lwz r4, 0x4090(r7) (source) */
+    0x80, 0xa7, 0x40, 0x94,   /* 0x20: lwz r5, 0x4094(r7) (dest) */
+    0x80, 0xc7, 0x40, 0x98,   /* 0x24: lwz r6, 0x4098(r7) (size, PATCHED) */
+    0x80, 0x67, 0x40, 0x9c,   /* 0x28: lwz r3, 0x409C(r7) (entry) */
+    0x7c, 0xa9, 0x2b, 0x78,   /* 0x2C: mr r9, r5 */
+    0x7c, 0xca, 0x33, 0x78,   /* 0x30: mr r10, r6 */
+    0x54, 0xc6, 0xf0, 0xbe,   /* 0x34: srwi r6, r6, 2 */
+    0x7c, 0xc9, 0x03, 0xa6,   /* 0x38: mtctr r6 */
+    0x80, 0x04, 0x00, 0x00,   /* 0x3C: lwz r0, 0(r4) */
+    0x90, 0x05, 0x00, 0x00,   /* 0x40: stw r0, 0(r5) */
+    0x38, 0x84, 0x00, 0x04,   /* 0x44: addi r4, r4, 4 */
+    0x38, 0xa5, 0x00, 0x04,   /* 0x48: addi r5, r5, 4 */
+    0x42, 0x00, 0xff, 0xf0,   /* 0x4C: bdnz copy_loop */
+    0x7d, 0x24, 0x4b, 0x78,   /* 0x50: mr r4, r9 */
+    0x7c, 0xa9, 0x52, 0x14,   /* 0x54: add r5, r9, r10 */
+    0x7c, 0x00, 0x20, 0xac,   /* 0x58: dcbf 0, r4 */
+    0x38, 0x84, 0x00, 0x20,   /* 0x5C: addi r4, r4, 32 */
+    0x7c, 0x04, 0x28, 0x40,   /* 0x60: cmplw r4, r5 */
+    0x41, 0x80, 0xff, 0xf4,   /* 0x64: blt dcbf_loop */
+    0x7c, 0x00, 0x04, 0xac,   /* 0x68: sync */
+    0x7d, 0x24, 0x4b, 0x78,   /* 0x6C: mr r4, r9 */
+    0x7c, 0x00, 0x27, 0xac,   /* 0x70: icbi 0, r4 */
+    0x38, 0x84, 0x00, 0x20,   /* 0x74: addi r4, r4, 32 */
+    0x7c, 0x04, 0x28, 0x40,   /* 0x78: cmplw r4, r5 */
+    0x41, 0x80, 0xff, 0xf4,   /* 0x7C: blt icbi_loop */
+    0x7c, 0x00, 0x04, 0xac,   /* 0x80: sync */
+    0x4c, 0x00, 0x01, 0x2c,   /* 0x84: isync */
+    0x7c, 0x69, 0x03, 0xa6,   /* 0x88: mtctr r3 */
+    0x4e, 0x80, 0x04, 0x20,   /* 0x8C: bctr */
+    /* Constant pool at trampoline+0x90 — runtime address 0x80004090. */
+    0x80, 0x00, 0x41, 0x00,   /* 0x90: source = 0x80004100 (load_addr+0x100) */
+    0x81, 0x7c, 0x00, 0x00,   /* 0x94: dest   = 0x817C0000 (WII_LOADER_BASE) */
+    0x00, 0x00, 0x00, 0x00,   /* 0x98: size   = PATCHED */
+    0x81, 0x7c, 0x00, 0x00,   /* 0x9C: entry  = 0x817C0000 (WII_LOADER_BASE) */
+    /* Remaining bytes zero-padded to 256. */
+};
+
+static const arch_update_params_t ppc_wii_params = {
+    .trampoline = ppc_wii_trampoline,
+    .trampoline_size = 256,
+    .size_patch_offset = 0x98,
+    .load_addr = WII_DEFAULT_LOAD_ADDR,   /* 0x80004000 — see comment above */
+    .loader_base = 0x817C0000,             /* WII_LOADER_BASE per mk/memory.mk */
     .big_endian = 1,
 };
 
@@ -696,6 +791,8 @@ int auto_update_firmware(kostool_context_t *ctx) {
     const arch_update_params_t *arch;
     if (console == CONSOLE_GC)
         arch = &ppc_params;
+    else if (console == CONSOLE_WII)
+        arch = &ppc_wii_params;
     else if (console == CONSOLE_PS2)
         arch = &mips_r5900_params;
     else
@@ -722,8 +819,9 @@ int auto_update_firmware(kostool_context_t *ctx) {
         return 0;
     }
 
-    const char *prefix = (console == CONSOLE_DC) ? "dc" :
-                         (console == CONSOLE_GC)  ? "gc" : "ps2";
+    const char *prefix = (console == CONSOLE_DC)  ? "dc"  :
+                         (console == CONSOLE_GC)  ? "gc"  :
+                         (console == CONSOLE_WII) ? "wii" : "ps2";
 
     /* Select embedded firmware based on console + transport */
     if (console == CONSOLE_DC) {
@@ -742,6 +840,10 @@ int auto_update_firmware(kostool_context_t *ctx) {
             fw_data = firmware_gc_ip_data;
             fw_size = firmware_gc_ip_size;
         }
+    } else if (console == CONSOLE_WII) {
+        /* Wii: network only (IOS socket shim, no serial transport). */
+        fw_data = firmware_wii_ip_data;
+        fw_size = firmware_wii_ip_size;
     } else {
         /* PS2: network only, no serial transport */
         fw_data = firmware_ps2_ip_data;

@@ -1,10 +1,9 @@
 # client/gamecube/bootstrap.S - Two-stage bootstrap for kosload (GameCube)
 #
-# Loads at a safe high address (0x81300000) so that Swiss and other
-# DOL loaders can copy it without memory conflicts.  Copies the
-# embedded kosload binary to the loader region at top of MEM1
-# (GC_LOADER_BASE, set by mk/memory.mk), flushes caches, and
-# jumps to the loader entry point.
+# Loads at a safe high address (0x81300000) so external DOL loaders
+# can copy it without memory conflicts.  Copies the embedded kosload
+# binary to the loader region at top of MEM1 (GC_LOADER_BASE, set by
+# mk/memory.mk), flushes caches, and jumps to the loader entry point.
 #
 # The kosload .bin is linked in as a binary blob via objcopy,
 # producing symbols:

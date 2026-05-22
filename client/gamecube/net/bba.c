@@ -42,7 +42,8 @@ adapter_t adapter_bba = {
     bba_start,
     bba_stop,
     bba_loop,
-    bba_tx
+    bba_tx,
+    false       /* not lossy: reliable raw NIC, wait forever for RETVAL */
 };
 
 /* Set once link has been UP this session.  Picks "link lost..." over

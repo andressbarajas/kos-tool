@@ -135,9 +135,13 @@ static int apply_target_profile(kostool_context_t *ctx, const char *profile)
         target = ctx->dc_ip;
     } else if (strcmp(profile, "gc_ip") == 0) {
         target = ctx->gc_ip;
+    } else if (strcmp(profile, "ps2_ip") == 0) {
+        target = ctx->ps2_ip;
+    } else if (strcmp(profile, "wii_ip") == 0) {
+        target = ctx->wii_ip;
     } else {
         fprintf(stderr, "Unknown target profile: %s\n", profile);
-        fprintf(stderr, "Valid profiles: dc_serial, gc_serial, dc_ip, gc_ip\n");
+        fprintf(stderr, "Valid profiles: dc_serial, gc_serial, dc_ip, gc_ip, ps2_ip, wii_ip\n");
         return -1;
     }
 
@@ -198,7 +202,7 @@ static void usage(void) {
     printf("  -a <addr>    Set address (default: 0x8c010000)\n");
     printf("  -s <size>    Set size for download\n");
     printf("  -t <device>  Serial device, IP address, or 'dhcp'\n");
-    printf("  -T <profile> Use configured target profile (dc_serial, gc_serial, dc_ip, gc_ip)\n");
+    printf("  -T <profile> Use configured target profile (dc_serial, gc_serial, dc_ip, gc_ip, ps2_ip, wii_ip)\n");
     printf("  -b <baud>    Serial baud rate (default: %d)\n", SERIAL_DEFAULT_SPEED);
     printf("  -n           Disable console/fileserver\n");
     printf("  -p           Dumb terminal mode\n");
@@ -213,12 +217,6 @@ static void usage(void) {
     printf("  -f           Fast mode (no FIFO delays)\n");
     printf("  -P, --diag   Print performance diagnostics\n");
     printf("  -w           Sync console RTC to host time\n");
-    printf("                 PS2: writes JST to mechacon (the PS2 hardware\n");
-    printf("                 convention).  The displayed clock = mechacon\n");
-    printf("                 minus the PS2 BIOS Time Zone setting, so the\n");
-    printf("                 BIOS region must match the host's actual\n");
-    printf("                 timezone or the dashboard will display offset.\n");
-    printf("                 Set it via PS2 BIOS > Configuration > Time Zone.\n");
     printf("  -U <file>    Update firmware from external file\n");
     printf("  -F           Enable automatic firmware update\n");
     printf("  -h           Show this help\n\n");
@@ -465,9 +463,12 @@ int main(int argc, char *argv[]) {
                ctx.rx_fifo_delay, ctx.rx_fifo_delay_count);
     }
 
-    /* Detect target endianness from version string (gc-load = BE, dc-load = LE) */
+    /* Detect target endianness from version string.  Big-endian: GameCube
+     * and Wii (both PowerPC).  Little-endian: Dreamcast (SH4) and PS2 (MIPS
+     * EL), which fall through to 0. */
     ctx.target_big_endian = (strncmp(ctx.remote_version_string, "gc-load-", 8) == 0 ||
-                             strncmp(ctx.remote_version_string, "gcload-", 7) == 0);
+                             strncmp(ctx.remote_version_string, "gcload-", 7) == 0 ||
+                             strncmp(ctx.remote_version_string, "wii-load-", 9) == 0);
 
     /* Firmware update if requested */
     if (!ctx.skip_update || ctx.firmware_path) {

@@ -3,6 +3,7 @@
 #define KOSLOAD_NET_ADAPTER_H
 
 #include <stdbool.h>
+#include <stdint.h>
 
 /*
  * Client network adapter interface.
@@ -51,6 +52,16 @@ typedef struct {
     void (*stop)(void);
     void (*loop)(bool is_main_loop);
     int  (*tx)(unsigned char *pkt, int len);
+
+    /* True if this transport can silently drop datagrams, so the syscall
+     * layer must use the bounded-wait retransmit (see
+     * kos_syscall_wait_for_retval) instead of waiting forever for the
+     * RETVAL.  Defaults to false (raw-NIC drivers on DC/GC/PS2 don't lose
+     * packets); the Wii adapter sets it true for the internal Wi-Fi.
+     * CONTRACT: any adapter that sets this true MUST honor
+     * loop_deadline_ticks in its loop() — break (with escape_loop clear)
+     * once it passes — so the retransmit can fire. */
+    bool lossy;
 } adapter_t;
 
 /* Console-specific adapter.c selects and initializes the active driver. */
@@ -66,6 +77,15 @@ extern adapter_t *bb;
 extern volatile unsigned char escape_loop;
 extern int timeout_loop;
 extern int loop_secs_elapsed;
+
+/* Per-syscall bounded-wait deadline (absolute, in target ticks).  Armed
+ * only for a lossy adapter (adapter_t.lossy): kos_syscall_wait_for_retval()
+ * sets it before bb->loop(0) and that adapter's loop breaks (with
+ * escape_loop still clear) when reached, so the syscall layer can
+ * retransmit a lost request/reply.  Today only the Wii's internal Wi-Fi
+ * sets lossy; reliable transports (DC/GC/PS2 raw NICs, the Wii LAN Adapter)
+ * leave it 0 and wait forever for the RETVAL without consulting it. */
+extern volatile uint64_t loop_deadline_ticks;
 
 /* All adapter drivers receive into this shared packet buffer. */
 extern __attribute__((aligned(32))) unsigned char raw_current_pkt[RAW_RX_PKT_BUF_SIZE];

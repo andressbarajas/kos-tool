@@ -15,10 +15,13 @@ HOST_CC_DEFAULT := cc
 ifeq ($(UNAME_S),Darwin)
   PLATFORM_SRCS := src/platform/posix.c src/platform/macos_serial.c
   ifeq ($(shell uname -m),arm64)
-    LIBELF_CFLAGS  := -I/opt/homebrew/include/libelf
+    # libelf.h falls through to `#include <libelf/sys_elf.h>` for non-internal
+    # users, so the bare /opt/homebrew/include path has to be on -I too — the
+    # /libelf-suffixed path alone wasn't enough to resolve that include.
+    LIBELF_CFLAGS  := -I/opt/homebrew/include -I/opt/homebrew/include/libelf
     LIBELF_LDFLAGS := -L/opt/homebrew/lib -lelf
   else
-    LIBELF_CFLAGS  := -I/usr/local/include/libelf
+    LIBELF_CFLAGS  := -I/usr/local/include -I/usr/local/include/libelf
     LIBELF_LDFLAGS := -L/usr/local/lib -lelf
   endif
   EXTRA_DEFS :=
@@ -53,6 +56,15 @@ CFLAGS  := -O2 -Wall -Wextra -std=c11 \
     -D_GNU_SOURCE \
     -DKOSLOAD_VERSION_STRING=\"$(KOSLOAD_VERSION)\"
 
+# Automatic header-dependency tracking.  -MMD writes a .d file alongside each
+# .o listing every (non-system) header pulled in by the preprocessor; -MP adds
+# phony targets for those headers so a renamed/deleted header doesn't break
+# the build.  The .d files are then -include'd at the bottom.  Supersedes the
+# coarse $(HOST_HEADERS) catch-all dep on the compile rule, which forces a
+# full rebuild on any header touch — kept for now because it's harmless once
+# .d files exist (auto-deps are a strict subset).
+CFLAGS  += -MMD -MP
+
 LDFLAGS := $(LIBELF_LDFLAGS) $(EXTRA_LDLIBS)
 
 # ---------- Firmware embedding ----------
@@ -67,6 +79,7 @@ DC_IP_BIN  := $(ROOT)/client/dreamcast/build/ip/dc-load-ip.bin
 GC_SER_BIN := $(ROOT)/client/gamecube/build/serial/gc-load-ser.bin
 GC_IP_BIN  := $(ROOT)/client/gamecube/build/ip/gc-load-ip.bin
 PS2_IP_BIN := $(ROOT)/client/playstation2/build/ip/ps2-load-ip-image.bin
+WII_IP_BIN := $(ROOT)/client/wii/build/ip/wii-load-ip.bin
 
 FW_OBJS :=
 FW_DEFS :=
@@ -91,10 +104,18 @@ ifneq ($(wildcard $(PS2_IP_BIN)),)
   FW_OBJS += $(BUILDDIR)/firmware_ps2_ip_data.o
   FW_DEFS += -DHAS_FIRMWARE_PS2_IP
 endif
+ifneq ($(wildcard $(WII_IP_BIN)),)
+  FW_OBJS += $(BUILDDIR)/firmware_wii_ip_data.o
+  FW_DEFS += -DHAS_FIRMWARE_WII_IP
+endif
 
 CFLAGS += $(FW_DEFS)
 
 # ---------- Sources ----------
+
+HOST_HEADERS := \
+    $(wildcard include/kostool/*.h) \
+    $(wildcard $(ROOT)/include/kosload/*.h)
 
 CORE_SRCS := \
     src/main.c \
@@ -107,6 +128,7 @@ CORE_SRCS := \
     src/gdb.c \
     src/cdfs.c \
     src/syscalls.c \
+    src/dedup.c \
     src/firmware_update.c \
     src/transport/serial.c \
     src/transport/network.c \
@@ -147,7 +169,7 @@ $(TARGET): $(OBJS) $(FW_OBJS) $(MINILZO_A) | $(BUILDDIR)
 	$(CC) $(OBJS) $(FW_OBJS) $(MINILZO_A) $(LDFLAGS) -o $@
 	@echo "  Built: $@"
 
-$(BUILDDIR)/%.o: src/%.c $(VERSION_H) | $(BUILDDIR)/transport $(BUILDDIR)/binary $(BUILDDIR)/platform
+$(BUILDDIR)/%.o: src/%.c $(VERSION_H) $(HOST_HEADERS) | $(BUILDDIR)/transport $(BUILDDIR)/binary $(BUILDDIR)/platform
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # firmware_update.o uses #ifdef HAS_FIRMWARE_* to emit stubs for missing
@@ -184,9 +206,17 @@ $(BUILDDIR)/firmware_ps2_ip_data.c: $(PS2_IP_BIN) $(BIN2C) | $(BUILDDIR)
 	@echo "  BIN2C   $<"
 	@$(BIN2C) $< firmware_ps2_ip $@
 
+$(BUILDDIR)/firmware_wii_ip_data.c: $(WII_IP_BIN) $(BIN2C) | $(BUILDDIR)
+	@echo "  BIN2C   $<"
+	@$(BIN2C) $< firmware_wii_ip $@
+
 $(BUILDDIR)/firmware_%_data.o: $(BUILDDIR)/firmware_%_data.c
 	@$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
 	rm -rf $(BUILDDIR)
 	$(MAKE) -C $(MINILZO_DIR) BUILDDIR=build-host clean
+
+# Auto-generated header deps (-MMD).  `-include` (leading dash) is silent on
+# missing files, so the first build after `clean` works without any .d files.
+-include $(OBJS:.o=.d) $(FW_OBJS:.o=.d)

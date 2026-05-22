@@ -74,6 +74,7 @@ adapter_t adapter_smap = {
     smap_stop_adapter,
     smap_loop_adapter,
     smap_tx_adapter,
+    false       /* not lossy: reliable raw NIC, wait forever for RETVAL */
 };
 
 /*--------------------------------------------------------------------------*/
@@ -354,9 +355,9 @@ static void smap_loop_adapter(bool is_main_loop) {
         for (;;) {
             uint32_t rx_len = 0;
             int rc = ps2_smap_poll(current_pkt, RX_PKT_BUF_SIZE, &rx_len);
-            if (rc != 0)
-                break;
-            if (rx_len == 0u)
+
+            /* If no data available or error occurred, break the loop */
+            if (rc != 0 || rx_len == 0)
                 break;
             process_pkt(current_pkt);
         }

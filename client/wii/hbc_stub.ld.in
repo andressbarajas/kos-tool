@@ -1,0 +1,41 @@
+/* Wii HBC-launch stub linker script.
+ *
+ * Links the stub at WII_HBC_BASE — the standard low-MEM1 homebrew area
+ * HBC accepts.  The stub copies its appended .blob (the real loader,
+ * linked at WII_LOADER_BASE) up and jumps; see hbc_stub.S.
+ */
+
+OUTPUT_FORMAT("elf32-powerpc", "elf32-powerpc", "elf32-powerpc")
+OUTPUT_ARCH(powerpc:common)
+ENTRY(start)
+
+MEMORY
+{
+  /* 2 MB is far more than stub(<1 KB) + blob(~tens of KB) and stays
+     well clear of WII_LOADER_BASE in high MEM1. */
+  stub (rwx) : ORIGIN = @WII_HBC_BASE@, LENGTH = 0x00200000
+}
+
+SECTIONS
+{
+  .text : {
+    *(.text.stub)
+    *(.text)
+    *(.text.*)
+    *(.rodata*)
+    *(.sdata*)
+    *(.data*)
+  } > stub
+
+  .blob ALIGN(32) : {
+    KEEP(*(.blob))
+  } > stub
+
+  . = ALIGN(32);
+  _end = .;
+  PROVIDE (end = .);
+
+  .bss (NOLOAD) : { *(.bss) *(.sbss) *(COMMON) } > stub
+
+  /DISCARD/ : { *(.eh_frame) *(.comment) *(.note*) *(.gnu.attributes) }
+}

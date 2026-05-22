@@ -1,9 +1,10 @@
 # Makefile — kosload top-level build dispatcher
 #
 # Usage:
-#   make all           Build host tool + DC + GC + PS2 firmware
+#   make all           Build host tool + DC + GC + Wii + PS2 firmware
 #   make dc            Build Dreamcast firmware
 #   make gc            Build GameCube firmware
+#   make wii           Build Wii firmware
 #   make ps2           Build PlayStation 2 firmware
 #   make disc          Build all disc images (CDI + ISO)
 #   make disc-dc       Build Dreamcast CDI images
@@ -75,8 +76,8 @@ endef
 
 # ---------- Targets ----------
 
-.PHONY: all host dc gc ps2 disc disc-dc disc-gc gc-dol disc-auto-dc disc-auto-gc clean \
-        check-dc-toolchain check-gc-toolchain check-ps2-toolchain
+.PHONY: all host dc gc wii ps2 disc disc-dc disc-gc gc-dol disc-auto-dc disc-auto-gc clean \
+        check-dc-toolchain check-gc-toolchain check-wii-toolchain check-ps2-toolchain
 
 check-dc-toolchain:
 	$(call require_host_tool,$(DC_CC),Dreamcast compiler (sh-elf-gcc),Dreamcast,DC_TOOLCHAIN)
@@ -90,11 +91,13 @@ check-gc-toolchain:
 	$(call require_host_tool,$(GC_OBJCOPY),GameCube objcopy (powerpc-eabi-objcopy),GameCube,GC_TOOLCHAIN)
 	$(call require_host_tool,$(GC_SIZE),GameCube size tool (powerpc-eabi-size),GameCube,GC_TOOLCHAIN)
 
+check-wii-toolchain: check-gc-toolchain
+
 check-ps2-toolchain:
 	$(call require_host_tool,$(PS2_CC),PS2 EE compiler (mips64r5900el-ps2-elf-gcc),PlayStation 2,PS2_EE_TOOLCHAIN)
 	$(call require_host_tool,$(PS2_IOP_CC),PS2 IOP compiler (mipsel-elf-gcc),PlayStation 2,PS2_IOP_TOOLCHAIN)
 
-all: dc gc ps2 host
+all: dc gc wii ps2 host
 
 host: $(VERSION_H) | $(BUILDDIR)
 	$(MAKE) -C host ROOT=$(ROOT)
@@ -126,6 +129,17 @@ gc: check-gc-toolchain $(VERSION_H) | $(BUILDDIR)
 	@mkdir -p $(BUILDDIR)/examples/gc
 	@cp client/gamecube/build/examples/*.elf $(BUILDDIR)/examples/gc/
 	@echo "  COPY    $(BUILDDIR)/examples/gc/*.elf"
+	$(MAKE) host
+
+wii: check-wii-toolchain $(VERSION_H) | $(BUILDDIR)
+	$(MAKE) -C client/wii ROOT=$(ROOT) all
+	@cp client/wii/build/ip/wii-load-ip.elf $(BUILDDIR)/
+	@cp client/wii/build/ip/wii-load-ip.bin $(BUILDDIR)/
+	@cp client/wii/build/ip/wii-load-ip.dol $(BUILDDIR)/
+	@echo "  COPY    $(BUILDDIR)/wii-load-ip.{elf,bin,dol}"
+	@mkdir -p $(BUILDDIR)/examples/wii
+	@cp client/wii/build/examples/*.elf $(BUILDDIR)/examples/wii/
+	@echo "  COPY    $(BUILDDIR)/examples/wii/*.elf"
 	$(MAKE) host
 
 ps2: check-ps2-toolchain $(VERSION_H) | $(BUILDDIR)

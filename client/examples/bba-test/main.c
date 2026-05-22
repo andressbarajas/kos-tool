@@ -3,7 +3,7 @@
  * bba-test - GameCube Broadband Adapter diagnostics
  *
  * Self-contained — does NOT depend on the kosload BBA driver.
- * Performs a full Swiss-pattern init, then sweeps through several
+ * Performs a full 16-step BBA init, then sweeps through several
  * NWAYC configurations and reports NWAYS after each so we can see
  * which (if any) actually gets the chip to 100Mbps full-duplex on
  * the user's network.  Also dumps a wide set of registers and
@@ -249,7 +249,7 @@ static void mdelay(int ms)
     int i; for (i = 0; i < ms * 100000; i++) __asm__ volatile("" ::: "memory");
 }
 
-/* ===== Init (Swiss pattern, with auto-neg restart) ===== */
+/* ===== Init (16-step BBA bring-up, with auto-neg restart) ===== */
 
 static int bba_init(void)
 {
@@ -290,7 +290,7 @@ static int bba_init(void)
     udelay(100);
 
     /* 8. Main config */
-    bba_out8(R_NCRB,      0x52);   /* Swiss value */
+    bba_out8(R_NCRB,      0x52);   /* RE'd from working init traces */
     bba_out8(R_SI_ACTRL2, 0x74);
     bba_out8(0x14,        0x00);
     bba_out8(0x15,        0x06);
@@ -401,7 +401,7 @@ static void test_nwayc_config(const char *desc, unsigned char value)
     puthex(to_write, 2);
     print(" ---\n");
 
-    /* For ANS_RA cases do the 3-step Swiss sequence */
+    /* For ANS_RA cases do the 3-step auto-neg restart sequence */
     if (value & NWAYC_ANS_RA) {
         bba_out8(R_NWAYC, preserve);
         udelay(100);
@@ -436,7 +436,7 @@ static void test_nwayc_config(const char *desc, unsigned char value)
 /* ===== Test 3: loader-style init verification =====
  *
  * Mirrors what client/gamecube/net/bba.c bba_init() does after our
- * recent fixes: full Swiss-pattern setup, NWAYC = preserve | (FD |
+ * recent fixes: full 16-step BBA bring-up, NWAYC = preserve | (FD |
  * PS100 | ANE | ANS_RA), then wait up to ~5s for LS10 or LS100. */
 
 static void loader_init_test(void)
@@ -623,8 +623,8 @@ void start(void)
 
     /* Sweep NWAYC configs */
     test_nwayc_config("preserve only (no ANE, no force)", 0x00);
-    test_nwayc_config("ANE only (Swiss step 1)",          NWAYC_ANE);
-    test_nwayc_config("ANE + ANS_RA (Swiss step 2)",      NWAYC_ANE | NWAYC_ANS_RA);
+    test_nwayc_config("ANE only (autoneg step 1)",        NWAYC_ANE);
+    test_nwayc_config("ANE + ANS_RA (autoneg step 2)",    NWAYC_ANE | NWAYC_ANS_RA);
     test_nwayc_config("force 100FD (FD | PS100, no ANE)", NWAYC_FD | NWAYC_PS100_10);
     test_nwayc_config("force 10FD (FD only)",              NWAYC_FD);
     test_nwayc_config("FD | PS100 | ANE",                  NWAYC_FD | NWAYC_PS100_10 | NWAYC_ANE);

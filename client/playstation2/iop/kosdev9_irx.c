@@ -15,11 +15,9 @@
  *
  * Module name in .iopmod is "kosdev9".  The LIBRARY name registered
  * via RegisterLibraryEntries is "dev9" v1.9 — matching what Sony's
- * INET_SMAP_driver and ps2link's smap_irx import (verified in
- * AGENT/docs/re/cleanroom-iop-loader/{11,12}-*.md import tables).  IRX
- * module name and registered-library name are independent
- * namespaces; Sony does the same split (module
- * "INET_SMAP_driver" registers library "smap").
+ * INET_SMAP_driver and ps2link's smap_irx import.  IRX module name and
+ * registered-library name are independent namespaces; Sony does the
+ * same split (module "INET_SMAP_driver" registers library "smap").
  *
  * EEPROM bit-bang protocol RE'd from the EE-side ps2-load-ip port at
  * client/playstation2/net/smap.c (smap_eeprom_*) which has been

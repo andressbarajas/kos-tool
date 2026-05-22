@@ -10,19 +10,25 @@
  */
 
 #if defined(__PPC__) || defined(__powerpc__)
-#ifdef GC_KOSLOAD_BASE
+#if defined(WII_KOSLOAD_BASE)
+#define KOSLOAD_BASE    WII_KOSLOAD_BASE
+#elif defined(GC_KOSLOAD_BASE)
 #define KOSLOAD_BASE    GC_KOSLOAD_BASE
 #else
 #define KOSLOAD_BASE    0x817EC000
 #endif
 #else
-#error "font-test is GameCube-only"
+#error "font-test is GameCube/Wii-only"
 #endif
 
 #define KOSLOAD_MAGIC_ADDR         (*(volatile unsigned int *)(KOSLOAD_BASE + 4))
 #define KOSLOAD_SYSCALL_ADDR       (*(volatile unsigned int *)(KOSLOAD_BASE + 8))
-#define KOSLOAD_CLEAR_SCREEN_ADDR  (*(volatile unsigned int *)(KOSLOAD_BASE + 0x10))
-#define KOSLOAD_DRAW_STRING_ADDR   (*(volatile unsigned int *)(KOSLOAD_BASE + 0x14))
+/* crt0 header layout: +0x10 setup_video, +0x14 clear_screen,
+ * +0x18 draw_string (see client/gamecube/crt0.S).  These were off
+ * by one slot, so draw_string() actually invoked clear_screen() —
+ * every glyph call wiped the screen and nothing was rendered. */
+#define KOSLOAD_CLEAR_SCREEN_ADDR  (*(volatile unsigned int *)(KOSLOAD_BASE + 0x14))
+#define KOSLOAD_DRAW_STRING_ADDR   (*(volatile unsigned int *)(KOSLOAD_BASE + 0x18))
 
 #define KOSLOAD_MAGIC              0xdeadbeef
 #define KOSLOAD_MAGIC_NO_CONSOLE   0xfeedface

@@ -27,8 +27,7 @@ KOSLOAD_IRX_ID("smap", 1, 0);
  * ================================================================== */
 
 /* thbase — thread spawn + delay.  Versions and export #s validated
- * against extracted/11_Multi_Thread_Manager.bin (see
- * AGENT/docs/re/cleanroom-iop-loader/10-thbase-imports.md). */
+ * against extracted/11_Multi_Thread_Manager.bin. */
 KOSLOAD_IMPORT_TABLE(thbase, 1, 1);
 KOSLOAD_IMPORT(thbase,  4, CreateThread, int, (kosload_iop_thread_t *t));
 KOSLOAD_IMPORT(thbase,  6, StartThread,  int, (int thid, void *arg));

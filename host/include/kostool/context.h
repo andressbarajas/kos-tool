@@ -119,6 +119,8 @@ typedef struct kostool_context {
     char gc_serial[128];
     char dc_ip[64];
     char gc_ip[64];
+    char ps2_ip[64];
+    char wii_ip[64];
     uint32_t serial_baud;
 
     /* Remote loader info (populated during transport init/handshake) */

@@ -5,10 +5,22 @@
 # this region (code + data + BSS + stack).
 #
 # Before launching a loaded program, ArenaHi is set to the loader base so
-# that libogc/devkitPPC heaps stay below the loader.
+# guest-side heap allocators stay below the loader.
 
 GC_MEM1_TOP    := 0x81800000
 GC_LOADER_SIZE := 0x14000    # 80 KB
+
+# Wii mode has the same 24 MB MEM1 window as GameCube plus MEM2.  Keep the
+# initial clean-room loader in high MEM1 so uploaded Wii DOLs can use the usual
+# low MEM1 area while the IOS socket shim is being brought up.
+WII_MEM1_TOP     := 0x81800000
+WII_LOADER_SIZE  := 0x40000    # 256 KB
+
+# HBC will only launch a DOL whose load addresses sit in the standard
+# homebrew area of low MEM1 (it reserves the top of MEM1 for itself + the
+# XFB).  So the DOL handed to HBC is a tiny stub linked here; it relocates
+# the real loader up to WII_LOADER_BASE and jumps (cf. PS2 -F trampoline).
+WII_HBC_BASE     := 0x80004000  # canonical devkitPPC/HBC homebrew base
 
 # PS2 EE memory layout.  If you change these values, keep the matching
 # constants in include/kosload/protocol.h and the PS2 linker templates in sync.
