@@ -55,7 +55,7 @@ INCLUDES := -I$(ROOT)/include -I$(CLIENTDIR)/include -I$(CURDIR) -I$(CURDIR)/ser
 
 # ---------- Combined flags ----------
 
-CFLAGS  := $(ARCH_CFLAGS) $(FREE_CFLAGS) $(INCLUDES) -DKOSLOAD_VERSION_STRING=\"$(KOSLOAD_VERSION)\"
+CFLAGS  := $(ARCH_CFLAGS) $(FREE_CFLAGS) $(INCLUDES) -DKOSLOAD_VERSION_STRING=\"$(KOSLOAD_VERSION)\" -DKOSLOAD_GIT_REV=\"$(KOSLOAD_GIT_REV)\"
 ASFLAGS := $(ARCH_ASFLAGS) $(INCLUDES)
 
 # Automatic header-dependency tracking.  -MMD writes a .d file alongside each

@@ -54,7 +54,8 @@ CFLAGS  := -O2 -Wall -Wextra -std=c11 \
     -I$(ROOT)/third_party/minilzo \
     $(LIBELF_CFLAGS) \
     -D_GNU_SOURCE \
-    -DKOSLOAD_VERSION_STRING=\"$(KOSLOAD_VERSION)\"
+    -DKOSLOAD_VERSION_STRING=\"$(KOSLOAD_VERSION)\" \
+    -DKOSLOAD_GIT_REV=\"$(KOSLOAD_GIT_REV)\"
 
 # Automatic header-dependency tracking.  -MMD writes a .d file alongside each
 # .o listing every (non-system) header pulled in by the preprocessor; -MP adds
@@ -171,6 +172,13 @@ $(TARGET): $(OBJS) $(FW_OBJS) $(MINILZO_A) | $(BUILDDIR)
 
 $(BUILDDIR)/%.o: src/%.c $(VERSION_H) $(HOST_HEADERS) | $(BUILDDIR)/transport $(BUILDDIR)/binary $(BUILDDIR)/platform
 	$(CC) $(CFLAGS) -c $< -o $@
+
+# main.o carries the git stamp (KOSLOAD_GIT_REV via -D); recompile it every
+# build so `kos-tool` always reports the current revision. (One small file; the
+# relink is instant.)
+.PHONY: gitrev-stamp
+gitrev-stamp:
+$(BUILDDIR)/main.o: gitrev-stamp
 
 # firmware_update.o uses #ifdef HAS_FIRMWARE_* to emit stubs for missing
 # firmware.  When firmware availability changes (e.g. dc built before gc),

@@ -18,6 +18,12 @@ extern void exception_init(void);
 #define KOSLOAD_VERSION_STRING "3.0.0"
 #endif
 
+/* Git revision sub-version stamp — on-screen DISPLAY ONLY, never the VERS wire
+ * string (see mk/version.mk). */
+#ifndef KOSLOAD_GIT_REV
+#define KOSLOAD_GIT_REV "unknown"
+#endif
+
 /* Red background color */
 #define ERROR_BG_COLOR 0x2000
 
@@ -42,7 +48,7 @@ void common_main(const target_ops_t *tgt, const client_transport_ops_t *xport) {
          * The user can insert the BBA/LAN/Serial adapter without power cycling. */
         target->setup_video(0, ERROR_BG_COLOR);
         target->clear_screen(ERROR_BG_COLOR);
-        target->draw_string(30, 54, LOADER_NAME " " KOSLOAD_VERSION_STRING, 0xffff);
+        target->draw_string(30, 54, LOADER_NAME " " KOSLOAD_VERSION_STRING "  " KOSLOAD_GIT_REV, 0xffff);
         if (transport->init_error_msg)
             target->draw_string(30, 78, transport->init_error_msg, 0xffff);
 

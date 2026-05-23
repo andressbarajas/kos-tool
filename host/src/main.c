@@ -16,6 +16,11 @@
 #include <kostool/config.h>
 #include <kostool/gdb.h>
 
+/* Git revision sub-version stamp (display only; see mk/version.mk). */
+#ifndef KOSLOAD_GIT_REV
+#define KOSLOAD_GIT_REV "unknown"
+#endif
+
 /* Forward declarations */
 uint32_t upload(kostool_context_t *ctx, const char *filename, uint32_t address);
 int download(kostool_context_t *ctx, const char *filename, uint32_t address, uint32_t size);
@@ -189,7 +194,8 @@ static time_t host_local_rtc_time(time_t now) {
 }
 
 static void usage(void) {
-    printf("\nkostool %s — Unified console loader\n\n", KOSLOAD_VERSION_STRING);
+    printf("\nkostool %s — Unified console loader\n", KOSLOAD_VERSION_STRING);
+    printf("build: %s\n\n", KOSLOAD_GIT_REV);
     printf("Usage: kostool [options] -t <device|ip|dhcp>\n");
     printf("       kostool [options] -T <profile>\n\n");
     printf("Commands:\n");

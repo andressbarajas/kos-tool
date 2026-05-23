@@ -34,6 +34,12 @@
 #define KOSLOAD_VERSION_STRING "0.1.0"
 #endif
 
+/* Git revision sub-version stamp — on-screen DISPLAY ONLY, not the VERS wire
+ * string (see mk/version.mk). */
+#ifndef KOSLOAD_GIT_REV
+#define KOSLOAD_GIT_REV "unknown"
+#endif
+
 #ifndef NETWORK_DISPLAY_X
 #define NETWORK_DISPLAY_X 30
 #endif
@@ -212,7 +218,7 @@ void disp_info(void)
 
     t->setup_video(0, 0);
     t->clear_screen(global_bg_color);
-    t->draw_string(NETWORK_DISPLAY_X, 54, LOADER_NAME " " KOSLOAD_VERSION_STRING, 0xffff);
+    t->draw_string(NETWORK_DISPLAY_X, 54, LOADER_NAME " " KOSLOAD_VERSION_STRING "  " KOSLOAD_GIT_REV, 0xffff);
 
     if (bb) {
         t->draw_string(NETWORK_DISPLAY_X, 78, bb->name, 0xffff);
