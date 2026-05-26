@@ -316,6 +316,23 @@ int main(int argc, char *argv[])
         num_data++;
     }
 
+    /* IOS-bug workaround: if either text or data has no segments, IOS rejects
+     * the channel DOL on launch (the channel installs and shows its banner,
+     * but the launch button does nothing -- no video, no signal, no IPC).
+     * Working homebrew Wii channel boot DOLs (e.g. Open HBC) write a non-zero
+     * file offset (the header size, aligned) into the empty type's first slot,
+     * with size and address zero, so nothing is actually loaded -- the
+     * workaround is purely structural.  Reverse-engineered from those
+     * homebrew DOLs. */
+    if (num_text == 0) {
+        write32be(dol_header + 0x00,
+                  align_up(DOL_HEADER_SIZE, DOL_ALIGN));
+    }
+    if (num_data == 0) {
+        write32be(dol_header + 0x1C,
+                  align_up(DOL_HEADER_SIZE, DOL_ALIGN));
+    }
+
     /* Fill BSS and entry point */
     if (bss_end > bss_addr) {
         write32be(dol_header + 0xD8, bss_addr);
