@@ -5,6 +5,9 @@ build/
 *.elf
 *.bin
 !make-cd/tools/IP.BIN
+# make-cd/tools/mkwad/common-key.bin is the user-provided Wii common key
+# consumed by mkwad; already matched by *.bin above but called out so it
+# isn't accidentally whitelisted later.
 *.cdi
 *.dol
 *.lzo

@@ -76,6 +76,7 @@ DC_SER_BIN := $(BUILDDIR)/dc-load-ser.bin
 DC_IP_BIN  := $(BUILDDIR)/dc-load-ip.bin
 GC_SER_BIN := $(BUILDDIR)/gc-load-ser.bin
 GC_IP_BIN  := $(BUILDDIR)/gc-load-ip.bin
+WII_IP_DOL := $(BUILDDIR)/wii-load-ip.dol
 
 # ---------- Intermediate outputs ----------
 
@@ -92,6 +93,7 @@ GC_IP_BOOTSTRAP  := $(LOCALDIR)/gc-bootstrap-ip.elf
 ELF2DOL := $(LOCALDIR)/elf2dol
 MKISO_LITE := $(LOCALDIR)/mkiso-lite
 MKCDI_LITE := $(LOCALDIR)/mkcdi-lite
+MKWAD := $(LOCALDIR)/mkwad
 GBI_HDR := tools/gbi.hdr
 
 # ---------- Final outputs ----------
@@ -104,12 +106,21 @@ GC_IP_DOL  := $(BUILDDIR)/gc-load-ip.dol
 GC_SER_ISO := $(BUILDDIR)/gc-load-ser.iso
 GC_IP_ISO  := $(BUILDDIR)/gc-load-ip.iso
 
+# Wii channel WAD packed around wii-load-ip.dol.  Override on the command line:
+#   make -C make-cd wii WII_WAD_TITLE_ID=KOSL WII_WAD_IOS=58 \
+#       WII_WAD_NAME="wii-load-ip" WII_WAD_TITLE_VER=2
+WII_WAD           := $(BUILDDIR)/wii-load-ip.wad
+WII_WAD_TITLE_ID  ?= KOSL
+WII_WAD_IOS       ?= 58
+WII_WAD_NAME      ?= wii-load-ip
+WII_WAD_TITLE_VER ?= 1
+
 # ============================================================
 # Phony targets
 # ============================================================
 
 .DEFAULT_GOAL := all
-.PHONY: all dc gc dc-serial dc-ip gc-serial gc-ip gc-dol clean
+.PHONY: all dc gc wii dc-serial dc-ip gc-serial gc-ip gc-dol mkwad clean
 
 all: dc gc
 
@@ -118,6 +129,8 @@ dc: dc-serial dc-ip
 gc: gc-serial gc-ip
 
 gc-dol: $(GC_SER_DOL) $(GC_IP_DOL)
+
+wii: $(WII_WAD)
 
 # ============================================================
 # Directory creation
@@ -218,6 +231,37 @@ $(MKCDI_LITE): tools/mkcdi-lite.c tools/iso9660-lite.c tools/iso9660-lite.h tool
 	@$(HOSTCC) $(HOST_CFLAGS) -I$(ROOT)/include \
 	    -DMKCDI_LITE_IP_TEMPLATE=\"$(CURDIR)/tools/IP.BIN\" \
 	    -o $@ tools/mkcdi-lite.c tools/iso9660-lite.c
+
+# Wii: mkwad -- pack a Wii channel WAD around a boot DOL.  Single-binary
+# host tool (no kos-tool dep), built from its own sources + the wadcrypto
+# clean-room library next door.  Mirrors the mkiso-lite/iso9660-lite pattern.
+mkwad: $(MKWAD)
+
+$(MKWAD): tools/mkwad/wad.c tools/mkwad/banner.c tools/mkwad/banner.h tools/mkwad/wii_certs.c \
+          tools/wadcrypto/aes.c tools/wadcrypto/aes.h \
+          tools/wadcrypto/md5.c tools/wadcrypto/md5.h \
+          tools/wadcrypto/sha1.c tools/wadcrypto/sha1.h | $(LOCALDIR)
+	@echo "  HOSTCC  $@"
+	@$(HOSTCC) $(HOST_CFLAGS) -Itools/wadcrypto -o $@ \
+	    tools/mkwad/wad.c tools/mkwad/banner.c tools/mkwad/wii_certs.c \
+	    tools/wadcrypto/aes.c tools/wadcrypto/md5.c tools/wadcrypto/sha1.c
+
+# Wii channel WAD: pack the wii-load-ip boot DOL with mkwad.  The DOL input
+# is sourced from $(BUILDDIR)/wii-load-ip.dol, which the top-level `wii`
+# target stages from client/wii/build/ip/.
+#
+# mkwad reads ./common-key.bin from the cwd it was invoked in, so cd into
+# the mkwad source dir before running it -- that's where the user keeps
+# their (gitignored) common-key.bin, alongside the tool that consumes it
+# (mirroring the make-cd/tools/IP.BIN convention).  $(MKWAD), $(WII_IP_DOL),
+# and $@ are anchored at absolute paths via $(abspath ...), so the cd
+# doesn't break them.
+$(WII_WAD): $(MKWAD) $(WII_IP_DOL) | $(BUILDDIR)
+	@echo "  WAD     $@"
+	@cd $(ROOT)/make-cd/tools/mkwad && $(abspath $(MKWAD)) --dol $(WII_IP_DOL) \
+	    --title-id $(WII_WAD_TITLE_ID) --ios $(WII_WAD_IOS) \
+	    --title "$(WII_WAD_NAME)" --title-ver $(WII_WAD_TITLE_VER) \
+	    -o $@
 
 # ============================================================
 # GameCube: Bootstrap (embeds firmware, copies to high memory)
