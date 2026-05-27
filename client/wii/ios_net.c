@@ -171,22 +171,28 @@ static uint8_t tx_buf_storage[WII_NET_MAX_UDP_PAYLOAD]
 #define tx_buf           tx_buf_storage
 #endif
 
-/* MAC-related IOS output buffers MUST live in MEM2.
+/* IOS landing zone for NCD cmd 8 / SOGetInterfaceOpt 0x1004 — both drop the
+ * trailing 2 bytes of the 6-byte MAC if the output vector lives in MEM1.  We
+ * copy the result straight into MEM1 (wifi_mac/ethernet_mac/local_mac);
+ * ifopt_val_buf is also reused as the SOPoll output on the hot path.
  *
- * Layout, all 32-byte aligned:
+ * Placed LOW in the app MEM2 arena: well clear of the IOS-owned/Hollywood-
+ * protected high region (Dolphin's MMU-off fast-mem flagged an earlier
+ * near-top placement at 0x933dfe00), and only touched by init + the idle
+ * poll loop, so timing is unconstrained.
+ *
+ * Layout from MEM2_MAC_BUFS_BASE, all 32-byte aligned:
  *   +0x000  ncd_mac_buf       (32 B reserved, 6 B used by NCD cmd 8)
  *   +0x020  ifopt_req_buf     (32 B reserved, 8 B used = level + optname)
  *   +0x040  ifopt_val_buf     (IFOPT_VAL_BUF_SIZE = 256 B; up to outlen used)
- *   +0x140  ifopt_len_buf     (32 B reserved, 4 B used = optsize-inout)
- *
- * Base 0x933E8000 sits comfortably above the existing optional IPC arena
- * at 0x933E0000 (which uses ~0xD20 B), well within the loader's trusted
- * MEM2 region. */
+ *   +0x140  ifopt_len_buf     (32 B reserved, 4 B used = optsize-inout) */
 #define NCD_MAC_BUF_SIZE    32
 #define IFOPT_REQ_BUF_SIZE  32
 #define IFOPT_LEN_BUF_SIZE  32
+#define MEM2_MAC_BUFS_SPAN  0x200      /* total span of the four buffers */
 
-#define MEM2_MAC_BUFS_BASE  0x933E8000
+#define MEM2_MAC_BUFS_BASE  0x90100000u
+
 #define ncd_mac_buf       ((uint8_t *)(MEM2_MAC_BUFS_BASE + 0x000))
 #define ifopt_req_buf     ((uint8_t *)(MEM2_MAC_BUFS_BASE + 0x020))
 #define ifopt_val_buf     ((uint8_t *)(MEM2_MAC_BUFS_BASE + 0x040))

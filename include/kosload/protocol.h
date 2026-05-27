@@ -248,11 +248,13 @@ typedef struct {
 #define WII_DEFAULT_LOAD_ADDR   0x80004000
 #define PS2_DEFAULT_LOAD_ADDR   0x00100000
 
-/* Memory layout constants */
+/* Memory layout constants.  Wii MEM1/MEM2 ceilings deliberately omitted:
+ * the build system passes the channel-safe loader ceiling via -DWII_MEM1_TOP
+ * (see mk/memory.mk), which differs from the hardware-architectural ceiling.
+ * Defining the architectural value here too would shadow the build-system
+ * value with a redefinition warning, and no source consumer needs it. */
 #define DC_RAM_TOP          0x8d000000  /* 16 MB SH4 RAM */
 #define GC_RAM_TOP          0x81800000  /* 24 MB MEM1 */
-#define WII_MEM1_TOP        0x81800000  /* 24 MB MEM1 */
-#define WII_MEM2_TOP        0x94000000  /* 64 MB MEM2 cached upper bound */
 #define PS2_RAM_TOP         0x02000000  /* 32 MB EE RAM */
 
 #ifndef GC_LOADER_BASE

@@ -82,7 +82,7 @@ IP_DEFS := -DLOADER_NAME=\"wii-load-ip\" -DMAX_RAM_BYTES=92274688
 # so we don't expose a STATICIP knob here.
 
 IP_LD  := $(IPDIR)/wii-load-ip.ld
-HBC_LD := $(IPDIR)/hbc_stub.ld
+BOOTSTRAP_LD := $(IPDIR)/bootstrap.ld
 
 .DEFAULT_GOAL := all
 
@@ -105,8 +105,9 @@ $(IP_LD): wii-load-ip.ld.in $(ROOT)/mk/memory.mk | $(IPDIR)
 	     $< > $@
 	@echo "  GEN     $@"
 
-$(HBC_LD): hbc_stub.ld.in $(ROOT)/mk/memory.mk | $(IPDIR)
-	@sed -e 's/@WII_HBC_BASE@/$(WII_HBC_BASE)/g' \
+$(BOOTSTRAP_LD): bootstrap.ld.in $(ROOT)/mk/memory.mk | $(IPDIR)
+	@sed -e 's/@WII_LOADER_BASE@/$(WII_LOADER_BASE)/g' \
+	     -e 's/@WII_LOADER_SIZE@/$(WII_LOADER_SIZE)/g' \
 	     $< > $@
 	@echo "  GEN     $@"
 
@@ -232,22 +233,31 @@ $(IP_BIN): $(IP_ELF)
 $(DOLTOOL): $(ROOT)/make-cd/tools/elf2dol.c | $(BUILDDIR)
 	$(HOST_CC) $< -o $@
 
-# ---- HBC-launch stub --------------------------------------------------
-# Tiny DOL HBC will actually accept (links at WII_HBC_BASE); embeds the
-# Stage-2 loader image ($(IP_BIN), linked at WII_LOADER_BASE) via .incbin,
-# relocates it up and jumps.  -I$(IPDIR) lets .incbin find wii-load-ip.bin.
-HBC_OBJ := $(IPDIR)/hbc_stub.o
-HBC_ELF := $(IPDIR)/wii-load-ip-hbc.elf
+# ---- Unified boot stub (System Menu channel + Homebrew Channel) -------
+# ONE DOL boots from both.  The System Menu's ES_LaunchTitle enters a channel
+# executable at the fixed 0x80003400 with the MMU essentially uninitialised, so
+# this stub does the full Broadway bring-up itself (HID0, HID4[SBE] to enable the
+# MEM2 BATs, segment regs, canonical BAT layout, translation) then RELOCATES
+# the embedded loader ($(IP_BIN)) up to WII_LOADER_BASE and jumps.
+#
+# The same DOL also launches from HBC: its entry is 0x80003400 and all sections
+# are low (the loader is embedded, not a high section), so it sits inside HBC's
+# accepted load range [0x80003400, BASE_ADDR-1] (HBC loads itself at BASE_ADDR =
+# 0x81330000; a high loader section is what HBC rejected before).  Under HBC the
+# MMU is already up, so the bring-up is an idempotent no-op.  -I$(IPDIR) lets
+# .incbin find wii-load-ip.bin.  See bootstrap.S.
+BOOTSTRAP_OBJ := $(IPDIR)/bootstrap.o
+BOOTSTRAP_ELF := $(IPDIR)/wii-bootstrap-ip.elf
 
-$(HBC_OBJ): hbc_stub.S $(IP_BIN) | $(IPDIR)
+$(BOOTSTRAP_OBJ): bootstrap.S $(IP_BIN) | $(IPDIR)
 	$(CC) $(ASFLAGS) -I$(IPDIR) -Wa,-I,$(IPDIR) -c $< -o $@
 
-$(HBC_ELF): $(HBC_OBJ) $(HBC_LD)
-	$(CC) $(ARCH_CFLAGS) -nostdlib -Wl,-n -Wl,--gc-sections -T $(HBC_LD) \
-	    $(HBC_OBJ) -o $@
+$(BOOTSTRAP_ELF): $(BOOTSTRAP_OBJ) $(BOOTSTRAP_LD)
+	$(CC) $(ARCH_CFLAGS) -nostdlib -Wl,-n -T $(BOOTSTRAP_LD) \
+	    $(BOOTSTRAP_OBJ) -o $@
 
-# The DOL handed to HBC is the stub, not the high-linked loader.
-$(IP_DOL): $(HBC_ELF) $(DOLTOOL)
+# Single DOL for both the System-Menu channel WAD and direct HBC launch.
+$(IP_DOL): $(BOOTSTRAP_ELF) $(DOLTOOL)
 	$(DOLTOOL) $< $@
 
 # ---- Wii example guests -----------------------------------------------
@@ -280,9 +290,9 @@ examples: $(WII_EXAMPLE_ELFS)
 
 all: ip examples
 
-ip: $(IP_ELF) $(IP_BIN) $(HBC_ELF) $(IP_DOL)
+ip: $(IP_ELF) $(IP_BIN) $(BOOTSTRAP_ELF) $(IP_DOL)
 	@$(SIZE) $(IP_ELF)
-	@$(SIZE) $(HBC_ELF)
+	@$(SIZE) $(BOOTSTRAP_ELF)
 
 $(COMMONDIR) $(IPDIR) $(EXBUILD) $(BUILDDIR):
 	@mkdir -p $@

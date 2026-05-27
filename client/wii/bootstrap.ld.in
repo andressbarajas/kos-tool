@@ -1,0 +1,49 @@
+/* Wii unified channel + HBC boot stub linker script.
+ *
+ * Two loadable DOL sections (matching pink's known-working shape and HBC's
+ * real channel-boot DOL):
+ *   TEXT0 @ 0x80003400 -- the bring-up + copy stub.
+ *   TEXT1 @ 0x80004000 -- the embedded loader image (.blob).  The stub copies
+ *     this to WII_LOADER_BASE at runtime and jumps there.
+ *
+ * Why two sections (not one big flat section): hardware experiment showed the
+ * SM/IOS rejects single-section channel DOLs even with the elf2dol IOS-bug
+ * workaround applied -- every working DOL (HBC, pink) has at least two
+ * loadable text sections.  PHDRS forces ld to emit them as separate PT_LOAD
+ * segments so elf2dol sees them as separate DOL sections.
+ *
+ * DOL entry is the HIGH alias 0x80003400 (the `start` symbol itself, not a
+ * stripped low alias). The high-alias entry is required for the wiiload->HBC 
+ * path: HBC's exec_stub `bctr`s to the DOL entry verbatim while still in 
+ * virtual mode under libogc BATs, where a low-alias entry like 0x00003400 has 
+ * no BAT coverage and ISIs immediately.  The SM channel path strips the high 
+ * bit before its real-mode entry, so the same high-alias entry resolves cleanly 
+ * to physical 0x3400 on both paths.  The stub's prologue then uses the canonical 
+ * `clrlwi + rfi` trick to handle either real-mode-low or virtual-mode-high 
+ * arrival -- see bootstrap.S for the gory details.
+ */
+
+OUTPUT_FORMAT("elf32-powerpc", "elf32-powerpc", "elf32-powerpc")
+OUTPUT_ARCH(powerpc:common)
+ENTRY(start)                                /* 0x80003400 high alias */
+
+PHDRS
+{
+  stub PT_LOAD FLAGS(5);                    /* R+X */
+  blob PT_LOAD FLAGS(5);                    /* R+X (DOL has no perms anyway) */
+}
+
+SECTIONS
+{
+  . = 0x80003400;
+  .stub : {
+    KEEP(*(.text.stub))
+  } :stub
+
+  . = 0x80004000;
+  .blob : {
+    KEEP(*(.blob))
+  } :blob
+
+  /DISCARD/ : { *(.eh_frame) *(.comment) *(.note*) *(.gnu.attributes) }
+}

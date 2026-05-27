@@ -68,8 +68,105 @@ void exception_init(void)
         install_exception_stub(vectors[i]);
 }
 
+/* ---- Wii AV Encoder (AVE) I2C bring-up ------------------------------------
+ * The Wii routes video through an external AV encoder reached over a bit-banged
+ * I2C bus on Hollywood GPIO (SCL=0x4000, SDA=0x8000 of HW_GPIO1B at 0xCD8000C0).
+ * A System-Menu channel launch leaves the encoder unconfigured, so VI timing
+ * alone yields no signal (black) — unlike GameCube, whose encoder the IPL sets
+ * up.  This programs the encoder for NTSC 480i.  Protocol, register map and the
+ * linear-gamma table are from the WiiBrew "AV Encoder" RE notes (clean-room
+ * documentation, not SDK source), cross-checked against the Homebrew Channel
+ * binary which does the same I2C writes. */
+#define AVE_GPIO_OUT (*(volatile unsigned int *)0xCD8000C0)   /* HW_GPIO1BOUT */
+#define AVE_GPIO_DIR (*(volatile unsigned int *)0xCD8000C4)   /* HW_GPIO1BDIR */
+#define AVE_GPIO_IN  (*(volatile unsigned int *)0xCD8000C8)   /* HW_GPIO1BIN  */
+#define AVE_SCL  0x4000u
+#define AVE_SDA  0x8000u
+#define AVE_ADDR 0xe0u                                         /* 0x70<<1 | W  */
+
+static void ave_delay(void)
+{
+    unsigned int a, b;
+    __asm__ volatile("mftb %0" : "=r"(a));
+    do { __asm__ volatile("mftb %0" : "=r"(b)); } while ((b - a) < 300u); /* ~5us */
+}
+static void ave_scl(int v){ if(v) AVE_GPIO_OUT|=AVE_SCL; else AVE_GPIO_OUT&=~AVE_SCL; __asm__ volatile("eieio"); }
+static void ave_sda(int v){ if(v) AVE_GPIO_OUT|=AVE_SDA; else AVE_GPIO_OUT&=~AVE_SDA; __asm__ volatile("eieio"); }
+static void ave_sda_out(void){ AVE_GPIO_DIR|=AVE_SDA;  __asm__ volatile("eieio"); }
+static void ave_sda_in(void){  AVE_GPIO_DIR&=~AVE_SDA; __asm__ volatile("eieio"); }
+static int  ave_sda_read(void){ return (AVE_GPIO_IN & AVE_SDA) ? 1 : 0; }
+
+static void ave_start(void)
+{
+    ave_sda_out(); ave_sda(1); ave_scl(1); ave_delay();
+    ave_sda(0); ave_delay(); ave_scl(0); ave_delay();
+}
+static void ave_stop(void)
+{
+    ave_sda_out(); ave_sda(0); ave_delay();
+    ave_scl(1); ave_delay(); ave_sda(1); ave_delay();
+}
+static void ave_wbyte(unsigned char v)
+{
+    int i;
+    for (i = 7; i >= 0; i--) {
+        ave_sda((v >> i) & 1); ave_delay();
+        ave_scl(1); ave_delay();
+        ave_scl(0); ave_delay();
+    }
+    /* ACK: release SDA, pulse SCL, sample (slave pulls low on ACK) */
+    ave_sda_in(); ave_delay();
+    ave_scl(1); ave_delay(); (void)ave_sda_read(); ave_scl(0); ave_delay();
+    ave_sda_out();
+}
+static void ave_w(unsigned char reg, unsigned char val)
+{
+    ave_start();
+    ave_wbyte(AVE_ADDR);
+    ave_wbyte(reg);
+    ave_wbyte(val);
+    ave_stop();
+}
+
+static void wii_ave_init(void)
+{
+    /* NTSC encoder bring-up reverse-engineered from disassembly of the user's
+     * own HBC boot DOL.  Differs from the WiiBrew sequence: 0x65 = 0x03 not
+     * 0x01, register 0x01 is NOT written at all, and the 0x7A and 0x0A blocks
+     * are added.  Using the WiiBrew sequence here produced visibly wrong
+     * colours (red looked orange, green tinted cyan) on a channel-launched
+     * loader; the disassembled sequence reproduces correct colour. */
+    static const unsigned char gamma[33] = {
+        0x10,0x00,0x10,0x00,0x10,0x00,0x10,0x00,0x10,0x00,0x10,0x00,0x10,0x20,0x40,0x60,
+        0x80,0xa0,0xeb,0x10,0x00,0x20,0x00,0x40,0x00,0x60,0x00,0x80,0x00,0xa0,0x00,0xeb,0x00
+    };
+    int i;
+
+    AVE_GPIO_DIR |= (AVE_SCL | AVE_SDA); __asm__ volatile("eieio");  /* SCL,SDA outputs */
+    AVE_GPIO_OUT |= (AVE_SCL | AVE_SDA); __asm__ volatile("eieio");  /* idle high       */
+
+    ave_w(0x6a, 0x01);
+    ave_w(0x65, 0x03);                    /* HBC value (was 0x01 in WiiBrew docs) */
+    ave_w(0x00, 0x00);                    /* A/V timings -- HBC does NOT write 0x01 */
+    ave_w(0x71, 0x8e); ave_w(0x72, 0x8e); /* audio volume */
+    ave_w(0x02, 0x07);                    /* VBI */
+    ave_w(0x05, 0x00); ave_w(0x06, 0x00); /* CGMS */
+    ave_w(0x08, 0x00); ave_w(0x09, 0x00); /* WSS */
+    ave_w(0x7a, 0x00); ave_w(0x7b, 0x00); /* HBC adds these four */
+    ave_w(0x7c, 0x00); ave_w(0x7d, 0x00);
+    for (i = 0x40; i <= 0x59; i++) ave_w((unsigned char)i, 0x00);   /* macrovision off */
+    ave_w(0x0a, 0x00);                    /* HBC adds this */
+    ave_w(0x03, 0x01);                    /* composite trap filter */
+    for (i = 0; i < 33; i++) ave_w((unsigned char)(0x10 + i), gamma[i]);
+    ave_w(0x04, 0x01);                    /* enable A/V output */
+    ave_w(0x6e, 0x00);                    /* disable RGB filter */
+}
+
 static int wii_init(void)
 {
+    /* CPU/MMU bring-up is done in the channel stub; here configure the AV
+     * encoder + VI and return. */
+    wii_ave_init();
     gc_video_init();
     return 0;
 }

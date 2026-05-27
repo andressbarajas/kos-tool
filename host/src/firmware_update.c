@@ -312,7 +312,7 @@ static const arch_update_params_t ppc_params = {
  *   2. Stack at 0x80200000
  *   3. Copy firmware 0x80004100 -> 0x817C0000 (word-at-a-time)
  *   4. dcbf + icbi over dest range
- *   5. Jump to 0x817C0000 (= WII_LOADER_BASE — same entry hbc_stub.S
+ *   5. Jump to 0x817C0000 (= WII_LOADER_BASE — same entry our boot stub
  *      produces after a cold-boot relocation, so no need to re-run it).
  *
  * Size at offset 0x98 is patched by the host with the firmware byte count

@@ -13,7 +13,14 @@ GC_LOADER_SIZE := 0x14000    # 80 KB
 # Wii mode has the same 24 MB MEM1 window as GameCube plus MEM2.  Keep the
 # initial clean-room loader in high MEM1 so uploaded Wii DOLs can use the usual
 # low MEM1 area while the IOS socket shim is being brought up.
-WII_MEM1_TOP     := 0x81800000
+#
+# NOTE: the top of MEM1 (the real 0x81800000) is NOT usable when launched as a
+# System-Menu channel — ES_LaunchTitle leaves only ~0x81380000 mapped/executable
+# (the very top is the SM's XFB/reserved region; jumping to 0x817c0000 there
+# faults with an ISI). Retail channel executables run their payload at
+# 0x81330000, so we put the loader there. This stays well clear of HBC's top
+# reservation too, so the same base works for both HBC and channel boot.
+WII_MEM1_TOP     := 0x81370000  # channel-safe usable top (loader base 0x81330000)
 WII_LOADER_SIZE  := 0x40000    # 256 KB
 
 # HBC will only launch a DOL whose load addresses sit in the standard
