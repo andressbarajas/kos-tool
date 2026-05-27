@@ -56,6 +56,13 @@ kosload_syscall_ptr:
 kosload_info_ptr:
     .word   kosload_info
 
+# SIF broker iface slot (entry+0x14) — KOSLOAD_SIF_IFACE_ADDR in KOS's
+# ps2/kosload_sif_abi.h. Stays 0 until the loader-side SIF broker ships;
+# KOS keys broker-presence on (*iface).magic == 'KSIF', so a non-zero
+# non-iface value here makes guests dereference garbage.
+kosload_sif_iface_ptr:
+    .word   0
+
 # Function pointers for exception handler (entry+0x18, +0x1C, +0x20, +0x24, +0x28)
 setup_video_ptr:
     .word   setup_video
