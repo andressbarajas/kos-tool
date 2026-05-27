@@ -63,11 +63,12 @@ static uint32_t normalize_color(uint32_t color)
     if (color <= 0xFFFF) {
         /* Treat as RGB565: RRRRRGGGGGGBBBBB */
         unsigned int r5 = (color >> 11) & 0x1F;
-        unsigned int g6 = (color >> 5) & 0x3F;
-        unsigned int b5 = color & 0x1F;
-        return ((r5 << 19) | (r5 << 14)) |   /* R: 5-bit to 8-bit */
-               ((g6 << 10) | (g6 << 4)) |     /* G: 6-bit to 8-bit */
-               ((b5 << 3) | (b5 >> 2));        /* B: 5-bit to 8-bit */
+        unsigned int g6 = (color >>  5) & 0x3F;
+        unsigned int b5 =  color        & 0x1F;
+        unsigned int r8 = (r5 << 3) | (r5 >> 2);
+        unsigned int g8 = (g6 << 2) | (g6 >> 4);
+        unsigned int b8 = (b5 << 3) | (b5 >> 2);
+        return (r8 << 16) | (g8 << 8) | b8;
     }
     return color;  /* Already 0x00RRGGBB */
 }
@@ -124,9 +125,10 @@ void gc_video_init(void)
     /* VICLK = 0 means 27 MHz; VICLK = 1 means 54 MHz and is used for progressive mode. */
     VI_VICLK = 0x0000;   /* 27 MHz video clock. */
 
-    /* Wait for the raster beam to enter the vertical blanking region. */
-    while(VI_DPV > 20)
-        ;
+    /* Wait for the raster beam to enter the vertical blanking region, but ONLY if
+     * VI is currently enabled (DCR bit 0). */
+    if (VI_DCR & 0x0001)
+        while (VI_DPV > 20);
 
     /* Configure VI for NTSC 480i */
     VI_VTR  = 0x0F06;         /* ACV=240, EQU=6 */
