@@ -137,14 +137,7 @@ void arch_icache_sync_range(uintptr_t start, size_t count) {
 }
 
 void cache_flush_dc(const void *addr, size_t size) {
-    /* SIF DMA reads main RAM directly.  If data is still only in the EE data
-     * cache, the IOP can receive old bytes.  A full 8 KB D-cache purge is
-     * simple and reliable here, and the cost is tiny compared with the DMA
-     * work this protects.  The narrower per-line flush was sensitive to cache
-     * set conflicts on real hardware. */
-    (void)addr;
-    (void)size;
-    arch_dcache_purge_all();
+    arch_dcache_purge_range((uintptr_t)addr, size);
 }
 
 void cache_flush_range(const void *addr, size_t size) {
