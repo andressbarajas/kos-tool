@@ -164,6 +164,7 @@ COMMON_C_OBJS := \
     $(COMMONDIR)/screensaver.o \
     $(COMMONDIR)/syscall_table.o \
     $(COMMONDIR)/target.o \
+    $(COMMONDIR)/sif_broker.o \
     $(COMMONDIR)/video.o \
     $(COMMONDIR)/cache.o \
     $(COMMONDIR)/memfuncs.o
@@ -186,7 +187,10 @@ $(COMMONDIR)/screensaver.o: $(CLIENTDIR)/common/core/screensaver.c $(VERSION_H) 
 $(COMMONDIR)/syscall_table.o: $(CLIENTDIR)/common/core/syscall_table.c $(VERSION_H) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(COMMONDIR)/target.o: target.c ee_cop0.h $(VERSION_H) | $(COMMONDIR)
+$(COMMONDIR)/target.o: target.c ee_cop0.h sif_broker.h $(VERSION_H) | $(COMMONDIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(COMMONDIR)/sif_broker.o: sif_broker.c sif_broker.h ee_sif.h $(VERSION_H) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(COMMONDIR)/video.o: video.c $(VERSION_H) | $(COMMONDIR)

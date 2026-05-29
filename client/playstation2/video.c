@@ -15,6 +15,7 @@
 #include "video.h"
 #include "cache.h"
 #include "ee_cop0.h"
+#include "ee_dmac.h"   /* EE DMAC regs/bits (ch2=GIF, globals, CHCR/STAT/PCR) */
 
 /* ===== GS Privileged Registers (KSEG1 mapped, 64-bit) ===== */
 
@@ -27,30 +28,9 @@
 #define GS_BGCOLOR      (*(volatile uint64_t *)(GS_PRIV_BASE + 0xE0))
 #define GS_CSR          (*(volatile uint64_t *)(GS_PRIV_BASE + 0x1000))
 
-/* ===== GIF DMA Channel (DMA channel 2) ===== */
-
-#define GIF_DMA_BASE    0xB000A000
-
-#define GIF_CHCR        (*(volatile uint32_t *)(GIF_DMA_BASE + 0x00))
-#define GIF_MADR        (*(volatile uint32_t *)(GIF_DMA_BASE + 0x10))
-#define GIF_QWC         (*(volatile uint32_t *)(GIF_DMA_BASE + 0x20))
-
-/* DMA control registers */
-#define DMA_CTRL        (*(volatile uint32_t *)0xB000E000)
-#define DMA_STAT        (*(volatile uint32_t *)0xB000E010)
-#define DMA_PCR         (*(volatile uint32_t *)0xB000E020)
-#define DMA_SQWC        (*(volatile uint32_t *)0xB000E030)
-
-#define DMA_CTRL_DMAE       0x00000001u
-#define DMA_STAT_GIF        0x00000004u
-#define DMA_PCR_CDE_GIF     0x00040000u
-#define DMA_CHCR_STR        0x00000100u
-
-/* DMAC global hold (CPND) — used to force-abort a wedged channel.
- * Same registers/bit ee_sif.c's dmac_force_stop() uses for SIF. */
-#define DMAC_ENABLER    (*(volatile uint32_t *)0xB000F520)
-#define DMAC_ENABLEW    (*(volatile uint32_t *)0xB000F590)
-#define DMAC_CPND       0x00010000u
+/* GIF DMA channel (ch2 = D2_*), DMAC globals (D_CTRL/STAT/PCR/SQWC), the
+ * ENABLER/W hold (DMAC_CPND), and CHCR/STAT/PCR bits all come from
+ * ee_dmac.h. The GIF *unit* control register below is a separate block. */
 
 /* GIF unit control register (NOT the GIF DMA channel).
  * Writing bit 0 (RST) resets the GIF path controller. */
@@ -143,10 +123,10 @@ static void gif_dma_recover(void)
 {
     gif_dma_stop_held();   /* DMAC hold, ch2 CHCR/QWC=0, release */
     gif_unit_reset();      /* GIF_CTRL.RST: clear PATH3/PSE inside GIF */
-    DMA_CTRL = DMA_CTRL_DMAE;
-    DMA_SQWC = 0;
-    DMA_PCR  = DMA_PCR | DMA_PCR_CDE_GIF;
-    DMA_STAT = DMA_STAT_GIF;   /* clear any latched ch2 status */
+    D_CTRL = D_CTRL_DMAE;
+    D_SQWC = 0;
+    D_PCR  = D_PCR | D_PCR_CDE_GIF;
+    D_STAT = D_STAT_GIF;   /* clear any latched ch2 status */
 }
 
 /*
@@ -175,24 +155,24 @@ static void gif_dma_send(void *data, unsigned int qwc)
 
         /* (Re)enable DMA + arm ch2.  Repeated on the retry path because
          * gif_dma_recover() tears the channel down. */
-        if ((DMAC_ENABLER & DMAC_CPND) != 0) {
-            DMAC_ENABLEW = DMAC_ENABLER & ~DMAC_CPND;
-            (void)DMAC_ENABLER;
+        if ((D_ENABLER & DMAC_CPND) != 0) {
+            D_ENABLEW = D_ENABLER & ~DMAC_CPND;
+            (void)D_ENABLER;
         }
-        DMA_CTRL = DMA_CTRL_DMAE;
-        DMA_PCR  = DMA_PCR | DMA_PCR_CDE_GIF;
+        D_CTRL = D_CTRL_DMAE;
+        D_PCR  = D_PCR | D_PCR_CDE_GIF;
 
         /* Source address (physical) + quadword count, then start:
          * normal mode, DIR=0 (from memory), STR=1. */
-        GIF_MADR = PHYSADDR(data);
-        GIF_QWC  = qwc;
-        GIF_CHCR = DMA_CHCR_STR;
+        D2_MADR = PHYSADDR(data);
+        D2_QWC  = qwc;
+        D2_CHCR = CHCR_STR;
 
-        while (GIF_CHCR & DMA_CHCR_STR) {
+        while (D2_CHCR & CHCR_STR) {
             if (++spin >= GIF_DMA_WAIT_BUDGET)
                 break;
         }
-        if ((GIF_CHCR & DMA_CHCR_STR) == 0)
+        if ((D2_CHCR & CHCR_STR) == 0)
             return;                       /* transfer completed */
 
         /* Wedged — repair the channel and retry once. */
@@ -283,18 +263,18 @@ static void gif_dma_stop_held(void)
     uint32_t saved;
 
     ee_cop0_write_status(status & ~EE_COP0_STATUS_IE);
-    saved = DMAC_ENABLER;
-    DMAC_ENABLEW = saved | DMAC_CPND;
-    (void)DMAC_ENABLER;
-    (void)GIF_CHCR;
-    (void)DMA_CTRL;
-    GIF_CHCR = 0;
-    GIF_QWC = 0;
-    (void)GIF_CHCR;            /* MMIO read-back drains the EE write buffer */
+    saved = D_ENABLER;
+    D_ENABLEW = saved | DMAC_CPND;
+    (void)D_ENABLER;
+    (void)D2_CHCR;
+    (void)D_CTRL;
+    D2_CHCR = 0;
+    D2_QWC = 0;
+    (void)D2_CHCR;            /* MMIO read-back drains the EE write buffer */
     /* This is early hardware ownership, not a temporary pause/resume.  If a
      * previous context left the whole DMAC held, release it before video DMA. */
-    DMAC_ENABLEW = saved & ~DMAC_CPND;
-    (void)DMAC_ENABLER;
+    D_ENABLEW = saved & ~DMAC_CPND;
+    (void)D_ENABLER;
     ee_cop0_write_status(status);
 }
 
@@ -315,16 +295,16 @@ void ps2_video_init(void)
      * A firmware update enters here with EE hardware inherited from the
      * previous loader.  Repair the global state that controls whether ch2 can
      * execute at all, not just the ch2 STR bit:
-     *   - DMA_CTRL clears any stale stall/MFIFO mode while enabling DMA.
-     *   - DMA_PCR.CDE2 lets GIF run if priority control was left enabled.
+     *   - D_CTRL clears any stale stall/MFIFO mode while enabling DMA.
+     *   - D_PCR.CDE2 lets GIF run if priority control was left enabled.
      *   - GIF_CTRL.RST clears PATH3/PSE state inside the GIF unit itself.
      */
     gif_dma_stop_held();
     gif_unit_reset();
-    DMA_CTRL = DMA_CTRL_DMAE;
-    DMA_SQWC = 0;
-    DMA_PCR = DMA_PCR | DMA_PCR_CDE_GIF;
-    DMA_STAT = DMA_STAT_GIF;
+    D_CTRL = D_CTRL_DMAE;
+    D_SQWC = 0;
+    D_PCR = D_PCR | D_PCR_CDE_GIF;
+    D_STAT = D_STAT_GIF;
 
     /* Fully configure display for NTSC 640x480 interlaced.
      * The BIOS/uLaunchELF may have been using circuit 2 or a different

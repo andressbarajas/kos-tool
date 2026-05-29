@@ -743,9 +743,9 @@ static int open_network_devices(void)
     }
     ncd_parse_link_status(ncd_out);
 
-    /* MAC retrieval is deferred to after IOS_NET_CMD_STARTUP completes,
-     * per AGENT/wii_sysmenu_mac_re.md: the System Menu only queries the
-     * MAC once NCD's link state has settled.  Config (cmd 3/5) still
+    /* MAC retrieval is deferred to after IOS_NET_CMD_STARTUP completes:
+     * the System Menu only queries the MAC once NCD's link state has
+     * settled (per Wii System Menu RE).  Config (cmd 3/5) still
      * happens here because we need its contents to drive interface-type
      * selection before the rest of bring-up. */
     ncd_probe_config(ncd_fd);
