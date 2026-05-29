@@ -203,10 +203,22 @@ kosloadsyscall:
     move    $a1, $a2
     move    $a2, $a3
 
-    # Save caller's gp and ra on stack
+    # Save caller's gp, ra, and COP0 Status on stack. Mask Status.IE
+    # for the duration of the syscall so the broker SIF0 DMAC ISR
+    # (installed by sif_broker.c) cannot fire mid-poll inside the
+    # loader's polling SIFRPC code. KOS guest enters with IE=1; without
+    # this mask the ISR steals RPC_END replies destined for the loader's
+    # poll loop, which then times out at RPC_REPLY_TIMEOUT (~25s) per
+    # syscall. Restored on return — KOS gets IE back exactly as it was.
     addiu   $sp, $sp, -16
     sw      $gp, 0($sp)
     sw      $ra, 4($sp)
+    mfc0    $t3, $12
+    sw      $t3, 8($sp)
+    li      $t8, ~0x1
+    and     $t8, $t3, $t8
+    mtc0    $t8, $12
+    sync.p
 
     # Load our _gp (in case caller changed gp)
     la      $gp, _gp
@@ -214,6 +226,11 @@ kosloadsyscall:
     # Call the syscall handler
     jalr    $t2
     nop
+
+    # Restore Status (re-enables IE if the guest had it set on entry).
+    lw      $t3, 8($sp)
+    mtc0    $t3, $12
+    sync.p
 
     # Restore caller's gp and ra
     lw      $gp, 0($sp)

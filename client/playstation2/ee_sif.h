@@ -141,8 +141,8 @@
 
     @{
 */
-#define EE_SIF_DMA_ATTR_INT_O    0x04u /**< \brief Request interrupt-on-completion in the DMA tag. */
-#define EE_SIF_DMA_ATTR_ERT      0x40u /**< \brief Mark the transfer as an end/terminal record. */
+#define EE_SIF_DMA_ATTR_INT_O    0x04 /**< \brief Request interrupt-on-completion in the DMA tag. */
+#define EE_SIF_DMA_ATTR_ERT      0x40 /**< \brief Mark the transfer as an end/terminal record. */
 
 /** @} */
 
@@ -276,7 +276,7 @@ typedef struct {
     uint32_t value;             /**< \brief 32-bit value to store at \c index. */
 } ee_sif_set_sreg_t;
 
-#define EE_SIF_IOP_RESET_ARG_MAX 80u /**< \brief Bytes reserved for MODLOAD reset arguments. */
+#define EE_SIF_IOP_RESET_ARG_MAX 80 /**< \brief Bytes reserved for MODLOAD reset arguments. */
 
 /** \brief   SIFCMD packet for EE_SIF_CMD_IOP_RESET.
     \ingroup ee_sif
@@ -631,6 +631,33 @@ volatile ee_sif_cmd_header_t *ee_sif_poll_packet(uint32_t cid,
 */
 void ee_sif_rearm_receive(void);
 
+/** \brief   Get the uncached alias of the current SIF0 receive-buffer header.
+    \ingroup ee_sif
+
+    Used by the broker SIF0 ISR to demux the most-recent incoming packet
+    without going through the polling \ref ee_sif_poll_packet path.
+
+    \return                 Uncached volatile pointer to the rx buffer header.
+*/
+volatile ee_sif_cmd_header_t *ee_sif_recv_header(void);
+
+/** \brief   Ack the SIF0 DMAC done-bit in D_STAT (write 1 to clear).
+    \ingroup ee_sif
+
+    Companion to \ref ee_sif_recv_header for the broker SIF0 ISR. Equivalent
+    to the bit-clear the polling loop in \ref ee_sif_poll_packet performs.
+*/
+void ee_sif_recv_ack(void);
+
+/** \brief   Enable DMAC INT1 generation for SIF0 (channel 5).
+    \ingroup ee_sif
+
+    Sets the SIF0 mask bit in D_STAT[21]. After this is on, every SIF0
+    DMA completion raises COP0 Cause.INT1_DMAC; the interrupt is gated
+    by COP0 Status.IE so loader-context polling (IE=0) is unaffected.
+*/
+void ee_sif_enable_sif0_irq(void);
+
 /** \brief   Initialize the EE SIF0 destination-chain receive channel.
     \ingroup ee_sif
 
@@ -711,6 +738,43 @@ int ee_sif_iop_read(uint32_t src_iop, void *dst_ee, uint32_t size);
 */
 int ee_sif_iop_read_word(uint32_t src_iop, uint32_t *out);
 
+/** \brief   Read a SIF software system register (SREG) shadow value.
+    \ingroup ee_sif
+
+    Returns the last value stored at \p index in the EE-side SIF system
+    register shadow. Values are placed there either locally by
+    ee_sif_sreg_publish() or by an inbound SET_SREG SIFCMD an IOP module
+    sent to publish state to the EE. Indices are masked to 8 bits.
+
+    \param  index           SIF system register index.
+    \return                 The 32-bit shadow value at \p index.
+*/
+uint32_t ee_sif_sreg_read(uint32_t index);
+
+/** \brief   Store a SIF SREG shadow value locally without notifying the IOP.
+    \ingroup ee_sif
+
+    Updates only the EE-side shadow. Used by the SIF0 receive path to record
+    an inbound SET_SREG without re-sending it.
+
+    \param  index           SIF system register index.
+    \param  value           Value to store.
+*/
+void ee_sif_sreg_write_local(uint32_t index, uint32_t value);
+
+/** \brief   Publish a SIF SREG value to the IOP and the local shadow.
+    \ingroup ee_sif
+
+    Updates the EE shadow at \p index and sends a SET_SREG SIFCMD so the
+    IOP-side SIF register at the same index is updated too. This is the
+    EE-to-IOP half of the classic SifSetReg/SifGetReg pair.
+
+    \param  index           SIF system register index.
+    \param  value           Value to publish.
+    \return                 0 on success, negative on transport failure.
+*/
+int ee_sif_sreg_publish(uint32_t index, uint32_t value);
+
 /** \brief   Clear an RPC client state block.
     \ingroup ee_sif
 
@@ -775,6 +839,17 @@ int ee_sif_rpc_call(volatile ee_sif_rpc_client_t *client, int rpc_number,
     \return                 IOP heap pointer on success, \c NULL on failure.
 */
 void *ee_sif_alloc_iop_heap(uint32_t size);
+
+/** \brief   Release a block previously returned by ee_sif_alloc_iop_heap().
+    \ingroup ee_sif
+
+    Calls the resident IOPHEAP RPC server's HFREE function (RPC function 2)
+    on \p iop_addr. Lazily binds the client if needed.
+
+    \param  iop_addr        IOP heap address returned by ee_sif_alloc_iop_heap().
+    \return                 0 on success, negative on failure.
+*/
+int ee_sif_free_iop_heap(void *iop_addr);
 
 /** \brief   Load an IRX image from an EE memory buffer.
     \ingroup ee_sif

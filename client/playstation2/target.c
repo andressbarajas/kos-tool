@@ -17,6 +17,7 @@
 #include "ee_cop0.h"
 #include "ee_sif.h"
 #include "iop_smap.h"
+#include "sif_broker.h"
 
 /* From go.S */
 extern void go(unsigned int addr);
@@ -174,6 +175,7 @@ static int ps2_init(void)
 {
     ps2_quiesce_cop0_timer();
     ps2_video_init();
+    ps2_sif_broker_publish();
     return 0;
 }
 

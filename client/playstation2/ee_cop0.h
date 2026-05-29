@@ -177,6 +177,30 @@ static inline void ee_cop0_write_status(uint32_t value)
     __asm__ volatile("mtc0 %0, $12\nsync.p" :: "r"(value) : "memory");
 }
 
+/* Suspend the broker ISR for the duration of a polling SIF op called from
+ * guest context: clear Status.IE and return its prior value so it can be
+ * restored. EI/DI only touch EIE (bit 16); IE (bit 0) needs an RMW. */
+static inline uint32_t ee_cop0_save_clear_ie(void)
+{
+    uint32_t s;
+    __asm__ volatile("mfc0 %0, $12" : "=r"(s));
+    if (s & EE_COP0_STATUS_IE) {
+        __asm__ volatile("mtc0 %0, $12\nsync.p"
+                         :: "r"(s & ~EE_COP0_STATUS_IE) : "memory");
+        return EE_COP0_STATUS_IE;
+    }
+    return 0;
+}
+
+static inline void ee_cop0_restore_ie(uint32_t saved)
+{
+    uint32_t s;
+    if (!saved) return;
+    __asm__ volatile("mfc0 %0, $12" : "=r"(s));
+    __asm__ volatile("mtc0 %0, $12\nsync.p"
+                     :: "r"(s | EE_COP0_STATUS_IE) : "memory");
+}
+
 static inline uint32_t ee_cop0_read_cause(void)
 {
     uint32_t value;
