@@ -15,11 +15,8 @@ AR      := $(GC_TOOLCHAIN)/$(PREFIX)ar
 OBJCOPY := $(GC_TOOLCHAIN)/$(PREFIX)objcopy
 SIZE    := $(GC_TOOLCHAIN)/$(PREFIX)size
 
-# ---------- Loader memory layout (from mk/memory.mk) ----------
-# GC_MEM1_TOP, GC_LOADER_SIZE are defined in mk/memory.mk.
-# GC_LOADER_BASE = GC_MEM1_TOP - GC_LOADER_SIZE.
-
-GC_LOADER_BASE := $(shell printf '0x%08x' $$(($(GC_MEM1_TOP) - $(GC_LOADER_SIZE))))
+# ---------- Loader memory layout ----------
+# GC_MEM1_TOP, GC_LOADER_SIZE, GC_LOADER_BASE all come from mk/memory.mk.
 
 # ---------- Directories ----------
 

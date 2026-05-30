@@ -1,7 +1,11 @@
-/* Dreamcast linker script for kosload
+/* Dreamcast linker script for kosload  (template)
  *
  * Based on dcload-serial: dcload-serial/target-src/dcload/dcload.x
  * Used by both kosload-serial and kosload-ip.
+ *
+ * Generated from this .in by client/dreamcast/Makefile: @DC_LOADER_BASE@ and
+ * @DC_LOADER_SIZE@ are substituted from mk/memory.mk (the source of truth for
+ * the loader base address and size).  The stack top derives from the region.
  */
 
 OUTPUT_FORMAT("elf32-shl", "elf32-shl", "elf32-shl")
@@ -10,7 +14,7 @@ ENTRY(start)
 
 MEMORY
 {
-  ram (rwx) : ORIGIN = 0x8c004000, LENGTH = 0xb400
+  ram (rwx) : ORIGIN = @DC_LOADER_BASE@, LENGTH = @DC_LOADER_SIZE@
 }
 
 SECTIONS
@@ -151,7 +155,7 @@ SECTIONS
   .debug_typenames 0 : { *(.debug_typenames) }
   .debug_varnames  0 : { *(.debug_varnames) }
 
-  _stack = 0x8c00f400;
+  _stack = ORIGIN(ram) + LENGTH(ram);
 
   ASSERT(( (_stack - _end) > 800 ), "Error: Not enough stack space: need at least 800 bytes")
   ASSERT(( _end <= (ORIGIN(ram) + LENGTH(ram)) ), "Error: Region 'ram' overflowed")

@@ -4,6 +4,7 @@ ROOT      ?= $(CURDIR)/../..
 CLIENTDIR := $(CURDIR)/..
 
 include $(ROOT)/mk/version.mk
+include $(ROOT)/mk/memory.mk
 include $(ROOT)/mk/toolchains.mk
 
 # ---------- Toolchain ----------
@@ -53,10 +54,15 @@ FREE_CFLAGS := \
 
 INCLUDES := -I$(ROOT)/include -I$(CLIENTDIR)/include -I$(CURDIR) -I$(CURDIR)/serial -I$(ROOT)/third_party/minilzo
 
+# ---------- Memory layout defines (from mk/memory.mk; passed to C and ASM) ----------
+
+MEMORY_DEFS := -DDC_LOADER_BASE=$(DC_LOADER_BASE) \
+               -DDC_LOADER_SIZE=$(DC_LOADER_SIZE)
+
 # ---------- Combined flags ----------
 
-CFLAGS  := $(ARCH_CFLAGS) $(FREE_CFLAGS) $(INCLUDES) -DKOSLOAD_VERSION_STRING=\"$(KOSLOAD_VERSION)\" -DKOSLOAD_GIT_REV=\"$(KOSLOAD_GIT_REV)\"
-ASFLAGS := $(ARCH_ASFLAGS) $(INCLUDES)
+CFLAGS  := $(ARCH_CFLAGS) $(FREE_CFLAGS) $(INCLUDES) $(MEMORY_DEFS) -DKOSLOAD_VERSION_STRING=\"$(KOSLOAD_VERSION)\" -DKOSLOAD_GIT_REV=\"$(KOSLOAD_GIT_REV)\"
+ASFLAGS := $(ARCH_ASFLAGS) $(INCLUDES) $(MEMORY_DEFS)
 
 # Automatic header-dependency tracking.  -MMD writes a .d file alongside each
 # .o listing every (non-system) header pulled in by the preprocessor; -MP adds
@@ -89,6 +95,16 @@ $(VERSION_H): $(VERSION_H_IN) $(ROOT)/mk/version.mk
 	     -e 's/@KOSLOAD_VERSION_MINOR@/$(KOSLOAD_VERSION_MINOR)/g' \
 	     -e 's/@KOSLOAD_VERSION_PATCH@/$(KOSLOAD_VERSION_PATCH)/g' \
 	     -e 's/@KOSLOAD_VERSION@/$(KOSLOAD_VERSION)/g' \
+	     $< > $@.tmp
+	@if ! cmp -s $@.tmp $@ 2>/dev/null; then mv $@.tmp $@; echo "  GEN     $@"; else rm $@.tmp; fi
+
+# ---------- Linker script (generated from mk/memory.mk) ----------
+
+KOSLOAD_X := $(BUILDDIR)/kosload.x
+
+$(KOSLOAD_X): kosload.x.in $(ROOT)/mk/memory.mk | $(BUILDDIR)
+	@sed -e 's/@DC_LOADER_BASE@/$(DC_LOADER_BASE)/g' \
+	     -e 's/@DC_LOADER_SIZE@/$(DC_LOADER_SIZE)/g' \
 	     $< > $@.tmp
 	@if ! cmp -s $@.tmp $@ 2>/dev/null; then mv $@.tmp $@; echo "  GEN     $@"; else rm $@.tmp; fi
 
@@ -219,8 +235,8 @@ $(SERIALDIR)/crt0.o: crt0.S | $(SERIALDIR)
 $(SERIALDIR)/go.o: go.S | $(SERIALDIR)
 	$(CC) $(ASFLAGS) $(SERIAL_DEFS) -c $< -o $@
 
-$(SERIAL_ELF): $(SERIAL_OBJS) $(COMMON_A) $(MINILZO_A)
-	$(CC) $(ARCH_CFLAGS) $(DC_LDFLAGS) -T kosload.x \
+$(SERIAL_ELF): $(SERIAL_OBJS) $(COMMON_A) $(MINILZO_A) $(KOSLOAD_X)
+	$(CC) $(ARCH_CFLAGS) $(DC_LDFLAGS) -T $(KOSLOAD_X) \
 	    $(SERIAL_OBJS) -Wl,--start-group $(COMMON_A) $(MINILZO_A) -lgcc -Wl,--end-group \
 	    -o $@
 
@@ -340,8 +356,8 @@ $(IPDIR)/crt0.o: crt0.S | $(IPDIR)
 $(IPDIR)/go.o: go.S | $(IPDIR)
 	$(CC) $(ASFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IP_ELF): $(IP_OBJS) $(COMMON_A)
-	$(CC) $(ARCH_CFLAGS) $(DC_LDFLAGS) -T kosload.x \
+$(IP_ELF): $(IP_OBJS) $(COMMON_A) $(KOSLOAD_X)
+	$(CC) $(ARCH_CFLAGS) $(DC_LDFLAGS) -T $(KOSLOAD_X) \
 	    $(IP_OBJS) -Wl,--start-group $(COMMON_A) -lgcc -Wl,--end-group \
 	    -o $@
 
@@ -413,7 +429,7 @@ ip: $(IP_ELF) $(IP_BIN)
 	@$(SIZE) $(IP_ELF)
 
 # Directory creation
-$(COMMONDIR) $(SERIALDIR) $(IPDIR) $(HOSTDIR) $(EXBUILD):
+$(BUILDDIR) $(COMMONDIR) $(SERIALDIR) $(IPDIR) $(HOSTDIR) $(EXBUILD):
 	@mkdir -p $@
 
 clean:

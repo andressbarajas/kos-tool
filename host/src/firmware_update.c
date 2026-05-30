@@ -196,8 +196,8 @@ static const arch_update_params_t sh4_params = {
     .trampoline = sh4_trampoline,
     .trampoline_size = 256,
     .size_patch_offset = 0x3C,
-    .load_addr = 0x8c010000,
-    .loader_base = 0x8c004000,
+    .load_addr = DC_DEFAULT_LOAD_ADDR, /* 0x8c010000 */
+    .loader_base = DC_LOADER_BASE,     /* 0x8c004000, from mk/memory.mk */
     .big_endian = 0,
 };
 
@@ -326,7 +326,7 @@ static const arch_update_params_t ppc_params = {
  *
  * Same shape as the GameCube trampoline above but staged at the Wii's
  * own WII_DEFAULT_LOAD_ADDR (0x80004000) and jumping to WII_LOADER_BASE
- * (0x817C0000).  Six bytes-positions differ from the GC version:
+ * (0x81330000).  Six bytes-positions differ from the GC version:
  *
  *   - Four lwz displacements (0x1C/0x20/0x24/0x28) change from
  *     0x3190..0x319C to 0x4090..0x409C.  The trampoline anchors its
@@ -336,7 +336,7 @@ static const arch_update_params_t ppc_params = {
  *     to 0x80004100 (= load_addr + 0x100, where the firmware blob is
  *     staged immediately after the 256-byte trampoline).
  *   - The `dest` and `entry` constants (0x94, 0x9C) change to
- *     WII_LOADER_BASE (0x817C0000) instead of GC's 0x817EC000.
+ *     WII_LOADER_BASE (0x81330000) instead of GC's 0x817EC000.
  *
  * Why land at WII_DEFAULT_LOAD_ADDR specifically: it's the Wii's own
  * natural upload base (`target_ops.default_load`).  FW_UPDATE vs.
@@ -347,9 +347,9 @@ static const arch_update_params_t ppc_params = {
  * Behavior:
  *   1. MSR = FP | IR | DR, EE off
  *   2. Stack at 0x80200000
- *   3. Copy firmware 0x80004100 -> 0x817C0000 (word-at-a-time)
+ *   3. Copy firmware 0x80004100 -> 0x81330000 (word-at-a-time)
  *   4. dcbf + icbi over dest range
- *   5. Jump to 0x817C0000 (= WII_LOADER_BASE — same entry our boot stub
+ *   5. Jump to 0x81330000 (= WII_LOADER_BASE — same entry our boot stub
  *      produces after a cold-boot relocation, so no need to re-run it).
  *
  * Size at offset 0x98 is patched by the host with the firmware byte count
@@ -394,9 +394,9 @@ static const uint8_t ppc_wii_trampoline[256] = {
     0x4e, 0x80, 0x04, 0x20,   /* 0x8C: bctr */
     /* Constant pool at trampoline+0x90 — runtime address 0x80004090. */
     0x80, 0x00, 0x41, 0x00,   /* 0x90: source = 0x80004100 (load_addr+0x100) */
-    0x81, 0x7c, 0x00, 0x00,   /* 0x94: dest   = 0x817C0000 (WII_LOADER_BASE) */
+    0x81, 0x33, 0x00, 0x00,   /* 0x94: dest   = 0x81330000 (WII_LOADER_BASE) */
     0x00, 0x00, 0x00, 0x00,   /* 0x98: size   = PATCHED */
-    0x81, 0x7c, 0x00, 0x00,   /* 0x9C: entry  = 0x817C0000 (WII_LOADER_BASE) */
+    0x81, 0x33, 0x00, 0x00,   /* 0x9C: entry  = 0x81330000 (WII_LOADER_BASE) */
     /* Remaining bytes zero-padded to 256. */
 };
 
@@ -405,7 +405,7 @@ static const arch_update_params_t ppc_wii_params = {
     .trampoline_size = 256,
     .size_patch_offset = 0x98,
     .load_addr = WII_DEFAULT_LOAD_ADDR, /* 0x80004000 — see comment above */
-    .loader_base = 0x817C0000,          /* WII_LOADER_BASE per mk/memory.mk */
+    .loader_base = WII_LOADER_BASE,     /* 0x81330000, from mk/memory.mk */
     .big_endian = 1,
 };
 
@@ -569,8 +569,8 @@ static const arch_update_params_t mips_r5900_params = {
     .trampoline = mips_r5900_trampoline,
     .trampoline_size = 256,
     .size_patch_offset = 0xF8,
-    .load_addr = 0x00100000,
-    .loader_base = 0x80000280,
+    .load_addr = PS2_DEFAULT_LOAD_ADDR, /* 0x00100000 */
+    .loader_base = PS2_LOADER_BASE,     /* 0x80000280, from mk/memory.mk */
     .big_endian = 0,
 };
 

@@ -65,8 +65,8 @@ extern uint8_t _binary_ps2_load_ip_image_bin_end[];
 /* Two ways to address the same RAM:
  *   KSEG1 writes bypass the data cache, so the copy reaches RAM directly.
  *   KSEG0 executes through the normal cached instruction path. */
-#define DEST_KSEG0 ((uint32_t)PS2_INNER_LOADER_BASE)
-#define DEST_KSEG1 (((uint32_t)PS2_INNER_LOADER_BASE & 0x1FFFFFFF) | 0xA0000000)
+#define DEST_KSEG0 ((uint32_t)PS2_LOADER_BASE)
+#define DEST_KSEG1 (((uint32_t)PS2_LOADER_BASE & 0x1FFFFFFF) | 0xA0000000)
 
 void main(void) {
     uint32_t blob_size = (uint32_t)(_binary_ps2_load_ip_image_bin_end - _binary_ps2_load_ip_image_bin_start);

@@ -55,8 +55,7 @@ GC_ASFLAGS := -mcpu=750 -meabi -Wa,-mregnames
 HOSTCC ?= $(HOST_CC_DEFAULT)
 HOST_CFLAGS ?= -D_GNU_SOURCE -std=c11 -O2 -Wall -Wextra
 
-# GC loader memory layout (from mk/memory.mk)
-GC_LOADER_BASE := $(shell printf '0x%08x' $$(($(GC_MEM1_TOP) - $(GC_LOADER_SIZE))))
+# GC_LOADER_BASE comes from mk/memory.mk (included above).
 
 # ---------- Local build directory ----------
 
