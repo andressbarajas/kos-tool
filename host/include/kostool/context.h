@@ -126,6 +126,7 @@ typedef struct kostool_context {
     /* Remote loader info (populated during transport init/handshake) */
     char     remote_version_string[128];
     uint32_t remote_capabilities;
+    uint32_t kostool_capabilities; /* KOSTOOL_CAP_* announced to the loader */
     int      target_big_endian; /* 0 = LE (DC/SH4), 1 = BE (GC/PPC) */
 
     /* Firmware update */

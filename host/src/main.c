@@ -350,6 +350,7 @@ int main(int argc, char *argv[]) {
             break;
         case 'g':
             ctx.gdb_enabled = 1;
+            ctx.kostool_capabilities |= KOSTOOL_CAP_GDB_ACTIVE;
             break;
         case 'e':
             ctx.speedhack = 1;
