@@ -50,26 +50,24 @@ $(BUILDDIR):
 # copy of the same title-id (e.g. `make dist-wii WII_WAD_TITLE_VER=2`).
 
 # ---------- Toolchain checks ----------
+# Tool prefixes (DC_PREFIX, GC_PREFIX, PS2_PREFIX, PS2_IOP_PREFIX) and bindirs
+# come from mk/toolchains.mk (included above).
 
-DC_PREFIX    := sh-elf-
 DC_CC        := $(DC_TOOLCHAIN)/$(DC_PREFIX)gcc
 DC_AR        := $(DC_TOOLCHAIN)/$(DC_PREFIX)ar
 DC_OBJCOPY   := $(DC_TOOLCHAIN)/$(DC_PREFIX)objcopy
 DC_SIZE      := $(DC_TOOLCHAIN)/$(DC_PREFIX)size
 
-GC_PREFIX    := powerpc-eabi-
 GC_CC        := $(GC_TOOLCHAIN)/$(GC_PREFIX)gcc
 GC_AR        := $(GC_TOOLCHAIN)/$(GC_PREFIX)ar
 GC_OBJCOPY   := $(GC_TOOLCHAIN)/$(GC_PREFIX)objcopy
 GC_SIZE      := $(GC_TOOLCHAIN)/$(GC_PREFIX)size
 
-PS2_PREFIX   := mips64r5900el-ps2-elf-
 PS2_CC       := $(PS2_EE_TOOLCHAIN)/$(PS2_PREFIX)gcc
 PS2_AR       := $(PS2_EE_TOOLCHAIN)/$(PS2_PREFIX)ar
 PS2_OBJCOPY  := $(PS2_EE_TOOLCHAIN)/$(PS2_PREFIX)objcopy
 PS2_SIZE     := $(PS2_EE_TOOLCHAIN)/$(PS2_PREFIX)size
 
-PS2_IOP_PREFIX    := mipsel-elf-
 PS2_IOP_CC        := $(PS2_IOP_TOOLCHAIN)/$(PS2_IOP_PREFIX)gcc
 
 define require_host_tool

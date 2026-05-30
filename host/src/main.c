@@ -245,7 +245,7 @@ int main(int argc, char *argv[]) {
 
     uint64_t diagnostics_start_usec = ctx.time_ops->time_usec();
 
-    /* Load config file (sets addr2line defaults) */
+    /* Load config file */
     config_load(&ctx);
 
     char command = 0;
@@ -484,6 +484,9 @@ int main(int argc, char *argv[]) {
     ctx.target_big_endian = (strncmp(ctx.remote_version_string, "gc-load-", 8) == 0 ||
                              strncmp(ctx.remote_version_string, "gcload-", 7) == 0 ||
                              strncmp(ctx.remote_version_string, "wii-load-", 9) == 0);
+
+    /* Console identity drives arch-specific tooling (e.g. which addr2line). */
+    ctx.console_type = detect_console(ctx.remote_version_string);
 
     /* Firmware update if requested */
     if(!ctx.skip_update || ctx.firmware_path) {

@@ -12,6 +12,17 @@ struct platform_socket_ops;
 struct platform_fs_ops;
 struct platform_time_ops;
 
+/* Console identity, derived from the loader's version string. */
+typedef enum {
+    CONSOLE_UNKNOWN,
+    CONSOLE_DC,
+    CONSOLE_GC,
+    CONSOLE_PS2,
+    CONSOLE_WII
+} console_type_t;
+
+console_type_t detect_console(const char *name);
+
 typedef struct kostool_context {
     /* Transport layer */
     const struct transport_ops *transport;
@@ -108,10 +119,11 @@ typedef struct kostool_context {
     /* Program execution state */
     int program_executed;
 
-    /* addr2line (configured via kos-tool.cfg) */
+    /* addr2line (paths derived from the toolchain location in config_load) */
     const char *loaded_binary_path;
-    char sh4_addr2line[512];        /* Full path to SH4 addr2line (from config) */
-    char ppc_addr2line[512];        /* Full path to PPC addr2line (from config) */
+    char sh4_addr2line[512];        /* Full path to SH4 addr2line  (DC) */
+    char ppc_addr2line[512];        /* Full path to PPC addr2line  (GC/Wii) */
+    char mips_addr2line[512];       /* Full path to MIPS addr2line (PS2) */
 
     /* Target profiles (configured via kos-tool.cfg) */
     char config_path[512];
@@ -127,7 +139,8 @@ typedef struct kostool_context {
     char     remote_version_string[128];
     uint32_t remote_capabilities;
     uint32_t kostool_capabilities; /* KOSTOOL_CAP_* announced to the loader */
-    int      target_big_endian; /* 0 = LE (DC/SH4), 1 = BE (GC/PPC) */
+    int      target_big_endian;  /* 0 = LE (DC/SH4, PS2/MIPS), 1 = BE (GC/Wii PPC) */
+    console_type_t console_type; /* DC/GC/PS2/WII, from the version string */
 
     /* Firmware update */
     int skip_update;

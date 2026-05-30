@@ -82,7 +82,7 @@ via the generated `wii-load-ip.dol`.
 ### Host Tool Enhancements
 * **Automatic transport detection** — `kos-tool` infers serial vs network from `-t <device|ip|dhcp>`
 * **Network DHCP discovery** — `-t dhcp` broadcasts on the LAN to find consoles (tries both legacy port 31313 and new port 53535)
-* **Automatic addr2line integration** — when the uploaded file is an ELF and `kos-tool.cfg` points at valid `addr2line` binaries, console stack addresses are annotated automatically for SH4 or PPC
+* **Automatic addr2line integration** — when the uploaded file is an ELF, console stack addresses are annotated automatically for SH4 (DC), PPC (GC/Wii), or MIPS (PS2). The `addr2line` path is derived from the toolchain location (`$DC_TOOLCHAIN`/`$GC_TOOLCHAIN`/`$PS2_EE_TOOLCHAIN`, else the build-time default)
 * **RTC sync** — `-w` flag sets the console's real-time clock to the host's local time
 * **Program arguments** — `-- arg1 arg2` passes arguments to the loaded program
 * **Performance diagnostics** — `-P` / `--diag` prints transfer timing and recovery statistics

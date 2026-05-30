@@ -25,7 +25,36 @@
 
 #define CONFIG_FILENAME "kos-tool.cfg"
 
-static const char default_config[] = 
+/* addr2line defaults + tool prefixes are normally injected by the Makefile
+ * from mk/toolchains.mk.  These fallbacks only apply to ad-hoc builds that
+ * don't pass them. */
+
+#ifndef SH4_TOOL_PREFIX
+#define SH4_TOOL_PREFIX "sh-elf-"
+#endif
+
+#ifndef DEFAULT_SH4_ADDR2LINE
+#define DEFAULT_SH4_ADDR2LINE "/opt/toolchains/dc/sh-elf/bin/sh-elf-addr2line"
+#endif
+
+#ifndef PPC_TOOL_PREFIX
+#define PPC_TOOL_PREFIX "powerpc-eabi-"
+#endif
+
+#ifndef DEFAULT_PPC_ADDR2LINE
+#define DEFAULT_PPC_ADDR2LINE "/opt/toolchains/gc/powerpc-eabi/bin/powerpc-eabi-addr2line"
+#endif
+
+#ifndef MIPS_TOOL_PREFIX
+#define MIPS_TOOL_PREFIX "mips64r5900el-ps2-elf-"
+#endif
+
+#ifndef DEFAULT_MIPS_ADDR2LINE
+#define DEFAULT_MIPS_ADDR2LINE "/opt/toolchains/ps2/mips-elf/bin/mips64r5900el-ps2-elf-addr2line"
+#endif
+
+
+static const char default_config[] =
     "# kos-tool configuration\n"
     "#\n"
     "# Target profiles for -T <profile>.\n"
@@ -37,13 +66,7 @@ static const char default_config[] =
     "# gc_ip = dhcp\n"
     "# ps2_ip = dhcp\n"
     "# wii_ip = dhcp\n"
-    "# serial_baud = 1562500\n"
-    "\n"
-    "# Full paths to addr2line for each target architecture.\n"
-    "# Used for exception register decoding and address annotation.\n"
-    "\n"
-    "sh4_addr2line = /opt/toolchains/dc/sh-elf/bin/sh-elf-addr2line\n"
-    "ppc_addr2line = /opt/toolchains/gc/powerpc-eabi/bin/powerpc-eabi-addr2line\n";
+    "# serial_baud = 1562500\n";
 
 /* Get the directory containing the kos-tool binary. */
 static int get_executable_dir(char *buf, size_t size) {
@@ -98,11 +121,8 @@ static void trim_whitespace(char *s) {
 }
 
 static void apply_config_value(struct kostool_context *ctx, const char *key, const char *value) {
-    if(strcmp(key, "sh4_addr2line") == 0) {
-        compat_str_copy(ctx->sh4_addr2line, sizeof(ctx->sh4_addr2line), value);
-    } else if(strcmp(key, "ppc_addr2line") == 0) {
-        compat_str_copy(ctx->ppc_addr2line, sizeof(ctx->ppc_addr2line), value);
-    } else if(strcmp(key, "dc_serial") == 0) {
+    /* addr2line paths are derived (see config_load), not config-file keys. */
+    if(strcmp(key, "dc_serial") == 0) {
         compat_str_copy(ctx->dc_serial, sizeof(ctx->dc_serial), value);
     } else if(strcmp(key, "gc_serial") == 0) {
         compat_str_copy(ctx->gc_serial, sizeof(ctx->gc_serial), value);
@@ -122,15 +142,30 @@ static void apply_config_value(struct kostool_context *ctx, const char *key, con
     /* Unknown keys are silently ignored for forward compat */
 }
 
+/* Build "<bindir>/<prefix>addr2line" from $envvar if it is set in the tool's
+ * runtime environment, else fall back to the build-time default (which itself
+ * was derived from mk/toolchains.mk). */
+static void derive_addr2line(char *dst, size_t dstsz, const char *envvar, const char *prefix,
+                             const char *fallback) {
+    const char *base = getenv(envvar);
+    if(base && base[0])
+        snprintf(dst, dstsz, "%s/%saddr2line", base, prefix);
+    else
+        compat_str_copy(dst, dstsz, fallback);
+}
+
 void config_load(struct kostool_context *ctx) {
     char dir[4096];
     char path[4096];
 
-    /* Set defaults first (full paths) */
-    compat_str_copy(ctx->sh4_addr2line, sizeof(ctx->sh4_addr2line),
-                    "/opt/toolchains/dc/sh-elf/bin/sh-elf-addr2line");
-    compat_str_copy(ctx->ppc_addr2line, sizeof(ctx->ppc_addr2line),
-                    "/opt/toolchains/gc/powerpc-eabi/bin/powerpc-eabi-addr2line");
+    /* addr2line paths are derived, not user-configurable: $*_TOOLCHAIN env var
+     * if present, else the build-time default (from mk/toolchains.mk). */
+    derive_addr2line(ctx->sh4_addr2line, sizeof(ctx->sh4_addr2line), "DC_TOOLCHAIN", SH4_TOOL_PREFIX,
+                     DEFAULT_SH4_ADDR2LINE);
+    derive_addr2line(ctx->ppc_addr2line, sizeof(ctx->ppc_addr2line), "GC_TOOLCHAIN", PPC_TOOL_PREFIX,
+                     DEFAULT_PPC_ADDR2LINE);
+    derive_addr2line(ctx->mips_addr2line, sizeof(ctx->mips_addr2line), "PS2_EE_TOOLCHAIN", MIPS_TOOL_PREFIX,
+                     DEFAULT_MIPS_ADDR2LINE);
 
     if(get_executable_dir(dir, sizeof(dir)) != 0)
         return;

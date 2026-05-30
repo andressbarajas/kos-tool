@@ -2,6 +2,7 @@
 
 ROOT ?= $(CURDIR)/..
 include $(ROOT)/mk/version.mk
+include $(ROOT)/mk/toolchains.mk
 
 BUILDDIR    := build
 MINILZO_DIR := $(ROOT)/third_party/minilzo
@@ -65,6 +66,17 @@ CFLAGS  := -O2 -Wall -Wextra -std=c11 \
 # full rebuild on any header touch — kept for now because it's harmless once
 # .d files exist (auto-deps are a strict subset).
 CFLAGS  += -MMD -MP
+
+# addr2line defaults derived from the cross-toolchain config (mk/toolchains.mk),
+# so they track DC_TOOLCHAIN/GC_TOOLCHAIN/PS2_EE_TOOLCHAIN (CLI > env > default).
+# The *_TOOL_PREFIX defines let config.c rebuild the path from $*_TOOLCHAIN set
+# in the tool's own runtime environment.
+CFLAGS  += -DDEFAULT_SH4_ADDR2LINE=\"$(DC_TOOLCHAIN)/$(DC_PREFIX)addr2line\" \
+           -DDEFAULT_PPC_ADDR2LINE=\"$(GC_TOOLCHAIN)/$(GC_PREFIX)addr2line\" \
+           -DDEFAULT_MIPS_ADDR2LINE=\"$(PS2_EE_TOOLCHAIN)/$(PS2_PREFIX)addr2line\" \
+           -DSH4_TOOL_PREFIX=\"$(DC_PREFIX)\" \
+           -DPPC_TOOL_PREFIX=\"$(GC_PREFIX)\" \
+           -DMIPS_TOOL_PREFIX=\"$(PS2_PREFIX)\"
 
 LDFLAGS := $(LIBELF_LDFLAGS) $(EXTRA_LDLIBS)
 

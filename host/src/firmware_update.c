@@ -65,17 +65,9 @@ const uint8_t firmware_wii_ip_data[] = {0};
 const uint32_t firmware_wii_ip_size = 0;
 #endif
 
-/* ===== Console detection ===== */
+/* ===== Console detection (console_type_t declared in kostool/context.h) ===== */
 
-typedef enum {
-    CONSOLE_UNKNOWN,
-    CONSOLE_DC,
-    CONSOLE_GC,
-    CONSOLE_PS2,
-    CONSOLE_WII
-} console_type_t;
-
-static console_type_t detect_console(const char *name) {
+console_type_t detect_console(const char *name) {
     if(strncmp(name, "dc-load-", 8) == 0 || strncmp(name, "dcload-", 7) == 0)
         return CONSOLE_DC;
     if(strncmp(name, "gc-load-", 8) == 0)

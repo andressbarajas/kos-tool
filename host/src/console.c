@@ -302,10 +302,26 @@ static int write_full(int fd, const uint8_t *data, uint32_t count) {
     return (int)off;
 }
 
+/* Pick the addr2line matching the running console's architecture. */
+static const char *addr2line_for_console(const kostool_context_t *ctx) {
+    switch(ctx->console_type) {
+    case CONSOLE_DC:
+        return ctx->sh4_addr2line;
+    case CONSOLE_GC:
+    case CONSOLE_WII:
+        return ctx->ppc_addr2line;
+    case CONSOLE_PS2:
+        return ctx->mips_addr2line;
+    default:
+        /* Unrecognized loader: fall back to the endianness heuristic. */
+        return ctx->target_big_endian ? ctx->ppc_addr2line : ctx->sh4_addr2line;
+    }
+}
+
 /* Write console output, annotating stack trace addresses with addr2line.
  * Handles line buffering for data that doesn't end on a line boundary. */
 static int console_write(kostool_context_t *ctx, int fd, const uint8_t *data, uint32_t count) {
-    const char *addr2line_cmd = ctx->target_big_endian ? ctx->ppc_addr2line : ctx->sh4_addr2line;
+    const char *addr2line_cmd = addr2line_for_console(ctx);
 
     /* Check addr2line availability once, then cache the result */
     if(addr2line_available < 0) {
