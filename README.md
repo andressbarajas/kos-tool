@@ -74,6 +74,7 @@ via the generated `wii-load-ip.dol`.
 ### Wii Support
 * **Wii network loader** — Ethernet transport over the Wii LAN Adapter (RVL-015) and, experimentally, the internal Wi-Fi, both via the console's IOS network stack
 * **Homebrew Channel launch** — `wii-load-ip` ships as a `.dol` that boots from the Homebrew Channel
+* **Installable System Menu channel** — `make disc-wii` packs the loader into a Wii channel WAD that installs to the System Menu and launches like a retail channel (no Homebrew Channel required)
 * **Shared protocol** — Wii uses the same network upload/download command protocol as the other consoles
 * **Lossy-link resilience** — the syscall path adds opt-in request sequencing with host-side reply dedup and bounded retransmit, so a dropped request or reply recovers instead of wedging — important on the experimental Wi-Fi path
 * **DHCP support** — IOS handles address acquisition; the loader displays the current lease
@@ -94,7 +95,7 @@ via the generated `wii-load-ip.dol`.
 
 ### Build System
 * **Simple Makefiles** — no CMake dependency; just `make` with the cross-compiler toolchains in PATH
-* **Disc image generation** — `make disc` produces bootable CDI (Dreamcast) and ISO (GameCube) disc images using in-tree image builders
+* **Disc image generation** — `make disc` produces bootable CDI (Dreamcast) and ISO (GameCube) disc images, plus an installable Wii channel WAD, using in-tree image builders
 * **Example programs** — freestanding test programs (console, rainbow, syscall, CDFS, exception, maple, etc.) built automatically
 
 ## Features
@@ -143,6 +144,7 @@ build/
 ├── gc-load-ip.{elf,bin}      # GameCube network firmware
 ├── ps2-load-ip.elf           # PlayStation 2 network firmware
 ├── wii-load-ip.{elf,bin,dol} # Wii network firmware (.dol boots from Homebrew Channel)
+├── wii-load-ip.wad           # Wii installable channel (built by `make disc-wii`/`make disc`)
 └── examples/
     ├── dc/                   # Dreamcast example ELFs
     ├── gc/                   # GameCube example ELFs
@@ -158,9 +160,10 @@ make gc       # GameCube firmware + examples + rebuild kos-tool
 make ps2      # PlayStation 2 firmware + examples + rebuild kos-tool
 make wii      # Wii firmware + examples + rebuild kos-tool
 make host     # Host tool only (embeds whatever firmware bins exist)
-make disc     # Bootable disc images (CDI for DC, ISO for GC)
+make disc     # Delivery artifacts: CDI (DC), ISO (GC), and Wii channel WAD
 make disc-dc  # Dreamcast-only bootable CDI images
 make disc-gc  # GameCube-only bootable ISO images
+make disc-wii # Wii-only installable channel WAD
 make gc-dol   # GameCube DOL files only (no ISO)
 ```
 
@@ -379,9 +382,11 @@ To debug Dreamcast programs remotely:
 ```
 kos-tool/
 ├── client/              # Console-side firmware
-│   ├── common/          # Shared client code (commands, main loop)
-│   ├── serial/          # Serial transport
-│   ├── network/         # Network transport
+│   ├── common/          # Shared client code
+│   │   ├── core/        # Main loop, commands, screensaver, CDFS
+│   │   ├── serial/      # Serial transport
+│   │   ├── network/     # Network transport
+│   │   └── drivers/     # Shared device drivers
 │   ├── include/         # Client headers
 │   ├── dreamcast/       # DC platform (SCIF, video, BBA/LA drivers)
 │   ├── gamecube/        # GC platform (USBGecko, EXI, BBA/ENC28J60/W5500 drivers)
@@ -413,6 +418,9 @@ kos-tool is derived from the original dcload by Andrew Kieschnick (ADK/Napalm), 
 * **Andy Barajas** (BBHoodsta) — kos-tool unification, GameCube, PlayStation 2, and Wii support
 * **Paul Cercueil** (pcercuei) - Testing, feedback, bug fixes
 * **Ruslan Rostovtsev** (DC-SWAT) - W5500 driver
+* **Extrems**, **emukidid** - Swiss
+* **fail0verflow** - Homebrew Channel
+* **fjtrujy** - PS2Link
 
 See the legacy [dcload-serial](https://github.com/KallistiOS/dcload-serial) and [dcload-ip](https://github.com/KallistiOS/dcload-ip) repositories for the full history of contributors.
 
