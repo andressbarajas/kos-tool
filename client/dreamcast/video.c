@@ -38,7 +38,7 @@ void __call_builtin_sh_set_fpscr(unsigned int value) {
 void setup_video(uint32_t mode, uint32_t bg_color) {
     (void)mode;
 #ifdef FORCE_VGA
-    init_video(0, 1);  /* Naomi/System SP: skip cable detect, force VGA */
+    init_video(0, 1); /* Naomi/System SP: skip cable detect, force VGA */
 #else
     init_video(check_cable(), 1);
 #endif
@@ -50,7 +50,7 @@ void setup_video(uint32_t mode, uint32_t bg_color) {
 void clear_lines(unsigned int y, unsigned int n, unsigned int c) {
     unsigned short *vmem = (unsigned short *)(0xa5000000 + y * 640 * 2);
     n = n * 640;
-    while (n-- > 0)
+    while(n-- > 0)
         *vmem++ = c;
 }
 
@@ -63,7 +63,7 @@ char *exception_code_to_string(unsigned int expevt) {
 /* uint_to_string: hex conversion, used by exception.S via address table */
 void uint_to_string(unsigned int value, unsigned char *buf) {
     char hexdigit[17] = "0123456789abcdef";
-    for (int i = 7; i >= 0; i--) {
+    for(int i = 7; i >= 0; i--) {
         buf[i] = hexdigit[value & 0x0f];
         value >>= 4;
     }

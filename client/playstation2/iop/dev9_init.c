@@ -41,14 +41,14 @@
 #define SSBUS_R_1420  (*(volatile unsigned int *)0xBF801420)
 
 /* Per-silicon SSBUS_R_1418 values. */
-#define SSBUS_R_1420_VAL          0x00051011u
-#define SSBUS_R_1418_VAL_CXD9566  0x001A00BBu
-#define SSBUS_R_1418_VAL_CXD9611  0xE01A3043u
-#define SSBUS_R_141C_VAL          0xEF1A3043u
+#define SSBUS_R_1420_VAL          0x00051011
+#define SSBUS_R_1418_VAL_CXD9566  0x001A00BB
+#define SSBUS_R_1418_VAL_CXD9611  0xE01A3043
+#define SSBUS_R_141C_VAL          0xEF1A3043
 
 /* DEV9_R_REV upper-nibble values that identify the controller chip. */
-#define DEV9C_REV_CXD9566  0x2u
-#define DEV9C_REV_CXD9611  0x3u
+#define DEV9C_REV_CXD9566  0x2
+#define DEV9C_REV_CXD9611  0x3
 
 /* SPEED chip on the other side of SSBUS bus 1.
  * EE-side base 0x10000000 = IOP KSEG1 alias 0xB0000000. */
@@ -58,59 +58,57 @@
 #define SPD_R_INTR_STAT (*(volatile unsigned short *)0xB0000028)
 #define SPD_R_INTR_MASK (*(volatile unsigned short *)0xB000002A)
 
-#define SPEED_ATTR_BASE      0xB0000000u
-#define SPEED_CIS_BYTES      0x800u
-#define SPEED_MANFID_ID      0x00F1u
-#define SPEED_CARD_ID        0x5300u
+#define SPEED_ATTR_BASE      0xB0000000
+#define SPEED_CIS_BYTES      0x800
+#define SPEED_MANFID_ID      0x00F1
+#define SPEED_CARD_ID        0x5300
 
-#define CISTPL_NULL          0x00u
-#define CISTPL_MANFID        0x20u
-#define CISTPL_END           0xFFu
+#define CISTPL_NULL          0x00
+#define CISTPL_MANFID        0x20
+#define CISTPL_END           0xFF
 
-static unsigned char speed_attr_u8(unsigned int cis_off)
-{
+static unsigned char speed_attr_u8(unsigned int cis_off) {
     return *(volatile unsigned char *)(SPEED_ATTR_BASE + (cis_off << 1));
 }
 
-static unsigned short speed_attr_u16(unsigned int cis_off)
-{
-    return (unsigned short)(speed_attr_u8(cis_off) |
-                            ((unsigned short)speed_attr_u8(cis_off + 1u) << 8));
+static unsigned short speed_attr_u16(unsigned int cis_off) {
+    return (unsigned short)(speed_attr_u8(cis_off) | ((unsigned short)speed_attr_u8(cis_off + 1) << 8));
 }
 
-static int speed_cis_find_manfid(unsigned int *packed_id, unsigned int *walk_diag)
-{
-    unsigned int off = 0u;
-    unsigned int tuples = 0u;
+static int speed_cis_find_manfid(unsigned int *packed_id, unsigned int *walk_diag) {
+    unsigned int off = 0;
+    unsigned int tuples = 0;
 
-    *packed_id = (unsigned int)speed_attr_u8(0u) |
-                 ((unsigned int)speed_attr_u8(1u) << 8) |
-                 ((unsigned int)speed_attr_u8(2u) << 16) |
-                 ((unsigned int)speed_attr_u8(3u) << 24);
+    *packed_id = (unsigned int)speed_attr_u8(0) | ((unsigned int)speed_attr_u8(1) << 8) |
+                 ((unsigned int)speed_attr_u8(2) << 16) | ((unsigned int)speed_attr_u8(3) << 24);
 
-    while (off < SPEED_CIS_BYTES) {
+    while(off < SPEED_CIS_BYTES) {
         unsigned char tag = speed_attr_u8(off++);
         unsigned char len;
         unsigned int body;
         unsigned int next;
 
-        if (tag == CISTPL_NULL) continue;
-        if (tag == CISTPL_END || off >= SPEED_CIS_BYTES) break;
+        if(tag == CISTPL_NULL)
+            continue;
+        if(tag == CISTPL_END || off >= SPEED_CIS_BYTES)
+            break;
 
         len = speed_attr_u8(off++);
-        if (len == CISTPL_END) break;
+        if(len == CISTPL_END)
+            break;
 
         body = off;
         next = body + (unsigned int)len;
-        if (next > SPEED_CIS_BYTES) break;
+        if(next > SPEED_CIS_BYTES)
+            break;
 
         tuples++;
-        if (tag == CISTPL_MANFID && len >= 4u) {
+        if(tag == CISTPL_MANFID && len >= 4) {
             unsigned short manf = speed_attr_u16(body);
-            unsigned short card = speed_attr_u16(body + 2u);
+            unsigned short card = speed_attr_u16(body + 2);
             *packed_id = ((unsigned int)manf << 16) | (unsigned int)card;
-            if (manf == SPEED_MANFID_ID && card == SPEED_CARD_ID) {
-                *walk_diag = (tuples << 16) | (off & 0xFFFFu);
+            if(manf == SPEED_MANFID_ID && card == SPEED_CARD_ID) {
+                *walk_diag = (tuples << 16) | (off & 0xFFFF);
                 return 1;
             }
         }
@@ -118,7 +116,7 @@ static int speed_cis_find_manfid(unsigned int *packed_id, unsigned int *walk_dia
         off = next;
     }
 
-    *walk_diag = (tuples << 16) | (off & 0xFFFFu);
+    *walk_diag = (tuples << 16) | (off & 0xFFFF);
     return 0;
 }
 
@@ -133,31 +131,27 @@ static int speed_cis_find_manfid(unsigned int *packed_id, unsigned int *walk_dia
 #define MBOX_RESULT_UNSUPPORTED_REV (-6)
 #define MBOX_RESULT_NO_SPEED        (-7)
 
-static __attribute__((noinline, noipa))
-void dev9_publish_word(volatile unsigned int *dst, unsigned int value)
-{
+static __attribute__((noinline, noipa)) 
+void dev9_publish_word(volatile unsigned int *dst, unsigned int value) {
     *dst = value;
-    __asm__ volatile ("" ::: "memory");
+    __asm__ volatile("" ::: "memory");
     (void)*dst;
-    __asm__ volatile ("" ::: "memory");
+    __asm__ volatile("" ::: "memory");
 }
 
-static __attribute__((noinline, noipa))
-void dev9_publish_result(volatile int *dst, int value)
-{
+static __attribute__((noinline, noipa)) 
+void dev9_publish_result(volatile int *dst, int value) {
     *dst = value;
-    __asm__ volatile ("" ::: "memory");
+    __asm__ volatile("" ::: "memory");
     (void)*dst;
-    __asm__ volatile ("" ::: "memory");
+    __asm__ volatile("" ::: "memory");
 }
 
 /* Force noinline so we test the inter-function jal/HI16+LO16 path.
  * If apply_lmb_patch() ran successfully on the bootstrap side, the
  * relocations get applied at IRX load time and this works. If it
  * fails, see the diagnostic prompt for what's broken. */
-__attribute__((noinline))
-int dev9_init_run(struct iop_mailbox *mbox)
-{
+__attribute__((noinline)) int dev9_init_run(struct iop_mailbox *mbox) {
     /* Track which DEV9 host adapter we're talking to:
      *   is_pcmcia_slot = 1 → CXD9566 (early Japan-only PS2s with
      *                        a literal PCMCIA slot — SCPH-10000/15000/
@@ -191,7 +185,7 @@ int dev9_init_run(struct iop_mailbox *mbox)
     /* Sentinels are written to mbox->cmd via the IOP uncached alias
      * before each potentially-blocking access. If the IOP hangs, the
      * EE-side timeout dump shows the last sentinel reached. */
-    dev9_publish_word(&mbox->cmd, 0xBA5E0000u); /* entered dev9_init_run */
+    dev9_publish_word(&mbox->cmd, 0xBA5E0000); /* entered dev9_init_run */
 
     /* No explicit Phase A controller pre-init.
      *
@@ -222,7 +216,7 @@ int dev9_init_run(struct iop_mailbox *mbox)
      * Upper nibble: 0x2 = CXD9566, 0x3 = CXD9611.
      * ---------------------------------------------------------- */
     rev = DEV9_R_146E;
-    gen = ((unsigned int)rev >> 4) & 0xFu;
+    gen = ((unsigned int)rev >> 4) & 0xF;
     mbox->rev = rev;
     /* Stash the rev in map so the DON line's M= column shows it
      * (and presence keeps the real DEV9_R_1462 card-status read
@@ -230,7 +224,7 @@ int dev9_init_run(struct iop_mailbox *mbox)
      * also gets the rev so it's still visible in P=. */
     mbox->map = (unsigned int)rev;
     mbox->presence = (unsigned int)rev;
-    dev9_publish_word(&mbox->cmd, 0xBA5E0001u); /* REV read OK */
+    dev9_publish_word(&mbox->cmd, 0xBA5E0001); /* REV read OK */
 
     /* ------------------------------------------------------
      * SSBUS bus 1 timing (retail dev9.irx :0x1494 / :0x1830,
@@ -240,21 +234,21 @@ int dev9_init_run(struct iop_mailbox *mbox)
      * to the controller silicon. Order: 0x1420, 0x1418, 0x141C.
      * ------------------------------------------------------ */
     SSBUS_R_1420 = SSBUS_R_1420_VAL;
-    dev9_publish_word(&mbox->cmd, 0xBA5E0002u);
+    dev9_publish_word(&mbox->cmd, 0xBA5E0002);
 
-    if (gen == DEV9C_REV_CXD9566) {
+    if(gen == DEV9C_REV_CXD9566) {
         SSBUS_R_1418 = SSBUS_R_1418_VAL_CXD9566;
         is_pcmcia_slot = 1;
-    } else if (gen == DEV9C_REV_CXD9611) {
+    } else if(gen == DEV9C_REV_CXD9611) {
         SSBUS_R_1418 = SSBUS_R_1418_VAL_CXD9611;
     } else {
         dev9_publish_result(&mbox->result, MBOX_RESULT_UNSUPPORTED_REV);
         return -6;
     }
-    dev9_publish_word(&mbox->cmd, 0xBA5E0003u);
+    dev9_publish_word(&mbox->cmd, 0xBA5E0003);
 
     SSBUS_R_141C = SSBUS_R_141C_VAL;
-    dev9_publish_word(&mbox->cmd, 0xBA5E0004u); /* SSBUS init done */
+    dev9_publish_word(&mbox->cmd, 0xBA5E0004); /* SSBUS init done */
 
     /* ----------------------------------------------------------
      * Card-status read — DEV9_R_1462 should now complete.
@@ -263,20 +257,20 @@ int dev9_init_run(struct iop_mailbox *mbox)
      * ---------------------------------------------------------- */
     presence = DEV9_R_1462;
     mbox->presence = presence;
-    dev9_publish_word(&mbox->cmd, 0xBA5E0005u); /* card-status read OK */
+    dev9_publish_word(&mbox->cmd, 0xBA5E0005); /* card-status read OK */
 
     /* Wake-up sequence — re-added to force dev9_init_run to stay
      * a separate (non-inlined) function so we can byte-compare
      * elf2irx vs iopfixup on the cross-function-call case. */
     power = DEV9_R_146C;
     mbox->power = (unsigned int)power;
-    if (!(power & 0x4u)) {
+    if(!(power & 0x4)) {
         DEV9_R_1466 = 1;
         DEV9_R_1464 = 0;
         v = DEV9_R_1464;
         DEV9_R_1460 = v;
     }
-    dev9_publish_word(&mbox->cmd, 0xBA5E0006u); /* DEV9C bring-up done */
+    dev9_publish_word(&mbox->cmd, 0xBA5E0006); /* DEV9C bring-up done */
 
     /* ----------------------------------------------------------
      * Post-SSBUS DEV9C controller setup that unlocks SPEED-chip
@@ -304,7 +298,7 @@ int dev9_init_run(struct iop_mailbox *mbox)
      * Gated on is_pcmcia_slot — this whole sequence is part of
      * the CXD9566 PCMCIA-slot bring-up.  Expansion-bay (CXD9611)
      * doesn't need any of these writes per ps2dev9.irx :0x600+. */
-    if (is_pcmcia_slot) {
+    if(is_pcmcia_slot) {
         DEV9_R_1474 = 0;
 
         DEV9_R_147E = 1;
@@ -313,7 +307,7 @@ int dev9_init_run(struct iop_mailbox *mbox)
         DEV9_R_147C = 1;
         v = DEV9_R_147C;
         DEV9_R_147A = v;
-        dev9_publish_word(&mbox->cmd, 0xBA5E000Bu); /* SPEED-routing unlock done */
+        dev9_publish_word(&mbox->cmd, 0xBA5E000B); /* SPEED-routing unlock done */
     }
 
     /* Bay power-on.
@@ -339,29 +333,29 @@ int dev9_init_run(struct iop_mailbox *mbox)
 
     /* Step A: 0x146C |= 0x4 (and clear bit 0) */
     v = DEV9_R_146C;
-    v = (v & 0xFFFAu) | 0x4u;
+    v = (v & 0xFFFA) | 0x4;
     DEV9_R_146C = v;
-    for (delay_i = 0; delay_i < 500000u; delay_i++) { }
+    for (delay_i = 0; delay_i < 500000; delay_i++) { }
 
     /* Step B: 0x1460 |= 0x1 */
     v = DEV9_R_1460;
-    v = v | 0x1u;
+    v = v | 0x1;
     DEV9_R_1460 = v;
 
     /* Step C: 0x146C |= 0x1 */
     v = DEV9_R_146C;
-    v = v | 0x1u;
+    v = v | 0x1;
     DEV9_R_146C = v;
-    for (delay_i = 0; delay_i < 500000u; delay_i++) { }
+    for (delay_i = 0; delay_i < 500000; delay_i++) { }
 
-    dev9_publish_word(&mbox->cmd, 0xBA5E000Cu); /* bay power-on done */
+    dev9_publish_word(&mbox->cmd, 0xBA5E000C); /* bay power-on done */
 
     /* CIS scan + per-silicon SSBUS-timing dance — CXD9566 PCMCIA
      * only. Retail ps2dev9.irx :0x74c writes SSBUS_R_1418 = 9566
      * timing before scanning attribute memory; on EXPBAY (CXD9611)
      * the scan is skipped, so we keep the already-set 9611 timing
      * and skip the walker. */
-    if (is_pcmcia_slot) {
+    if(is_pcmcia_slot) {
         SSBUS_R_1418 = SSBUS_R_1418_VAL_CXD9566;
 
         /* Walk the public PC Card CIS tuple chain in attribute memory.
@@ -370,17 +364,17 @@ int dev9_init_run(struct iop_mailbox *mbox)
         unsigned int packed_id;
         unsigned int walk_diag;
 
-        if (!speed_cis_find_manfid(&packed_id, &walk_diag)) {
+        if(!speed_cis_find_manfid(&packed_id, &walk_diag)) {
             mbox->presence = packed_id;
             mbox->map = walk_diag;
             dev9_publish_result(&mbox->result, MBOX_RESULT_NO_SPEED);
-            dev9_publish_word(&mbox->cmd, 0xBA5E000Eu); /* CIS walk: F15300 not found */
+            dev9_publish_word(&mbox->cmd, 0xBA5E000E); /* CIS walk: F15300 not found */
             return -7;
         }
 
         mbox->presence = packed_id;        /* 0x00F15300 */
         mbox->map = walk_diag;             /* high=count, low=CIS offset */
-        dev9_publish_word(&mbox->cmd, 0xBA5E000Du); /* CIS walk OK */
+        dev9_publish_word(&mbox->cmd, 0xBA5E000D); /* CIS walk OK */
     }
 
     /* SPEED chip enable.  RE'd from ps2dev9.irx around file
@@ -407,24 +401,24 @@ int dev9_init_run(struct iop_mailbox *mbox)
      *   SSBUS_R_1418 = per-silicon value (re-write)
      *   0x146C bit 0 cleared  (single-shot toggle)
      */
-    if (is_pcmcia_slot) {
+    if(is_pcmcia_slot) {
         DEV9_R_1460 = 2;
         DEV9_R_1474 = 5;
         DEV9_R_1460 = 1;
         DEV9_R_1474 = 7;
-        for (delay_i = 0; delay_i < 5000u; delay_i++) { }
+        for(delay_i = 0; delay_i < 5000; delay_i++) {
+        }
         SSBUS_R_1418 = SSBUS_R_1418_VAL_CXD9566;
         v = DEV9_R_146C;
-        v = v & 0xFFFEu;        /* clear bit 0 */
+        v = v & 0xFFFE; /* clear bit 0 */
         DEV9_R_146C = v;
-        dev9_publish_word(&mbox->cmd, 0xBA5E000Fu); /* SPEED enable kick done */
+        dev9_publish_word(&mbox->cmd, 0xBA5E000F); /* SPEED enable kick done */
     }
 
     /* Stash post-enable 0x146C / 0x1462 in mbox->map for diag. */
     power_state = DEV9_R_146C;
     card_status = DEV9_R_1462;
-    mbox->map = ((unsigned int)card_status << 16)
-              | (unsigned int)power_state;
+    mbox->map = ((unsigned int)card_status << 16) | (unsigned int)power_state;
 
     /* ----------------------------------------------------------
      * SPEED chip pulse-check via SSBUS bus 1.
@@ -453,39 +447,36 @@ int dev9_init_run(struct iop_mailbox *mbox)
      *
      * Pack two of them into mbox->presence (high 16 = REV_3,
      * low 16 = REV) so the DON line surfaces both. */
-    spd_rev   = SPD_R_REV;
+    spd_rev = SPD_R_REV;
     spd_rev_3 = SPD_R_REV_3;
 
-    mbox->power    = (unsigned int)spd_rev;
-    mbox->presence = ((unsigned int)spd_rev_3 << 16)
-                   | (unsigned int)spd_rev;
-    dev9_publish_word(&mbox->cmd, 0xBA5E0007u); /* SPEED REVs read */
+    mbox->power = (unsigned int)spd_rev;
+    mbox->presence = ((unsigned int)spd_rev_3 << 16) | (unsigned int)spd_rev;
+    dev9_publish_word(&mbox->cmd, 0xBA5E0007); /* SPEED REVs read */
 
     /* SMAP-presence test mirrors ps2dev9.irx :0x8d4-:0x8e0 —
      * read REV_3 and check bit 0 (SMAP capability).  If both
      * REV and REV_3 are 0/0xFFFF, the chip didn't respond at
      * all (open bus). */
-    if ((spd_rev == 0xFFFFu || spd_rev == 0x0000u) &&
-        (spd_rev_3 == 0xFFFFu || spd_rev_3 == 0x0000u)) {
+    if((spd_rev == 0xFFFF || spd_rev == 0x0000) && (spd_rev_3 == 0xFFFF || spd_rev_3 == 0x0000)) {
         dev9_publish_result(&mbox->result, MBOX_RESULT_NO_SPEED);
         return -7;
     }
 
     spd_caps = SPD_R_REV_1;
-    dev9_publish_word(&mbox->cmd, 0xBA5E0008u); /* SPEED caps read OK */
+    dev9_publish_word(&mbox->cmd, 0xBA5E0008); /* SPEED caps read OK */
     (void)spd_caps;
 
     /* Mask SPEED chip interrupts before continuing.  The SMAP
      * bring-up stage will set its own mask. */
     SPD_R_INTR_MASK = 0;
-    dev9_publish_word(&mbox->cmd, 0xBA5E0009u); /* SPEED INTR_MASK cleared */
+    dev9_publish_word(&mbox->cmd, 0xBA5E0009); /* SPEED INTR_MASK cleared */
 
     dev9_publish_result(&mbox->result, MBOX_RESULT_OK);
-    dev9_publish_word(&mbox->cmd, 0xBA5E000Au); /* full DEV9 + SPEED init done */
+    dev9_publish_word(&mbox->cmd, 0xBA5E000A); /* full DEV9 + SPEED init done */
     return 0;
 }
 
-int iop_main(struct iop_mailbox *mbox)
-{
+int iop_main(struct iop_mailbox *mbox) {
     return dev9_init_run(mbox);
 }

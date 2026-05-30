@@ -40,14 +40,14 @@
  * last retry can race past the window and re-execute a stale request.
  * Client today: 250 ms * 10 retries = 2.5 s.  Set 4 s for headroom; the
  * cache is one slot, so this is essentially free RAM. */
-#define DEDUP_WINDOW_USEC       3000000
+#define DEDUP_WINDOW_USEC     3000000
 
 /* Bounds for one captured dispatch.  A read() with a 1440-byte body
  * generates ~1 LOADBIN + ~30 PARTBINs + 1 DONEBIN + 1 RETVAL ≈ 35
  * packets, well under DEDUP_MAX_PACKETS.  Bytes-per-packet matches the
  * UDP wire-size cap in net_send_cmd / send_cmd. */
-#define DEDUP_MAX_PACKETS       64
-#define DEDUP_MAX_PKT_BYTES     2048
+#define DEDUP_MAX_PACKETS     64
+#define DEDUP_MAX_PKT_BYTES   2048
 
 /* True if `buf` ends with the KSQ0 magic.  When true and out_seq is
  * non-NULL, writes the host-endian seq id; len must reflect just the
@@ -59,8 +59,7 @@ int dedup_extract_seq(const uint8_t *buf, size_t len, uint32_t *out_seq);
  * verbatim on `sock_fd` via `socket_ops` and return 1.  Returns 0 (no
  * action taken) on any miss — non-matching seq, expired window, or
  * cache never primed. */
-int dedup_try_replay(uint32_t seq, uint64_t now_us,
-                     const platform_socket_ops_t *socket_ops, int sock_fd);
+int dedup_try_replay(uint32_t seq, uint64_t now_us, const platform_socket_ops_t *socket_ops, int sock_fd);
 
 /* Is this an old request we already handled and should ignore?
  *

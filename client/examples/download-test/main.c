@@ -55,29 +55,32 @@
 
 typedef int (*kosload_syscall_fn)(int syscall, int arg1, int arg2, int arg3);
 
-static kosload_syscall_fn get_syscall(void)
-{
-    if (KOSLOAD_MAGIC_ADDR != KOSLOAD_MAGIC)
+static kosload_syscall_fn get_syscall(void) {
+    if(KOSLOAD_MAGIC_ADDR != KOSLOAD_MAGIC)
         return (kosload_syscall_fn)0;
     return (kosload_syscall_fn)KOSLOAD_SYSCALL_ADDR;
 }
 
-static int slen(const char *s) { int n = 0; while (*s++) n++; return n; }
+static int slen(const char *s) {
+    int n = 0;
+    while(*s++)
+        n++;
+    return n;
+}
 
-static void print(const char *msg)
-{
+static void print(const char *msg) {
     kosload_syscall_fn sc = get_syscall();
-    if (!sc) return;
+    if(!sc)
+        return;
     sc(SYSCALL_WRITE, 1, (int)msg, slen(msg));
 }
 
-static void uint_to_hex(unsigned int val, char *buf)
-{
+static void uint_to_hex(unsigned int val, char *buf) {
     static const char hex[] = "0123456789abcdef";
     int i;
     buf[0] = '0';
     buf[1] = 'x';
-    for (i = 0; i < 8; i++)
+    for(i = 0; i < 8; i++)
         buf[2 + i] = hex[(val >> (28 - i * 4)) & 0xf];
     buf[10] = '\0';
 }
@@ -90,10 +93,9 @@ static void uint_to_hex(unsigned int val, char *buf)
 static volatile unsigned char pattern[256];
 
 void start(void) __attribute__((section(".text.start")));
-void start(void)
-{
+void start(void) {
     char hexbuf[12];
-    int i;
+    int  i;
 
     print("\n");
     print("=== kosload download test ===\n");
@@ -104,11 +106,11 @@ void start(void)
      *   Bytes  64-127: 0x55
      *   Bytes 128-255: incrementing (0x80, 0x81, ... 0xFF)
      */
-    for (i = 0; i < 64; i++)
+    for(i = 0; i < 64; i++)
         pattern[i] = 0xAA;
-    for (i = 64; i < 128; i++)
+    for(i = 64; i < 128; i++)
         pattern[i] = 0x55;
-    for (i = 128; i < 256; i++)
+    for(i = 128; i < 256; i++)
         pattern[i] = (unsigned char)i;
 
     /* Print the address and expected layout */
@@ -150,5 +152,6 @@ void start(void)
     print("Pattern is in memory. Download now, then reset console.\n");
 
     kosload_syscall_fn sc = get_syscall();
-    if (sc) sc(SYSCALL_EXIT, 0, 0, 0);
+    if(sc)
+        sc(SYSCALL_EXIT, 0, 0, 0);
 }

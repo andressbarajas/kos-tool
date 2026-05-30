@@ -18,10 +18,11 @@ typedef struct {
 
 static void *macos_serial_open(const char *device, uint32_t initial_baud) {
     macos_serial_t *s = calloc(1, sizeof(*s));
-    if (!s) return NULL;
+    if(!s)
+        return NULL;
 
     s->fd = open(device, O_RDWR | O_NOCTTY);
-    if (s->fd < 0) {
+    if(s->fd < 0) {
         perror(device);
         free(s);
         return NULL;
@@ -45,7 +46,7 @@ static void *macos_serial_open(const char *device, uint32_t initial_baud) {
 
     /* Set actual baud rate via IOSSIOSPEED */
     speed_t speed = initial_baud;
-    if (ioctl(s->fd, IOSSIOSPEED, &speed) < 0) {
+    if(ioctl(s->fd, IOSSIOSPEED, &speed) < 0) {
         perror("IOSSIOSPEED");
     }
 
@@ -54,7 +55,8 @@ static void *macos_serial_open(const char *device, uint32_t initial_baud) {
 
 static void macos_serial_close(void *handle) {
     macos_serial_t *s = handle;
-    if (!s) return;
+    if(!s)
+        return;
     tcflush(s->fd, TCIOFLUSH);
     tcsetattr(s->fd, TCSANOW, &s->old_tio);
     close(s->fd);
@@ -75,7 +77,7 @@ static int macos_serial_bytes_available(void *handle) {
     macos_serial_t *s = handle;
     int bytes = 0;
 
-    if (ioctl(s->fd, FIONREAD, &bytes) < 0)
+    if(ioctl(s->fd, FIONREAD, &bytes) < 0)
         return -1;
 
     return bytes;

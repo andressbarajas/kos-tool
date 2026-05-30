@@ -14,15 +14,18 @@
 
 static int bfd_probe(const char *filename) {
     bfd *abfd = bfd_openr(filename, NULL);
-    if (!abfd) return 0;
+    if(!abfd)
+        return 0;
     int ok = bfd_check_format(abfd, bfd_object);
     bfd_close(abfd);
     return ok;
 }
 
-static int bfd_load(const char *filename, uint32_t *entry_addr,
-                    binary_section_cb callback, void *user_data) {
-    (void)filename; (void)entry_addr; (void)callback; (void)user_data;
+static int bfd_load(const char *filename, uint32_t *entry_addr, binary_section_cb callback, void *user_data) {
+    (void)filename;
+    (void)entry_addr;
+    (void)callback;
+    (void)user_data;
     fprintf(stderr, "BFD loader not yet implemented\n");
     return -1;
 }
@@ -40,9 +43,12 @@ static int bfd_probe_stub(const char *filename) {
     return 0;
 }
 
-static int bfd_load_stub(const char *filename, uint32_t *entry_addr,
-                         binary_section_cb callback, void *user_data) {
-    (void)filename; (void)entry_addr; (void)callback; (void)user_data;
+static int bfd_load_stub(const char *filename, uint32_t *entry_addr, binary_section_cb callback,
+                         void *user_data) {
+    (void)filename;
+    (void)entry_addr;
+    (void)callback;
+    (void)user_data;
     return -1;
 }
 

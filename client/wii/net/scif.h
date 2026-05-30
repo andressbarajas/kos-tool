@@ -2,8 +2,7 @@
 #ifndef KOSLOAD_WII_SCIF_H
 #define KOSLOAD_WII_SCIF_H
 
-static inline void scif_puts(const unsigned char *s)
-{
+static inline void scif_puts(const unsigned char *s) {
     (void)s;
 }
 

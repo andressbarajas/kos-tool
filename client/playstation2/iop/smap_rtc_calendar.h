@@ -26,111 +26,93 @@
  *   write: utc_unix + JST_BIAS = jst_unix
  * Adjustment is done in the seconds domain so day/month/year carry
  * across midnight automatically via smap_*_to/from_*. */
-#define SMAP_CDVD_RTC_JST_BIAS_SECS  (9u * 60u * 60u)
+#define SMAP_CDVD_RTC_JST_BIAS_SECS (9 * 60 * 60)
 
-static int smap_bcd_to_int(unsigned char bcd)
-{
-    unsigned int hi = (unsigned int)((bcd >> 4) & 0x0fu);
-    unsigned int lo = (unsigned int)(bcd & 0x0fu);
+static int smap_bcd_to_int(unsigned char bcd) {
+    unsigned int hi = (unsigned int)((bcd >> 4) & 0x0f);
+    unsigned int lo = (unsigned int)(bcd & 0x0f);
 
-    if (hi > 9u || lo > 9u)
+    if(hi > 9 || lo > 9)
         return -1;
-    return (int)(hi * 10u + lo);
+    return (int)(hi * 10 + lo);
 }
 
-static unsigned char smap_int_to_bcd(unsigned int value)
-{
-    return (unsigned char)(((value / 10u) << 4) | (value % 10u));
+static unsigned char smap_int_to_bcd(unsigned int value) {
+    return (unsigned char)(((value / 10) << 4) | (value % 10));
 }
 
-static int smap_is_leap_year(unsigned int year)
-{
-    if ((year % 4u) != 0u)
+static int smap_is_leap_year(unsigned int year) {
+    if((year % 4) != 0)
         return 0;
-    if ((year % 100u) != 0u)
+    if((year % 100) != 0)
         return 1;
-    return (year % 400u) == 0u;
+    return (year % 400) == 0;
 }
 
-static unsigned int smap_days_before_month(unsigned int year, unsigned int month)
-{
-    static const unsigned short days[12] =
-        { 0u, 31u, 59u, 90u, 120u, 151u, 181u, 212u, 243u, 273u, 304u, 334u };
+static unsigned int smap_days_before_month(unsigned int year, unsigned int month) {
+    static const unsigned short days[12] = {0,   31,  59,  90,  120, 151,
+                                            181, 212, 243, 273, 304, 334};
     unsigned int total;
 
-    if (month == 0u || month > 12u)
-        return 0u;
+    if(month == 0 || month > 12)
+        return 0;
 
-    total = days[month - 1u];
-    if (month > 2u && smap_is_leap_year(year))
+    total = days[month - 1];
+    if(month > 2 && smap_is_leap_year(year))
         total++;
     return total;
 }
 
-static unsigned int smap_days_before_year(unsigned int year)
-{
-    unsigned int days = 0u;
+static unsigned int smap_days_before_year(unsigned int year) {
+    unsigned int days = 0;
     unsigned int y;
 
-    for (y = 1970u; y < year; y++)
-        days += smap_is_leap_year(y) ? 366u : 365u;
+    for(y = 1970; y < year; y++)
+        days += smap_is_leap_year(y) ? 366 : 365;
     return days;
 }
 
 /* (year, month, day, hour, min, sec) -> Unix-style seconds.
  * Caller's calendar may be UTC or JST; the function is timezone-naive. */
-static unsigned int smap_datetime_to_unix(unsigned int year,
-                                          unsigned int month,
-                                          unsigned int day,
-                                          unsigned int hour,
-                                          unsigned int minute,
-                                          unsigned int second)
-{
-    unsigned int days = smap_days_before_year(year)
-                      + smap_days_before_month(year, month)
-                      + (day - 1u);
+static unsigned int smap_datetime_to_unix(unsigned int year, unsigned int month, unsigned int day,
+                                          unsigned int hour, unsigned int minute, unsigned int second) {
+    unsigned int days = smap_days_before_year(year) + smap_days_before_month(year, month) + (day - 1);
 
-    return (((days * 24u + hour) * 60u + minute) * 60u + second);
+    return (((days * 24 + hour) * 60 + minute) * 60 + second);
 }
 
 /* Inverse of smap_datetime_to_unix.  Rolls year/month/day correctly. */
-static void smap_unix_to_datetime(unsigned int timestamp,
-                                  unsigned int *year,
-                                  unsigned int *month,
-                                  unsigned int *day,
-                                  unsigned int *hour,
-                                  unsigned int *minute,
-                                  unsigned int *second)
-{
-    unsigned int days = timestamp / 86400u;
-    unsigned int rem = timestamp % 86400u;
-    unsigned int y = 1970u;
+static void smap_unix_to_datetime(unsigned int timestamp, unsigned int *year, unsigned int *month,
+                                  unsigned int *day, unsigned int *hour, unsigned int *minute,
+                                  unsigned int *second) {
+    unsigned int days = timestamp / 86400;
+    unsigned int rem = timestamp % 86400;
+    unsigned int y = 1970;
     unsigned int m;
 
-    *hour = rem / 3600u;
-    rem %= 3600u;
-    *minute = rem / 60u;
-    *second = rem % 60u;
+    *hour = rem / 3600;
+    rem %= 3600;
+    *minute = rem / 60;
+    *second = rem % 60;
 
-    for (;;) {
-        unsigned int year_days = smap_is_leap_year(y) ? 366u : 365u;
-        if (days < year_days)
+    for(;;) {
+        unsigned int year_days = smap_is_leap_year(y) ? 366 : 365;
+        if(days < year_days)
             break;
         days -= year_days;
         y++;
     }
 
-    for (m = 1u; m < 12u; m++) {
-        unsigned int month_days =
-            smap_days_before_month(y, m + 1u) - smap_days_before_month(y, m);
-        if (days < month_days)
+    for(m = 1; m < 12; m++) {
+        unsigned int month_days = smap_days_before_month(y, m + 1) - smap_days_before_month(y, m);
+        if(days < month_days)
             break;
         days -= month_days;
     }
 
     *year = y;
     *month = m;
-    *day = days + 1u;
+    *day = days + 1;
 }
 
 #endif /* SMAP_RTC_CALENDAR_H */

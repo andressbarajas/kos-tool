@@ -8,7 +8,7 @@
 
 #define ISO_LITE_FILE_NAME_SIZE 16
 #define ISO_LITE_VOLUME_ID_SIZE 33
-#define ISO_LITE_SECTOR_SIZE 2048
+#define ISO_LITE_SECTOR_SIZE    2048
 
 typedef struct {
     const char *iso_name;
@@ -31,14 +31,11 @@ typedef struct {
 void iso_lite_normalize_file_name(const char *input, char *output, size_t output_size);
 void iso_lite_normalize_volume_id(const char *input, char *output, size_t output_size);
 
-int iso_lite_write_stream(FILE *output, const iso_lite_config_t *config,
-                          const iso_lite_file_t *files, size_t file_count,
-                          iso_lite_stats_t *stats, char *error_buf,
-                          size_t error_buf_size);
+int iso_lite_write_stream(FILE *output, const iso_lite_config_t *config, const iso_lite_file_t *files,
+                          size_t file_count, iso_lite_stats_t *stats, char *error_buf, size_t error_buf_size);
 
 int iso_lite_write_image(const char *output_path, const iso_lite_config_t *config,
-                         const iso_lite_file_t *files, size_t file_count,
-                         iso_lite_stats_t *stats, char *error_buf,
-                         size_t error_buf_size);
+                         const iso_lite_file_t *files, size_t file_count, iso_lite_stats_t *stats,
+                         char *error_buf, size_t error_buf_size);
 
 #endif /* ISO9660_LITE_H */

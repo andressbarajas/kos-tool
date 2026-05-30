@@ -22,45 +22,45 @@
 
 static int elf_probe(const char *filename) {
     int fd = open(filename, O_RDONLY | O_BINARY);
-    if (fd < 0) return 0;
+    if(fd < 0)
+        return 0;
 
     unsigned char magic[4];
     int n = read(fd, magic, 4);
     close(fd);
 
-    if (n != 4) return 0;
-    return (magic[0] == 0x7f && magic[1] == 'E' &&
-            magic[2] == 'L' && magic[3] == 'F');
+    if(n != 4)
+        return 0;
+    return (magic[0] == 0x7f && magic[1] == 'E' && magic[2] == 'L' && magic[3] == 'F');
 }
 
-static int elf_load(const char *filename, uint32_t *entry_addr,
-                    binary_section_cb callback, void *user_data) {
-    if (elf_version(EV_CURRENT) == EV_NONE) {
+static int elf_load(const char *filename, uint32_t *entry_addr, binary_section_cb callback, void *user_data) {
+    if(elf_version(EV_CURRENT) == EV_NONE) {
         fprintf(stderr, "ELF library initialization error: %s\n", elf_errmsg(-1));
         return -1;
     }
 
     int fd = open(filename, O_RDONLY | O_BINARY);
-    if (fd < 0) {
+    if(fd < 0) {
         perror(filename);
         return -1;
     }
 
     Elf *elf = elf_begin(fd, ELF_C_READ, NULL);
-    if (!elf) {
+    if(!elf) {
         fprintf(stderr, "Unable to open ELF file: %s\n", elf_errmsg(-1));
         close(fd);
         return -1;
     }
 
-    if (elf_kind(elf) != ELF_K_ELF) {
+    if(elf_kind(elf) != ELF_K_ELF) {
         elf_end(elf);
         close(fd);
         return -1;
     }
 
     Elf32_Ehdr *ehdr = elf32_getehdr(elf);
-    if (!ehdr) {
+    if(!ehdr) {
         fprintf(stderr, "Unable to read ELF header: %s\n", elf_errmsg(-1));
         elf_end(elf);
         close(fd);
@@ -71,7 +71,7 @@ static int elf_load(const char *filename, uint32_t *entry_addr,
     printf("File format is ELF, start address is 0x%x\n", *entry_addr);
 
     size_t shstrndx;
-    if (elf_getshdrstrndx(elf, &shstrndx)) {
+    if(elf_getshdrstrndx(elf, &shstrndx)) {
         fprintf(stderr, "Unable to read section index: %s\n", elf_errmsg(-1));
         elf_end(elf);
         close(fd);
@@ -79,9 +79,9 @@ static int elf_load(const char *filename, uint32_t *entry_addr,
     }
 
     Elf_Scn *scn = NULL;
-    while ((scn = elf_nextscn(elf, scn))) {
+    while((scn = elf_nextscn(elf, scn))) {
         Elf32_Shdr *shdr = elf32_getshdr(scn);
-        if (!shdr) {
+        if(!shdr) {
             fprintf(stderr, "Unable to read section header: %s\n", elf_errmsg(-1));
             elf_end(elf);
             close(fd);
@@ -89,18 +89,18 @@ static int elf_load(const char *filename, uint32_t *entry_addr,
         }
 
         char *section_name = elf_strptr(elf, shstrndx, shdr->sh_name);
-        if (!section_name) {
+        if(!section_name) {
             fprintf(stderr, "Unable to read section name: %s\n", elf_errmsg(-1));
             elf_end(elf);
             close(fd);
             return -1;
         }
 
-        if (!shdr->sh_addr)
+        if(!shdr->sh_addr)
             continue;
 
         Elf_Data *data = elf_getdata(scn, NULL);
-        if (!data || !data->d_buf || !data->d_size)
+        if(!data || !data->d_buf || !data->d_size)
             continue;
 
         binary_section_t section = {
@@ -110,7 +110,7 @@ static int elf_load(const char *filename, uint32_t *entry_addr,
             .data = data->d_buf,
         };
 
-        if (callback(&section, user_data) != 0) {
+        if(callback(&section, user_data) != 0) {
             elf_end(elf);
             close(fd);
             return -1;

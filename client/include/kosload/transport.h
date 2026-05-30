@@ -27,14 +27,13 @@
  */
 typedef struct client_transport_ops {
     const char *name;
-    const char *init_error_msg;   /* Message shown when init() fails, or NULL */
-    int   (*init)(void);
-    void  (*loop)(bool is_main_loop);
-    int   (*syscall_send)(const char cmd_id[4], const uint8_t *payload,
-                          size_t payload_len);
-    void  (*exit_notify)(void);
-    void  (*stop)(void);
-    void  (*start)(void);
+    const char *init_error_msg; /* Message shown when init() fails, or NULL */
+    int (*init)(void);
+    void (*loop)(bool is_main_loop);
+    int (*syscall_send)(const char cmd_id[4], const uint8_t *payload, size_t payload_len);
+    void (*exit_notify)(void);
+    void (*stop)(void);
+    void (*start)(void);
 } client_transport_ops_t;
 
 /* Transport implementations */

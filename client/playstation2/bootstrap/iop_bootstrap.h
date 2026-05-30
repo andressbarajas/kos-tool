@@ -26,7 +26,6 @@ int ps2_bootstrap_iop_smap_init(void);
 
 /* DMA bytes from EE memory into IOP RAM.  Destination is an IOP physical
  * address, not the EE 0xBC mirror. */
-int ps2_bootstrap_iop_dma_write(uint32_t iop_dest, const void *src,
-                                uint32_t size);
+int ps2_bootstrap_iop_dma_write(uint32_t iop_dest, const void *src, uint32_t size);
 
 #endif /* PS2_IOP_BOOTSTRAP_H */

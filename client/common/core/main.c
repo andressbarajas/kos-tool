@@ -43,19 +43,20 @@ void common_main(const target_ops_t *tgt, const client_transport_ops_t *xport) {
     /* Initialize transport BEFORE video — on Dreamcast, the BBA/GAPS
      * bridge must be initialized before video init touches the G2 bus.
      * This matches the original dcload-ip initialization order. */
-    if (transport->init() != 0) {
+    if(transport->init() != 0) {
         /* Transport failed — show red error screen and keep retrying.
-         * The user can insert the BBA/LAN/Serial adapter without power cycling. */
+         * The user can insert the BBA/LAN/Serial adapter without power cycling.
+         */
         target->setup_video(0, ERROR_BG_COLOR);
         target->clear_screen(ERROR_BG_COLOR);
         target->draw_string(30, 54, LOADER_NAME " " KOSLOAD_VERSION_STRING "  " KOSLOAD_GIT_REV, 0xffff);
-        if (transport->init_error_msg)
+        if(transport->init_error_msg)
             target->draw_string(30, 78, transport->init_error_msg, 0xffff);
 
-        while (transport->init() != 0) {
+        while(transport->init() != 0) {
             /* Wait ~1 second before trying again */
             uint64_t start = target->get_ticks();
-            while ((target->get_ticks() - start) < target->ticks_per_second)
+            while((target->get_ticks() - start) < target->ticks_per_second)
                 ;
         }
     }

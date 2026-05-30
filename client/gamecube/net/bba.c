@@ -43,7 +43,7 @@ adapter_t adapter_bba = {
     bba_stop,
     bba_loop,
     bba_tx,
-    false       /* not lossy: reliable raw NIC, wait forever for RETVAL */
+    false /* not lossy: reliable raw NIC, wait forever for RETVAL */
 };
 
 /* Set once link has been UP this session.  Picks "link lost..." over
@@ -68,9 +68,9 @@ static int bba_loader_settled = 0;
  * A combined word is therefore (dir | (addr << 8)) where dir is one of
  * the two direction constants below and addr is the 16-bit target. */
 
-#define GCBBA_CMD_READ      0x80000000u
-#define GCBBA_CMD_WRITE     0xC0000000u
-#define GCBBA_CMD(dir, addr) ((dir) | (((addr) & 0xFFFFu) << 8))
+#define GCBBA_CMD_READ      0x80000000
+#define GCBBA_CMD_WRITE     0xC0000000
+#define GCBBA_CMD(dir, addr) ((dir) | (((addr) & 0xFFFF) << 8))
 
 static void bba_select(void) {
     exi_select(GCBBA_EXI_CHANNEL, GCBBA_EXI_DEVICE, EXI_CLK_32MHZ);
@@ -123,8 +123,7 @@ static void bba_ins(unsigned int reg, void *buf, int len) {
 /* Write bulk data to a register via DMA.
  * Buffer must be 32-byte aligned.
  * Currently unused — bba_tx inlines the equivalent. */
-static void __attribute__((unused)) bba_outs(unsigned int reg, const void *buf, int len)
-{
+static void __attribute__((unused)) bba_outs(unsigned int reg, const void *buf, int len) {
     /* Flush D-cache so DMA reads correct data */
     cache_flush_dc(buf, len);
 
@@ -197,13 +196,10 @@ static void bba_chipport_write1(unsigned char op, unsigned char data) {
     bba_deselect();
 }
 
-static void bba_chipport_write2(unsigned char op,
-                                unsigned char d0, unsigned char d1) {
+static void bba_chipport_write2(unsigned char op, unsigned char d0, unsigned char d1) {
     bba_select();
     exi_imm(GCBBA_EXI_CHANNEL, (unsigned int)op << 24, 2, EXI_IMM_WRITE);
-    exi_imm(GCBBA_EXI_CHANNEL,
-            ((unsigned int)d0 << 24) | ((unsigned int)d1 << 16),
-            2, EXI_IMM_WRITE);
+    exi_imm(GCBBA_EXI_CHANNEL, ((unsigned int)d0 << 24) | ((unsigned int)d1 << 16), 2, EXI_IMM_WRITE);
     bba_deselect();
 }
 
@@ -285,7 +281,7 @@ int bba_init(void) {
     bba_out8(0x59, 0x00);
     bba_out8(0x5A, 0x03);
     bba_out8(0x5B, 0x83);
-    bba_out8(GCBBA_SI_ACTRL,  0x32);
+    bba_out8(GCBBA_SI_ACTRL, 0x32);
     bba_out8(GCBBA_SI_STATUS, 0xFE);
     bba_out8(0x5E, 0x1F);
     bba_out8(0x5F, 0x1F);
@@ -295,22 +291,27 @@ int bba_init(void) {
      *    RX interrupt counter on this silicon; 0x52 leaves the counter
      *    in its lowest setting, which gives us per-packet RX interrupts
      *    instead of batched ones. */
-    bba_out8(GCBBA_NCRB,      0x52);
+    bba_out8(GCBBA_NCRB, 0x52);
     bba_out8(GCBBA_SI_ACTRL2, 0x74);
-    bba_out8(0x14,            0x00);
-    bba_out8(0x15,            0x06);
-    bba_out8(GCBBA_MISC2,     0x80);
+    bba_out8(0x14, 0x00);
+    bba_out8(0x15, 0x06);
+    bba_out8(GCBBA_MISC2, 0x80);
 
     /* 9. TX/RX SRAM page boundaries.
      *    TLBP = 0x0000   TX buffer starts at page 0
      *    BP   = 0x0001   first RX page ("boundary")
      *    RHBP = 0x0010   RX ring upper bound (last page + 1)
      *    RWP/RRP both initialised to page 1 (empty ring). */
-    bba_out8(GCBBA_TLBP, 0x00);  bba_out8(GCBBA_TLBP + 1, 0x00);
-    bba_out8(GCBBA_BP,   0x01);  bba_out8(GCBBA_BP   + 1, 0x00);
-    bba_out8(GCBBA_RHBP, 0x10);  bba_out8(GCBBA_RHBP + 1, 0x00);
-    bba_out8(GCBBA_RWP,  0x01);  bba_out8(GCBBA_RWP  + 1, 0x00);
-    bba_out8(GCBBA_RRP,  0x01);  bba_out8(GCBBA_RRP  + 1, 0x00);
+    bba_out8(GCBBA_TLBP, 0x00);
+    bba_out8(GCBBA_TLBP + 1, 0x00);
+    bba_out8(GCBBA_BP, 0x01);
+    bba_out8(GCBBA_BP + 1, 0x00);
+    bba_out8(GCBBA_RHBP, 0x10);
+    bba_out8(GCBBA_RHBP + 1, 0x00);
+    bba_out8(GCBBA_RWP, 0x01);
+    bba_out8(GCBBA_RWP + 1, 0x00);
+    bba_out8(GCBBA_RRP, 0x01);
+    bba_out8(GCBBA_RRP + 1, 0x00);
 
     /* 10. GCA = 0x08 — general PHY config; written after the buffer
      *     pointers and before enabling RX. */
@@ -327,9 +328,8 @@ int bba_init(void) {
      *     auto-negotiation enable bit clear pins the PHY to 100FD.
      *     Auto-negotiation restart hung on the user's hardware during
      *     long DBIN transfers, so forced mode is preferred. */
-    unsigned char preserve = bba_in8(GCBBA_NWAYC) & 0xC0u;
-    bba_out8(GCBBA_NWAYC,
-                preserve | GCBBA_NWAYC_FD | GCBBA_NWAYC_PS100);
+    unsigned char preserve = bba_in8(GCBBA_NWAYC) & 0xC0;
+    bba_out8(GCBBA_NWAYC, preserve | GCBBA_NWAYC_FD | GCBBA_NWAYC_PS100);
 
     /* 13. Read the factory-programmed MAC address (PAR0..PAR5). */
     adapter_bba.mac[0] = bba_in8(GCBBA_PAR0);
@@ -341,7 +341,7 @@ int bba_init(void) {
 
     /* 14. Interrupt regs: clear all pending (IR=0xFF, write-1-clear),
      *     enable all sources except FIFO error (IMR=0xDF). */
-    bba_out8(GCBBA_IR,  0xFF);
+    bba_out8(GCBBA_IR, 0xFF);
     bba_out8(GCBBA_IMR, 0xDF);
 
     /* 15. Final activation: cmd 0x4200 + 0xF8 — chip "go live". */
@@ -391,7 +391,7 @@ int bba_tx(unsigned char *pkt, int len) {
         int wait = 10000;
         while(!(bba_in8(GCBBA_IR) & GCBBA_INT_TX) && wait > 0)
             wait--;
-        bba_out8(GCBBA_IR, GCBBA_INT_TX);   /* W1C ack */
+        bba_out8(GCBBA_IR, GCBBA_INT_TX); /* W1C ack */
     }
     prev_tx_pending = 1;
 
@@ -414,24 +414,20 @@ int bba_tx(unsigned char *pkt, int len) {
      *   - Send any trailing 0..31 bytes via single-byte EXI_ImmEx
      * Both phases happen within the same select/deselect cycle, so
      * the chip sees one continuous WRTXFIFOD write. */
-    int dma_len = tx_len & ~31;          /* round DOWN to 32-aligned */
-    int imm_len = tx_len - dma_len;      /* 0..31 trailing bytes */
+    int dma_len = tx_len & ~31;     /* round DOWN to 32-aligned */
+    int imm_len = tx_len - dma_len; /* 0..31 trailing bytes */
 
     if(dma_len > 0)
         cache_flush_dc(tx_dma_buf, dma_len);
 
     bba_select();
-    exi_imm(GCBBA_EXI_CHANNEL,
-            GCBBA_CMD(GCBBA_CMD_WRITE, GCBBA_WRTXFIFOD),
-            4, EXI_IMM_WRITE);
+    exi_imm(GCBBA_EXI_CHANNEL, GCBBA_CMD(GCBBA_CMD_WRITE, GCBBA_WRTXFIFOD), 4, EXI_IMM_WRITE);
 
     if(dma_len > 0)
         exi_dma(GCBBA_EXI_CHANNEL, tx_dma_buf, dma_len, EXI_DMA_WRITE);
 
     for(int i = 0; i < imm_len; i++)
-        exi_imm(GCBBA_EXI_CHANNEL,
-                (unsigned int)tx_dma_buf[dma_len + i] << 24,
-                1, EXI_IMM_WRITE);
+        exi_imm(GCBBA_EXI_CHANNEL, (unsigned int)tx_dma_buf[dma_len + i] << 24, 1, EXI_IMM_WRITE);
 
     bba_deselect();
 
@@ -494,11 +490,10 @@ static int bba_rx(void) {
 
         /* RX area is pages 1..0xF (RHBP=0x10).  Skip invalid
          * packets and advance RRP to next valid page. */
-        if(pkt_len > RX_PKT_BUF_SIZE || pkt_len < 14 ||
-            next_page < 1 || next_page > 0x10) {
+        if(pkt_len > RX_PKT_BUF_SIZE || pkt_len < 14 || next_page < 1 || next_page > 0x10) {
             if(next_page < 1 || next_page > 0x10)
                 next_page = (cur_page + 1 > 0x0F) ? 0x01 : (cur_page + 1);
-            bba_out8(GCBBA_RRP,     (unsigned char)next_page);
+            bba_out8(GCBBA_RRP, (unsigned char)next_page);
             bba_out8(GCBBA_RRP + 1, 0x00);
             continue;
         }
@@ -506,7 +501,7 @@ static int bba_rx(void) {
         /* Read packet data (skip 4-byte header).
          * Read into the aligned DMA buffer, then copy to current_pkt
          * (which has the 2-byte offset for alignment). */
-        unsigned int read_len = (pkt_len + 31) & ~31;  /* Align to 32 for DMA */
+        unsigned int read_len = (pkt_len + 31) & ~31; /* Align to 32 for DMA */
         if(read_len > RAW_RX_PKT_BUF_SIZE)
             read_len = RAW_RX_PKT_BUF_SIZE;
 
@@ -514,7 +509,7 @@ static int bba_rx(void) {
         memcpy(raw_current_pkt + 2, rx_dma_buf, pkt_len);
 
         /* Advance RX read pointer to next packet */
-        bba_out8(GCBBA_RRP,     (unsigned char)next_page);
+        bba_out8(GCBBA_RRP, (unsigned char)next_page);
         bba_out8(GCBBA_RRP + 1, 0x00);
 
         /* Process the packet */
@@ -536,8 +531,7 @@ void bba_loop(bool is_main_loop) {
     uint64_t last_sec_tick = 0;
     unsigned int loop_secs_elapsed = 0;
 
-    if(is_main_loop)
-    {
+    if(is_main_loop) {
         if(!(booted || running))
             disp_info();
         /* Loader-entry reset. */
@@ -545,14 +539,12 @@ void bba_loop(bool is_main_loop) {
 
         /* One-shot link-change → settle → idle sequence for fresh loader
          * instances (cold boot / FW update). */
-        if(!bba_loader_settled)
-        {
+        if(!bba_loader_settled) {
             if(booted && !running)
                 disp_status("link change...");
 
             while(!(bba_in8(GCBBA_NWAYS) & GCBBA_NWAYS_LINK_UP))
                 ;
-
 
             bba_loader_settled = 1;
             bba_link_seen_up = 1;
@@ -561,13 +553,11 @@ void bba_loop(bool is_main_loop) {
         }
     }
 
-    if(timeout_loop > 0)
-    {
+    if(timeout_loop > 0) {
         last_sec_tick = t->get_ticks();
     }
 
-    while(!escape_loop)
-    {
+    while(!escape_loop) {
         /* Check for received packets */
         unsigned char ir = bba_in8(GCBBA_IR);
 
@@ -575,19 +565,15 @@ void bba_loop(bool is_main_loop) {
             bba_rx();
 
         /* Handle RX buffer full */
-        if(ir & GCBBA_INT_RX_FULL)
-        {
+        if(ir & GCBBA_INT_RX_FULL) {
             bba_out8(GCBBA_IR, GCBBA_INT_RX_FULL);
             bba_rx();
         }
 
         /* Handle errors */
-        if(ir & (GCBBA_INT_RX_ERR | GCBBA_INT_TX_ERR |
-                  GCBBA_INT_FIFO_ERR | GCBBA_INT_BUS_ERR))
-        {
+        if(ir & (GCBBA_INT_RX_ERR | GCBBA_INT_TX_ERR | GCBBA_INT_FIFO_ERR | GCBBA_INT_BUS_ERR)) {
             bba_out8(GCBBA_IR,
-                     ir & (GCBBA_INT_RX_ERR | GCBBA_INT_TX_ERR |
-                           GCBBA_INT_FIFO_ERR | GCBBA_INT_BUS_ERR));
+                     ir & (GCBBA_INT_RX_ERR | GCBBA_INT_TX_ERR | GCBBA_INT_FIFO_ERR | GCBBA_INT_BUS_ERR));
         }
 
         /* Poll for link change.  NWAYS bits 0/1 report 10/100 link-
@@ -596,12 +582,11 @@ void bba_loop(bool is_main_loop) {
          * is lost), so we use this as the live link signal. */
         int link_up = (bba_in8(GCBBA_NWAYS) & GCBBA_NWAYS_LINK_UP) != 0;
 
-        if(__builtin_expect(!link_up, 0))
-        {
+        if(__builtin_expect(!link_up, 0)) {
             screensaver_wake();
 
             if(booted && !running) {
-                if (bba_link_seen_up)
+                if(bba_link_seen_up)
                     disp_status("link lost...");
                 else
                     disp_status("link change...");
@@ -623,36 +608,31 @@ void bba_loop(bool is_main_loop) {
 
             /* If we were waiting in a DHCP timeout loop when link
              * changed, timeout immediately so we can retry. */
-            if(timeout_loop > 0)
-            {
+            if(timeout_loop > 0) {
                 dhcp_attempts = 0;
                 timeout_loop = -1;
                 escape_loop = 1;
             }
         }
 
-        if(is_main_loop)
-        {
-            dhcp_tick();   /* lease countdown — always, no network ops */
+        if(is_main_loop) {
+            dhcp_tick(); /* lease countdown — always, no network ops */
             if(link_up)
                 dhcp_poll();
             screensaver_poll();
         }
 
         /* Timeout handling for DHCP */
-        if(timeout_loop > 0)
-        {
+        if(timeout_loop > 0) {
             uint64_t now = t->get_ticks();
             if((now - last_sec_tick) >= t->ticks_per_second) {
                 last_sec_tick = now;
                 loop_secs_elapsed++;
-                if(dhcp_attempts > 1)
-                {
+                if(dhcp_attempts > 1) {
                     disp_dhcp_attempts_count();
                     disp_dhcp_next_attempt(timeout_loop - loop_secs_elapsed + 1);
                 }
-                if(loop_secs_elapsed > (unsigned int)timeout_loop)
-                {
+                if(loop_secs_elapsed > (unsigned int)timeout_loop) {
                     timeout_loop = -1;
                     escape_loop = 1;
                 }

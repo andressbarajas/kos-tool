@@ -44,7 +44,7 @@ typedef struct {
     /* Argument vector data (populated by EXEC command from host).
      * argv_data stores NUL-separated strings including argv[0]. */
     uint32_t argc;            /* Final argc including argv[0] (0 = unavailable) */
-    char     argv_data[KOSLOAD_MAX_ARGV_DATA];
+    char argv_data[KOSLOAD_MAX_ARGV_DATA];
 } kosload_info_t;
 
 #endif /* KOSLOAD_INFO_H */

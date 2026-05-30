@@ -13,10 +13,10 @@
 #include <stdint.h>
 
 /* HID0 register bits for cache control */
-#define HID0_ICE    (1 << 15)   /* I-cache enable */
-#define HID0_DCE    (1 << 14)   /* D-cache enable */
-#define HID0_ICFI   (1 << 11)   /* I-cache flash invalidate */
-#define HID0_DCFI   (1 << 10)   /* D-cache flash invalidate */
+#define HID0_ICE  (1 << 15) /* I-cache enable */
+#define HID0_DCE  (1 << 14) /* D-cache enable */
+#define HID0_ICFI (1 << 11) /* I-cache flash invalidate */
+#define HID0_DCFI (1 << 10) /* D-cache flash invalidate */
 
 /* Flush data cache for a memory range (write back dirty lines) */
 void cache_flush_dc(const void *addr, uint32_t size);

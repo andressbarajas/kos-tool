@@ -83,7 +83,7 @@
 #define RT_RX_CRC_ERR          0x00000004 /* CRC error */
 #define RT_RX_FRAME_ALIGN      0x00000002 /* Frame alignment error */
 #define RT_RX_STATUS_OK        0x00000001 /* Status ok: a good packet was received */
-#define RT_RX_STATUS_EARLY     0xfff0U    /* Early receive marker */
+#define RT_RX_STATUS_EARLY     0xfff0    /* Early receive marker */
 
 /* RTL8139C RX config bits */
 #define RT_ERTH(n)             ((n) << 24)
@@ -97,7 +97,7 @@
 #define RT_RXC_AAP             0x00000001 /* Accept all packets */
 
 /* RTL8139C TX config bits */
-#define RT_TXC_IFG_STANDARD    0x03000000U
+#define RT_TXC_IFG_STANDARD    0x03000000
 #define RT_TXC_MXDMA(n)        ((n) << 8)
 
 /* RTL8139C config bits */
@@ -125,31 +125,31 @@
 
 /* Configuration definitions */
 // RTL8139 RX buffer size.
-#define RTL_MEM               0x01840000U
-#define RX_BUFFER_SHIFT       1U
-#define RX_BUFFER_LEN        (0x2000U << RX_BUFFER_SHIFT)
-//#define RX_BUFFER_LEN        32768U
+#define RTL_MEM               0x01840000
+#define RX_BUFFER_SHIFT       1
+#define RX_BUFFER_LEN         (0x2000 << RX_BUFFER_SHIFT)
+//#define RX_BUFFER_LEN        32768
 
-#define RTL_TX_BUFFER_OFFSET  (RX_BUFFER_LEN + 0x2000U)
-#define RTL_TX_BUFFER_LEN     0x800U
-#define RTL_TX_BUFFER_COUNT   4U
+#define RTL_TX_BUFFER_OFFSET  (RX_BUFFER_LEN + 0x2000)
+#define RTL_TX_BUFFER_LEN     0x800
+#define RTL_TX_BUFFER_COUNT   4
 
-#define RTL_RX_FIFO_THRESHOLD 0U
-#define RTL_RX_MAX_DMA_BURST  6U
-#define RTL_TX_MAX_DMA_BURST  1U
+#define RTL_RX_FIFO_THRESHOLD 0
+#define RTL_RX_MAX_DMA_BURST  6
+#define RTL_TX_MAX_DMA_BURST  1
 
 #define RTL_RX_CONFIG_DEFAULT (RT_ERTH(0) | RT_RXC_RXFTH(RTL_RX_FIFO_THRESHOLD) | \
                               RT_RXC_RBLEN(RX_BUFFER_SHIFT) | \
                               RT_RXC_MXDMA(RTL_RX_MAX_DMA_BURST) | RT_RXC_WRAP)
 #define RTL_RX_ACCEPT         (RT_RXC_APM | RT_RXC_AB)
 #define RTL_RX_CONFIG_ACCEPT  (RTL_RX_CONFIG_DEFAULT | RTL_RX_ACCEPT)
-#define RTL_RX_CAPR_OFFSET    16U
+#define RTL_RX_CAPR_OFFSET    16
 #define RTL_RX_CAPR_WRAP      (RTL_TX_BUFFER_OFFSET + (RTL_TX_BUFFER_LEN * RTL_TX_BUFFER_COUNT) - RTL_RX_CAPR_OFFSET)
 
 #define RTL_TX_CONFIG_DEFAULT (RT_TXC_IFG_STANDARD | RT_TXC_MXDMA(RTL_TX_MAX_DMA_BURST))
 
 #define RTL_AUTONEG_RESTART   (RT_MII_RESET | RT_MII_AN_ENABLE | RT_MII_AN_START)
-#define RTL_RESET_TIMEOUT     1000000U
+#define RTL_RESET_TIMEOUT     1000000
 
 #define GAPSPCI_ID "GAPSPCI_BRIDGE_2"
 

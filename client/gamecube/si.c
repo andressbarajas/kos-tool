@@ -28,8 +28,7 @@
 #define SI_COMCSR_TCINT      (1 << 29)  /* Transfer complete interrupt status */
 #define SI_COMCSR_TSTART     (1 << 0)   /* Transfer start */
 
-int si_poll_controller(int channel)
-{
+int si_poll_controller(int channel) {
     /* Write poll command (big-endian byte order in OUTBUF):
      * Byte 0: 0x40 = controller poll command
      * Byte 1: 0x03 = mode 3 (buttons + analog)
@@ -44,15 +43,15 @@ int si_poll_controller(int channel)
                 SI_COMCSR_TSTART;           /* Start transfer */
 
     /* Wait for transfer complete */
-    while (!(SI_COMCSR & SI_COMCSR_TCINT))
+    while(!(SI_COMCSR & SI_COMCSR_TCINT))
         ;
 
     /* Check for communication error (no controller connected).
      * Each channel has 8 status bits; NOREP is bit 3 of the channel byte.
      * Channel byte positions: ch0=bits 31-24, ch1=23-16, ch2=15-8, ch3=7-0. */
     uint32_t status = SI_STATUS;
-    uint32_t ch_err_mask = (uint32_t)0xF8 << (24 - channel * 8);  /* error bits for this channel */
-    if (status & ch_err_mask)
+    uint32_t ch_err_mask = (uint32_t)0xF8 << (24 - channel * 8); /* error bits for this channel */
+    if(status & ch_err_mask)
         return 0;
 
     /* Read response: high word contains button data.

@@ -35,8 +35,7 @@ static volatile bool console_enabled = false;
 #define PPC_LI_R0(val)  (0x38000000 | ((val) & 0xFFFF))
 #define PPC_BCTR        0x4E800420  /* bctr */
 
-static void install_exception_stub(uint32_t vector)
-{
+static void install_exception_stub(uint32_t vector) {
     volatile uint32_t *dst = (volatile uint32_t *)(0x80000000 + vector);
     uint32_t handler = (uint32_t)exception_common;
 
@@ -64,17 +63,19 @@ static void install_exception_stub(uint32_t vector)
  * Packs an EXPT frame (4-byte header + 428-byte save_area) and sends it
  * to the host via write syscall. All formatting is done host-side.
  */
-extern int write(int fd, const void *buf, unsigned int count);
+extern int  write(int fd, const void *buf, unsigned int count);
 extern void progexit(int status);
 
-void exception_handler_c(uint32_t type, uint32_t srr0, uint32_t *save_area)
-{
+void exception_handler_c(uint32_t type, uint32_t srr0, uint32_t *save_area) {
     (void)type;
     (void)srr0;
 
     /* 4-byte "EXPT" header + 428-byte save area = 432 bytes */
     uint8_t buf[432];
-    buf[0] = 'E'; buf[1] = 'X'; buf[2] = 'P'; buf[3] = 'T';
+    buf[0] = 'E';
+    buf[1] = 'X';
+    buf[2] = 'P';
+    buf[3] = 'T';
     memcpy(buf + 4, save_area, 428);
 
     write(1, buf, 432);
@@ -86,8 +87,7 @@ void exception_handler_c(uint32_t type, uint32_t srr0, uint32_t *save_area)
 
 /* ===== Exception initialization ===== */
 
-void exception_init(void)
-{
+void exception_init(void) {
     /* Install exception stubs at all standard PPC 750 vectors */
     static const uint32_t vectors[] = {
         0x0100, /* System Reset */
@@ -107,50 +107,43 @@ void exception_init(void)
     };
     unsigned int i;
 
-    for (i = 0; i < sizeof(vectors) / sizeof(vectors[0]); i++)
+    for(i = 0; i < sizeof(vectors) / sizeof(vectors[0]); i++)
         install_exception_stub(vectors[i]);
 }
 
 /* ===== target_ops implementations ===== */
 
-static int gc_init(void)
-{
+static int gc_init(void) {
     exi_init();
     gc_video_init();
     return 0;
 }
 
-static void gc_draw_string(int x, int y, const char *str, uint32_t color)
-{
+static void gc_draw_string(int x, int y, const char *str, uint32_t color) {
     gc_video_draw_string(x, y, str, color);
 }
 
-static void gc_clear_screen(uint32_t color)
-{
+static void gc_clear_screen(uint32_t color) {
     gc_video_clear(color);
 }
 
-static void gc_setup_video(uint32_t mode, uint32_t bg_color)
-{
+static void gc_setup_video(uint32_t mode, uint32_t bg_color) {
     (void)mode;
     (void)bg_color;
     /* Video already initialized in gc_init() */
 }
 
-static void gc_execute(uint32_t address)
-{
+static void gc_execute(uint32_t address) {
     /* Flush caches for the loaded program region */
     cache_flush_range((const void *)address, 0x01000000);
     go(address);
 }
 
-static void gc_disable_cache(void)
-{
+static void gc_disable_cache(void) {
     cache_disable();
 }
 
-static void gc_reboot(void)
-{
+static void gc_reboot(void) {
     /* Jump back to kosload entry point (GC_LOADER_BASE from mk/memory.mk) */
     cache_disable();
     void (*entry)(void) = (void (*)(void))GC_LOADER_BASE;
@@ -159,16 +152,14 @@ static void gc_reboot(void)
 
 /* Global wrappers for commands.c which calls these by name (not via vtable).
  * On DC these are provided by disable.S and cdfs_redir.S. */
-void disable_cache(void)
-{
+void disable_cache(void) {
     cache_disable();
 }
 
-static void gc_set_console_enabled(bool enabled)
-{
+static void gc_set_console_enabled(bool enabled) {
     console_enabled = enabled;
     /* Write magic value at loader base+4 for loaded program to detect */
-    if (enabled)
+    if(enabled)
         *(volatile unsigned int *)(GC_LOADER_BASE + 4) = 0xdeadbeef;
     else
         *(volatile unsigned int *)(GC_LOADER_BASE + 4) = 0xfeedface;
@@ -182,13 +173,12 @@ static void gc_set_console_enabled(bool enabled)
  * To set the displayed time correctly, we must account for this bias:
  *   new_rtc = desired_time - counter_bias
  * so that new_rtc + counter_bias = desired_time. */
-#define UNIX_TO_GC_OFFSET 946684800u  /* seconds from 1970-01-01 to 2000-01-01 */
+#define UNIX_TO_GC_OFFSET 946684800  /* seconds from 1970-01-01 to 2000-01-01 */
 
 /* SRAM read command: 0x20000100 + (byte_offset << 6) */
 #define SRAM_COUNTER_BIAS_OFFSET  0x0C
 
-static uint32_t gc_get_rtc(void)
-{
+static uint32_t gc_get_rtc(void) {
     /* Read raw RTC counter (seconds since 2000-01-01).
      * We skip counter_bias (SRAM 0x0C) here — it's only needed for
      * human-readable display (IPL).  For elapsed-time calculations
@@ -202,8 +192,7 @@ static uint32_t gc_get_rtc(void)
     return rtc_val + UNIX_TO_GC_OFFSET;
 }
 
-static void gc_set_rtc(uint32_t unix_timestamp)
-{
+static void gc_set_rtc(uint32_t unix_timestamp) {
     uint32_t desired_gc_time = unix_timestamp - UNIX_TO_GC_OFFSET;
 
     /* Read counter_bias from SRAM (offset 0x0C) */
@@ -227,48 +216,42 @@ static void gc_set_rtc(uint32_t unix_timestamp)
 /* GC Time Base Register: 40.5 MHz */
 #define GC_TBR_TICKS_PER_SEC  40500000
 
-static uint64_t gc_get_ticks(void)
-{
+static uint64_t gc_get_ticks(void) {
     uint32_t tbl, tbu0, tbu1;
     /* Read TBR with rollover protection */
     do {
         __asm__ volatile("mftbu %0" : "=r"(tbu0));
         __asm__ volatile("mftb  %0" : "=r"(tbl));
         __asm__ volatile("mftbu %0" : "=r"(tbu1));
-    } while (tbu0 != tbu1);
+    } while(tbu0 != tbu1);
     return ((uint64_t)tbu0 << 32) | tbl;
 }
 
 /* XFB address and dimensions (must match video.c) */
 #define XFB_ADDR  0xC0050000
 
-static void gc_restart_timer(void)
-{
+static void gc_restart_timer(void) {
     /* TBR is always running on GameCube; nothing to restart */
 }
 
-static void gc_fill_rect(int x, int y, int w, int h, uint32_t color)
-{
+static void gc_fill_rect(int x, int y, int w, int h, uint32_t color) {
     uint32_t fill = gc_color_to_yuy2(color);
     int row;
 
-    for (row = 0; row < h; row++) {
+    for(row = 0; row < h; row++) {
         uint32_t *fb32 = (uint32_t *)(XFB_ADDR +
                           (y + row) * GC_SCREEN_WIDTH * 2 + (x & ~1) * 2);
         int pairs = (w + 1) / 2;
         int i;
-        for (i = 0; i < pairs; i++)
+        for(i = 0; i < pairs; i++)
             fb32[i] = fill;
     }
 
     /* Flush modified framebuffer region */
-    cache_flush_dc((const void *)(XFB_ADDR + y * GC_SCREEN_WIDTH * 2),
-                   h * GC_SCREEN_WIDTH * 2);
+    cache_flush_dc((const void *)(XFB_ADDR + y * GC_SCREEN_WIDTH * 2), h * GC_SCREEN_WIDTH * 2);
 }
 
-static void gc_draw_bitmap(int x, int y, int w, int h,
-                           const uint32_t *bits, uint32_t color)
-{
+static void gc_draw_bitmap(int x, int y, int w, int h, const uint32_t *bits, uint32_t color) {
     uint32_t yuy2 = gc_color_to_yuy2(color);
     uint8_t c_y  = (yuy2 >> 24) & 0xFF;
     uint8_t c_cb = (yuy2 >> 16) & 0xFF;
@@ -276,10 +259,10 @@ static void gc_draw_bitmap(int x, int y, int w, int h,
     int words_per_row = (w + 31) / 32;
     int row, col;
 
-    for (row = 0; row < h; row++) {
+    for(row = 0; row < h; row++) {
         const uint32_t *row_bits = bits + row * words_per_row;
         /* Process 2 pixels at a time (YUY2 constraint) */
-        for (col = 0; col < w; col += 2) {
+        for(col = 0; col < w; col += 2) {
             int word0 = col / 32;
             int bit0 = 31 - (col % 32);
             int word1 = (col + 1) / 32;
@@ -288,14 +271,12 @@ static void gc_draw_bitmap(int x, int y, int w, int h,
             int p1 = (col + 1 < w) ? ((row_bits[word1] >> bit1) & 1) : 0;
 
             /* Skip pixel pairs where neither bit is set */
-            if (!p0 && !p1)
+            if(!p0 && !p1)
                 continue;
 
-            uint32_t *fb32 = (uint32_t *)(XFB_ADDR +
-                              (y + row) * GC_SCREEN_WIDTH * 2 +
-                              ((x + col) & ~1) * 2);
+            uint32_t *fb32 = (uint32_t *)(XFB_ADDR + (y + row) * GC_SCREEN_WIDTH * 2 + ((x + col) & ~1) * 2);
 
-            if (p0 && p1) {
+            if(p0 && p1) {
                 /* Both pixels foreground */
                 *fb32 = ((uint32_t)c_y << 24) | ((uint32_t)c_cb << 16) |
                         ((uint32_t)c_y << 8) | (uint32_t)c_cr;
@@ -305,18 +286,15 @@ static void gc_draw_bitmap(int x, int y, int w, int h,
                 uint8_t y0 = p0 ? c_y : (existing >> 24) & 0xFF;
                 uint8_t y1 = p1 ? c_y : (existing >> 8) & 0xFF;
                 /* Use foreground chroma when at least one pixel is set */
-                *fb32 = ((uint32_t)y0 << 24) | ((uint32_t)c_cb << 16) |
-                        ((uint32_t)y1 << 8) | (uint32_t)c_cr;
+                *fb32 = ((uint32_t)y0 << 24) | ((uint32_t)c_cb << 16) | ((uint32_t)y1 << 8) | (uint32_t)c_cr;
             }
         }
     }
 
-    cache_flush_dc((const void *)(XFB_ADDR + y * GC_SCREEN_WIDTH * 2),
-                   h * GC_SCREEN_WIDTH * 2);
+    cache_flush_dc((const void *)(XFB_ADDR + y * GC_SCREEN_WIDTH * 2), h * GC_SCREEN_WIDTH * 2);
 }
 
-static uint32_t gc_detect_ram_size(void)
-{
+static uint32_t gc_detect_ram_size(void) {
     /* GameCube has 24MB main RAM (MEM1), no hardware variation */
     return 24 * 1024 * 1024;
 }
@@ -342,7 +320,6 @@ const target_ops_t gamecube_target_ops = {
     .detect_ram_size = gc_detect_ram_size,
 };
 
-const target_ops_t *target_get_ops(void)
-{
+const target_ops_t *target_get_ops(void) {
     return &gamecube_target_ops;
 }

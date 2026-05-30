@@ -9,8 +9,7 @@
 
 extern void common_main(const target_ops_t *tgt, const client_transport_ops_t *xport);
 
-int main(void)
-{
+int main(void) {
     common_main(target_get_ops(), &client_serial_transport_ops);
     return 0;
 }

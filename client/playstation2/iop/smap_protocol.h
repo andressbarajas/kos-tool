@@ -25,7 +25,7 @@
  * RPC identity
  * ============================================================ */
 
-#define PS2_SMAP_RPC_ID         0x534D4150u  /* 'PAMS' */
+#define PS2_SMAP_RPC_ID         0x534D4150  /* 'PAMS' */
 
 /* ------------------------------------------------------------
  * RPC-server readiness handshake (the -F bind-before-register fix)
@@ -57,7 +57,7 @@
  * same pattern as kosdev9's probe); EE reads 0xBC1F8040.
  */
 #define PS2_SMAP_READY_IOP_PHYS 0x001F8040
-#define PS2_SMAP_READY_MAGIC    0x534D5244  /* 'DRMS' — SMAP RPC ReaDy */
+#define PS2_SMAP_READY_MAGIC    0x534D5244 /* 'DRMS' — SMAP RPC ReaDy */
 #define PS2_SMAP_NOTREADY_MAGIC 0x00000000
 
 /* RPC function numbers.  Whitelisted on the IOP side; the handler
@@ -94,7 +94,7 @@ enum ps2_smap_rc {
  * ============================================================ */
 
 /* Ethernet max frame: 6+6+2+1500+4 (DST/SRC/TYPE/PAYLOAD/FCS). */
-#define PS2_SMAP_FRAME_MAX     1518u
+#define PS2_SMAP_FRAME_MAX     1518
 
 /* Slot counts.  Both sides compile with these sizes, and GET_LAYOUT repeats
  * them so the EE can verify it is talking to the matching IRX.
@@ -102,12 +102,12 @@ enum ps2_smap_rc {
  * We use 16 RX/TX slots so short bursts do not stall while the other side is
  * catching up.  Earlier 4-slot rings worked, but had less room for batched
  * PARTBIN and console traffic. */
-#define PS2_SMAP_RX_SLOTS      16u
-#define PS2_SMAP_TX_SLOTS      16u
+#define PS2_SMAP_RX_SLOTS      16
+#define PS2_SMAP_TX_SLOTS      16
 
 /* Per-slot byte size in the shared region.  Must accommodate
  * PS2_SMAP_FRAME_MAX with 16-byte alignment for SIF DMA QWORD writes. */
-#define PS2_SMAP_SLOT_SIZE     1536u   /* (1518 + 15) & ~15 = 1520, rounded to 1536 */
+#define PS2_SMAP_SLOT_SIZE     1536   /* (1518 + 15) & ~15 = 1520, rounded to 1536 */
 
 /* TX slot state codes (u32 in shared memory). */
 enum ps2_smap_tx_state {
@@ -118,7 +118,7 @@ enum ps2_smap_tx_state {
 
 /* Layout magic: cross-checked by EE after GET_LAYOUT to detect garbled
  * replies and stale layout caches. */
-#define PS2_SMAP_LAYOUT_MAGIC  0x534D504Cu  /* 'LPMS' */
+#define PS2_SMAP_LAYOUT_MAGIC  0x534D504C  /* 'LPMS' */
 
 /* ABI version.  Bump this when the structs or function numbers change.
  *
@@ -128,7 +128,7 @@ enum ps2_smap_tx_state {
  *   5 — TX_SLOTS bumped to 16, hot_diag adds last_submit_batch_size,
  *       new fno SUBMIT_TX_BATCH, RELEASE_BATCH_MAX bumped to 16.
  *   6 — adds GET_RTC / SET_RTC RPCs backed by CDVDMAN clock calls. */
-#define PS2_SMAP_ABI_VERSION   6u
+#define PS2_SMAP_ABI_VERSION   6
 
 /* ============================================================
  * Enums kept for chip_init / status reporting
@@ -153,7 +153,7 @@ enum ps2_smap_link_state {
  * Surfaced to the EE via ps2_smap_status_rsp_t::fault. */
 enum ps2_smap_fault {
     PS2_SMAP_FAULT_NONE             = 0,
-    PS2_SMAP_FAULT_MAILBOX_BAD      = 1,    /* legacy, retained for chip_init switch */
+    PS2_SMAP_FAULT_MAILBOX_BAD      = 1,  /* legacy, retained for chip_init switch */
     PS2_SMAP_FAULT_THREAD_CREATE    = 2,
     PS2_SMAP_FAULT_THREAD_START     = 3,
     PS2_SMAP_FAULT_EMAC3_RESET      = 4,
@@ -165,8 +165,8 @@ enum ps2_smap_fault {
     PS2_SMAP_FAULT_DEV9_ID_BAD      = 10,
     PS2_SMAP_FAULT_STACR_TIMEOUT    = 11,
     PS2_SMAP_FAULT_EEPROM_IO        = 12,
-    PS2_SMAP_FAULT_SHARED_ALLOC     = 13,    /* sysmem alloc for shared region failed */
-    PS2_SMAP_FAULT_RPC_REGISTER     = 14     /* iop_rpc_register failed */
+    PS2_SMAP_FAULT_SHARED_ALLOC     = 13,  /* sysmem alloc for shared region failed */
+    PS2_SMAP_FAULT_RPC_REGISTER     = 14   /* iop_rpc_register failed */
 };
 
 /* ============================================================
@@ -180,10 +180,10 @@ enum ps2_smap_fault {
  * frame bytes into the slot's data region; EE reads it after observing
  * rx_head advance. */
 typedef struct ps2_smap_rx_desc {
-    volatile unsigned int len;     /* payload bytes in slot's data region */
-    volatile unsigned int status;  /* 0 = OK; non-zero reserved for FCS/trunc */
-    volatile unsigned int seq;     /* per-slot monotonic, written by IOP */
-    volatile unsigned int _pad;    /* align to 16 bytes */
+    volatile unsigned int len;    /* payload bytes in slot's data region */
+    volatile unsigned int status; /* 0 = OK; non-zero reserved for FCS/trunc */
+    volatile unsigned int seq;    /* per-slot monotonic, written by IOP */
+    volatile unsigned int _pad;   /* align to 16 bytes */
 } ps2_smap_rx_desc_t;
 
 /* Hot diagnostics — polled by EE every frame.  Located at
@@ -213,39 +213,39 @@ typedef struct ps2_smap_hot_diag {
  * ============================================================ */
 
 typedef struct ps2_smap_layout_rsp {
-    int          rc;                     /* 0 = ok */
-    unsigned int magic;                  /* PS2_SMAP_LAYOUT_MAGIC */
-    unsigned int abi_version;            /* PS2_SMAP_ABI_VERSION */
-    unsigned int shared_iop_phys;        /* IOP-physical base of shared region */
-    unsigned int shared_size;            /* total bytes of shared region */
+    int rc;                        /* 0 = ok */
+    unsigned int magic;            /* PS2_SMAP_LAYOUT_MAGIC */
+    unsigned int abi_version;      /* PS2_SMAP_ABI_VERSION */
+    unsigned int shared_iop_phys;  /* IOP-physical base of shared region */
+    unsigned int shared_size;      /* total bytes of shared region */
 
     unsigned int rx_slot_count;
     unsigned int rx_slot_size;
-    unsigned int rx_ring_offset;         /* offset to ps2_smap_rx_desc_t[] */
-    unsigned int rx_data_offset;         /* offset to RX bulk-data array */
+    unsigned int rx_ring_offset;    /* offset to ps2_smap_rx_desc_t[] */
+    unsigned int rx_data_offset;    /* offset to RX bulk-data array */
 
     unsigned int tx_slot_count;
     unsigned int tx_slot_size;
-    unsigned int tx_state_offset;        /* offset to tx_slot_state[] (in hot diag) */
-    unsigned int tx_data_offset;         /* offset to TX bulk-data array */
+    unsigned int tx_state_offset;    /* offset to tx_slot_state[] (in hot diag) */
+    unsigned int tx_data_offset;     /* offset to TX bulk-data array */
 
-    unsigned int diag_offset;            /* offset to ps2_smap_hot_diag_t */
-    unsigned int _pad[3];                /* align to 16 bytes */
+    unsigned int diag_offset;    /* offset to ps2_smap_hot_diag_t */
+    unsigned int _pad[3];        /* align to 16 bytes */
 } ps2_smap_layout_rsp_t;
 
 typedef struct ps2_smap_status_rsp {
     int          rc;
-    unsigned int boot_state;             /* enum ps2_smap_boot_status */
-    unsigned int fault;                  /* enum ps2_smap_fault */
-    unsigned int link_state;             /* enum ps2_smap_link_state */
+    unsigned int boot_state;     /* enum ps2_smap_boot_status */
+    unsigned int fault;          /* enum ps2_smap_fault */
+    unsigned int link_state;     /* enum ps2_smap_link_state */
     unsigned char mac[6];
     unsigned char _pad0[2];
-    unsigned int init_done;              /* 1 once chip_init returned */
-    unsigned int _pad[2];                /* align to 16 bytes */
+    unsigned int init_done;       /* 1 once chip_init returned */
+    unsigned int _pad[2];         /* align to 16 bytes */
 } ps2_smap_status_rsp_t;
 
 typedef struct ps2_smap_cold_diag_rsp {
-    int          rc;
+    int rc;
     unsigned int last_validation_op;
     unsigned int last_validation_slot;
     unsigned int last_validation_seq;
@@ -253,24 +253,24 @@ typedef struct ps2_smap_cold_diag_rsp {
     unsigned int mac_phy_status;
     unsigned int ring_invariant_flags;
     unsigned char mac[6];
-    unsigned char _pad[10];              /* align to 16 bytes */
+    unsigned char _pad[10];    /* align to 16 bytes */
 } ps2_smap_cold_diag_rsp_t;
 
 typedef struct ps2_smap_rtc_req {
     unsigned int unix_timestamp;
-    unsigned int _pad[3];                /* align to 16 bytes */
+    unsigned int _pad[3];    /* align to 16 bytes */
 } ps2_smap_rtc_req_t;
 
 typedef struct ps2_smap_rtc_rsp {
     int          rc;
     unsigned int unix_timestamp;
-    unsigned int _pad[2];                /* align to 16 bytes */
+    unsigned int _pad[2];    /* align to 16 bytes */
 } ps2_smap_rtc_rsp_t;
 
 typedef struct ps2_smap_release_rx_req {
     unsigned int slot;
     unsigned int seq;
-    unsigned int _pad[2];                /* align to 16 bytes */
+    unsigned int _pad[2];    /* align to 16 bytes */
 } ps2_smap_release_rx_req_t;
 
 /* Maximum RX releases that fit in a single batched RPC.  Sized so the
@@ -282,7 +282,7 @@ typedef struct ps2_smap_release_rx_req {
 
 typedef struct ps2_smap_release_rx_batch_req {
     unsigned int count;
-    unsigned int _pad[3];                /* align entries[] to 16 bytes */
+    unsigned int _pad[3];    /* align entries[] to 16 bytes */
     struct {
         unsigned int slot;
         unsigned int seq;
@@ -293,7 +293,7 @@ typedef struct ps2_smap_submit_tx_req {
     unsigned int slot;
     unsigned int len;
     unsigned int seq;
-    unsigned int _pad;                   /* align to 16 bytes */
+    unsigned int _pad;     /* align to 16 bytes */
 } ps2_smap_submit_tx_req_t;
 
 /* Maximum TX submissions that fit in a single batched RPC (ABI v5).
@@ -305,7 +305,7 @@ typedef struct ps2_smap_submit_tx_req {
 
 typedef struct ps2_smap_submit_tx_batch_req {
     unsigned int count;
-    unsigned int _pad[3];                /* align entries[] to 16 bytes */
+    unsigned int _pad[3];    /* align entries[] to 16 bytes */
     struct {
         unsigned int slot;
         unsigned int len;
@@ -316,13 +316,13 @@ typedef struct ps2_smap_submit_tx_batch_req {
 
 typedef struct ps2_smap_rc_rsp {
     int          rc;
-    unsigned int _pad[3];                /* align to 16 bytes */
+    unsigned int _pad[3];     /* align to 16 bytes */
 } ps2_smap_rc_rsp_t;
 
 /* RPC reception buffer size.  Must accommodate the largest request OR
  * response payload.  Currently: cold_diag_rsp = 48 bytes; layout_rsp =
  * 64 bytes; release_rx_batch_req = 16 + 16*8 = 144 bytes;
  * submit_tx_batch_req = 16 + 8*16 = 144 bytes.  Round up generously. */
-#define PS2_SMAP_RPC_BUF_SIZE  256u
+#define PS2_SMAP_RPC_BUF_SIZE    256
 
 #endif /* PS2_SMAP_PROTOCOL_H */

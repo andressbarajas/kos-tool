@@ -107,21 +107,21 @@ static void dc_set_console_enabled(bool enabled) {
     /* Write magic value at firmware base+4 for loaded program to detect.
      * Use P1 (cached) address — with write-through cache (CCR=0x090b),
      * the write reaches physical memory immediately. Matches legacy. */
-    if (enabled)
+    if(enabled)
         *(volatile unsigned int *)(DC_LOADER_BASE + 4) = 0xdeadbeef;
     else
         *(volatile unsigned int *)(DC_LOADER_BASE + 4) = 0xfeedface;
 }
 
 /* AICA RTC registers (P2 uncached addresses) */
-#define AICA_RTC_SECS_H  (*(volatile uint32_t *)0xa0710000)
-#define AICA_RTC_SECS_L  (*(volatile uint32_t *)0xa0710004)
-#define AICA_RTC_CTRL    (*(volatile uint32_t *)0xa0710008)
+#define AICA_RTC_SECS_H (*(volatile uint32_t *)0xa0710000)
+#define AICA_RTC_SECS_L (*(volatile uint32_t *)0xa0710004)
+#define AICA_RTC_CTRL   (*(volatile uint32_t *)0xa0710008)
 /* Seconds from 1950-01-01 to 1970-01-01 (AICA epoch to Unix epoch) */
-#define UNIX_TO_AICA_OFFSET 631152000u
-#define FLASHROM_BLOCK_SIZE 64
+#define UNIX_TO_AICA_OFFSET       631152000
+#define FLASHROM_BLOCK_SIZE       64
 #define FLASHROM_BITMAP_MAX_BYTES 64
-#define FLASHROM_OFFSET_CRC 62
+#define FLASHROM_OFFSET_CRC       62
 
 /* ===== BIOS flashrom syscalls (vector at 0x8c0000b8) =====
  *
@@ -130,39 +130,35 @@ static void dc_set_console_enabled(bool enabled) {
  */
 typedef int (*bios_flashrom_fn_t)(int, void *, int, int);
 
-static bios_flashrom_fn_t flashrom_fn(void)
-{
+static bios_flashrom_fn_t flashrom_fn(void) {
     return (bios_flashrom_fn_t)(*(uint32_t *)0x8c0000b8);
 }
 
-static int fr_info(int part, int *start, int *size)
-{
+static int fr_info(int part, int *start, int *size) {
     int info[2];
     int ret = flashrom_fn()(part, info, 0, 0);
-    if (ret < 0) return -1;
+    if(ret < 0)
+        return -1;
     *start = info[0];
     *size = info[1];
     return 0;
 }
 
-static int fr_read(int pos, void *dest, int n)
-{
+static int fr_read(int pos, void *dest, int n) {
     return flashrom_fn()(pos, dest, n, 1);
 }
 
-static int fr_write(int pos, void *src, int n)
-{
+static int fr_write(int pos, void *src, int n) {
     return flashrom_fn()(pos, src, n, 2);
 }
 
 /* CRC-16-CCITT over first 62 bytes of a 64-byte flashrom block */
-static uint16_t flashrom_crc(const uint8_t *buf)
-{
+static uint16_t flashrom_crc(const uint8_t *buf) {
     int n = 0xffff;
-    for (int i = 0; i < FLASHROM_OFFSET_CRC; i++) {
+    for(int i = 0; i < FLASHROM_OFFSET_CRC; i++) {
         n ^= buf[i] << 8;
-        for (int c = 0; c < 8; c++) {
-            if (n & 0x8000)
+        for(int c = 0; c < 8; c++) {
+            if(n & 0x8000)
                 n = (n << 1) ^ 4129;
             else
                 n = (n << 1);
@@ -183,16 +179,15 @@ static uint16_t flashrom_crc(const uint8_t *buf)
  * We find the current syscfg block (block_id=5), update its date field,
  * recalculate the CRC, and write it to a free slot.
  */
-#define FLASHROM_PART_SYSCFG  2
-#define FLASHROM_BLOCK_ID_SYSCFG  5
+#define FLASHROM_PART_SYSCFG     2
+#define FLASHROM_BLOCK_ID_SYSCFG 5
 
-static void update_flashrom_syscfg(uint32_t aica_time)
-{
+static void update_flashrom_syscfg(uint32_t aica_time) {
     int start, size;
-    if (fr_info(FLASHROM_PART_SYSCFG, &start, &size) < 0)
+    if(fr_info(FLASHROM_PART_SYSCFG, &start, &size) < 0)
         return;
 
-    if (size < FLASHROM_BLOCK_SIZE * 2)
+    if(size < FLASHROM_BLOCK_SIZE * 2)
         return;
 
     int num_blocks = size / FLASHROM_BLOCK_SIZE;
@@ -205,35 +200,35 @@ static void update_flashrom_syscfg(uint32_t aica_time)
 
     /* Read bitmap from end of partition */
     uint8_t bitmap[FLASHROM_BITMAP_MAX_BYTES];
-    if (bmcnt > FLASHROM_BITMAP_MAX_BYTES)
-        return;  /* Sanity check */
+    if(bmcnt > FLASHROM_BITMAP_MAX_BYTES)
+        return; /* Sanity check */
 
-    if (fr_read(start + size - bmcnt, bitmap, bmcnt) < 0)
+    if(fr_read(start + size - bmcnt, bitmap, bmcnt) < 0)
         return;
 
     /* Find the newest valid syscfg block by scanning from high to low.
      * Block 0 is the partition magic block, so skip it. */
     uint8_t block[FLASHROM_BLOCK_SIZE];
     int found = 0;
-    for (int i = num_blocks - 1; i > 0; i--) {
-        if (bitmap[i / 8] & (0x80 >> (i % 8)))
-            continue;  /* Bit set = unused, skip */
+    for(int i = num_blocks - 1; i > 0; i--) {
+        if(bitmap[i / 8] & (0x80 >> (i % 8)))
+            continue; /* Bit set = unused, skip */
 
-        if (fr_read(start + (i + 1) * FLASHROM_BLOCK_SIZE, block, FLASHROM_BLOCK_SIZE) < 0)
+        if(fr_read(start + (i + 1) * FLASHROM_BLOCK_SIZE, block, FLASHROM_BLOCK_SIZE) < 0)
             continue;
 
-        if (((uint16_t)block[0] | ((uint16_t)block[1] << 8)) != FLASHROM_BLOCK_ID_SYSCFG)
+        if(((uint16_t)block[0] | ((uint16_t)block[1] << 8)) != FLASHROM_BLOCK_ID_SYSCFG)
             continue;
 
-        if (flashrom_crc(block) != ((uint16_t)block[62] | ((uint16_t)block[63] << 8)))
+        if(flashrom_crc(block) != ((uint16_t)block[62] | ((uint16_t)block[63] << 8)))
             continue;
 
         found = 1;
         break;
     }
 
-    if (!found)
-        return;  /* No existing syscfg — don't create one from scratch */
+    if(!found)
+        return; /* No existing syscfg — don't create one from scratch */
 
     /* Update date field at offset 2 (little-endian, 4 bytes) */
     block[2] = aica_time & 0xff;
@@ -248,120 +243,112 @@ static void update_flashrom_syscfg(uint32_t aica_time)
 
     /* Find first unused real slot (bit set = unused), skip bit 0. */
     int free_slot = -1;
-    for (int i = 1; i < num_blocks; i++) {
-        if (bitmap[i / 8] & (0x80 >> (i % 8))) {
+    for(int i = 1; i < num_blocks; i++) {
+        if(bitmap[i / 8] & (0x80 >> (i % 8))) {
             free_slot = i;
             break;
         }
     }
 
-    if (free_slot < 0)
-        return;  /* Partition full — BIOS will compact on next boot */
+    if(free_slot < 0)
+        return; /* Partition full — BIOS will compact on next boot */
 
     /* Write bitmap first (mark slot as used: clear the bit).
-     * If the block write fails after this, we lose one slot but no corruption. */
+     * If the block write fails after this, we lose one slot but no corruption.
+     */
     uint8_t bm_byte = bitmap[free_slot / 8] & ~(0x80 >> (free_slot % 8));
-    if (fr_write(start + size - bmcnt + (free_slot / 8), &bm_byte, 1) < 0)
+    if(fr_write(start + size - bmcnt + (free_slot / 8), &bm_byte, 1) < 0)
         return;
 
     /* Write the updated syscfg block to the reserved slot */
-    if (fr_write(start + (free_slot + 1) * FLASHROM_BLOCK_SIZE, block, FLASHROM_BLOCK_SIZE) < 0)
+    if(fr_write(start + (free_slot + 1) * FLASHROM_BLOCK_SIZE, block, FLASHROM_BLOCK_SIZE) < 0)
         return;
 }
 
-static uint32_t dc_get_rtc(void)
-{
+static uint32_t dc_get_rtc(void) {
     uint32_t h1, h2, l;
 
     /* Read high, low, high again to detect rollover of the low 16 bits */
     do {
         h1 = AICA_RTC_SECS_H & 0xffff;
-        l  = AICA_RTC_SECS_L & 0xffff;
+        l = AICA_RTC_SECS_L & 0xffff;
         h2 = AICA_RTC_SECS_H & 0xffff;
-    } while (h1 != h2);
+    } while(h1 != h2);
 
     return ((h1 << 16) | l) - UNIX_TO_AICA_OFFSET;
 }
 
-static void dc_set_rtc(uint32_t unix_timestamp)
-{
+static void dc_set_rtc(uint32_t unix_timestamp) {
     uint32_t aica_time = unix_timestamp + UNIX_TO_AICA_OFFSET;
     int i;
 
     /* Write low first, then high; writing high locks RTC writes. */
     AICA_RTC_CTRL = 1;
-    for (i = 0; i < 3; i++) {
+    for(i = 0; i < 3; i++) {
         AICA_RTC_SECS_L = aica_time & 0xffff;
         AICA_RTC_SECS_H = (aica_time >> 16) & 0xffff;
 
-        if ((((AICA_RTC_SECS_H & 0xffff) << 16) | (AICA_RTC_SECS_L & 0xffff)) == aica_time)
+        if((((AICA_RTC_SECS_H & 0xffff) << 16) | (AICA_RTC_SECS_L & 0xffff)) == aica_time)
             break;
     }
     AICA_RTC_CTRL = 0;
 
-    if (i == 3)
+    if(i == 3)
         return;
 
-    /* Update flashrom syscfg date to prevent BIOS date/time prompt on next boot */
+    /* Update flashrom syscfg date to prevent BIOS date/time prompt on next boot
+     */
     update_flashrom_syscfg(aica_time);
 }
 
 /* ===== Screensaver support: timer, fill_rect, input polling ===== */
 
 /* SH4 Timer Unit channel 2 */
-#define TMU_TSTR   (*(volatile unsigned char  *)0xffd80004)
-#define TMU_TCOR2  (*(volatile unsigned int   *)0xffd80020)
-#define TMU_TCNT2  (*(volatile unsigned int   *)0xffd80024)
-#define TMU_TCR2   (*(volatile unsigned short *)0xffd80028)
+#define TMU_TSTR  (*(volatile unsigned char *)0xffd80004)
+#define TMU_TCOR2 (*(volatile unsigned int *)0xffd80020)
+#define TMU_TCNT2 (*(volatile unsigned int *)0xffd80024)
+#define TMU_TCR2  (*(volatile unsigned short *)0xffd80028)
 
-#define DC_TMU_TICKS_PER_SEC  48828  /* Pclk/1024 = 50MHz/1024 */
+#define DC_TMU_TICKS_PER_SEC 48828 /* Pclk/1024 = 50MHz/1024 */
 
-static void dc_tmu2_start(void)
-{
-    TMU_TSTR &= ~4;                /* Stop TMU2 */
+static void dc_tmu2_start(void) {
+    TMU_TSTR &= ~4; /* Stop TMU2 */
     TMU_TCOR2 = 0xFFFFFFFF;
     TMU_TCNT2 = 0xFFFFFFFF;
-    TMU_TCR2 = 4;                  /* Pclk/1024, no interrupt */
-    TMU_TSTR |= 4;                 /* Start TMU2 */
+    TMU_TCR2 = 4;  /* Pclk/1024, no interrupt */
+    TMU_TSTR |= 4; /* Start TMU2 */
 }
 
-static uint64_t dc_get_ticks(void)
-{
-    return (uint64_t)(0xFFFFFFFF - TMU_TCNT2);   /* Convert count-down to count-up */
+static uint64_t dc_get_ticks(void) {
+    return (uint64_t)(0xFFFFFFFF - TMU_TCNT2); /* Convert count-down to count-up */
 }
 
-static void dc_restart_timer(void)
-{
+static void dc_restart_timer(void) {
     dc_tmu2_start();
 }
 
-static void dc_fill_rect(int x, int y, int w, int h, uint32_t color)
-{
+static void dc_fill_rect(int x, int y, int w, int h, uint32_t color) {
     unsigned short c16 = (unsigned short)(color & 0xffff);
     int row, col;
-    for (row = 0; row < h; row++) {
-        volatile unsigned short *vram =
-            (volatile unsigned short *)(0xa5000000 + (y + row) * 640 * 2 + x * 2);
-        for (col = 0; col < w; col++)
+    for(row = 0; row < h; row++) {
+        volatile unsigned short *vram = (volatile unsigned short *)(0xa5000000 + (y + row) * 640 * 2 + x * 2);
+        for(col = 0; col < w; col++)
             vram[col] = c16;
     }
 }
 
-static void dc_draw_bitmap(int x, int y, int w, int h,
-                           const uint32_t *bits, uint32_t color)
-{
+static void dc_draw_bitmap(int x, int y, int w, int h, const uint32_t *bits, uint32_t color) {
     unsigned short c16 = (unsigned short)(color & 0xffff);
     int row, col;
     int words_per_row = (w + 31) / 32;
 
-    for (row = 0; row < h; row++) {
-        volatile unsigned short *vram =
-            (volatile unsigned short *)(0xa5000000 + (y + row) * 640 * 2 + x * 2);
+    for(row = 0; row < h; row++) {
+        volatile unsigned short *vram = (volatile unsigned short *)(0xa5000000 + (y + row) * 640 * 2 + x * 2);
         const uint32_t *row_bits = bits + row * words_per_row;
-        for (col = 0; col < w; col++) {
+        for(col = 0; col < w; col++) {
             int word = col / 32;
             int bit = 31 - (col % 32);
-            if ((row_bits[word] >> bit) & 1)
+            if((row_bits[word] >> bit) & 1)
                 vram[col] = c16;
         }
     }
@@ -375,15 +362,14 @@ static void dc_draw_bitmap(int x, int y, int w, int h,
  * the upper 16MB mirrors the lower 16MB (standard 16MB console).
  * If different, the upper 16MB is real RAM (32MB mod).
  */
-static uint32_t dc_detect_ram_size(void)
-{
+static uint32_t dc_detect_ram_size(void) {
     volatile unsigned char *addr_16m = (volatile unsigned char *)0xACFFFFFF;
     volatile unsigned char *addr_32m = (volatile unsigned char *)0xADFFFFFF;
 
     *addr_16m = 0xBA;
     *addr_32m = 0xAB;
 
-    if (*addr_16m != *addr_32m)
+    if(*addr_16m != *addr_32m)
         return 32 * 1024 * 1024;
 
     return 16 * 1024 * 1024;
@@ -395,16 +381,19 @@ static uint32_t dc_detect_ram_size(void)
  * register save_area) and sends it to the host via write syscall.
  * All formatting is done host-side.
  */
-extern int write(int fd, const void *buf, unsigned int count);
+extern int  write(int fd, const void *buf, unsigned int count);
 extern void progexit(int status);
 
-void exception_handler_c(uint32_t expt_code, uint32_t spc, uint32_t *save_area)
-{
+void exception_handler_c(uint32_t expt_code, uint32_t spc, uint32_t *save_area) {
     (void)spc;
 
-    /* 4-byte "EXPT" header + 4-byte expt_code + 264-byte registers = 272 bytes */
+    /* 4-byte "EXPT" header + 4-byte expt_code + 264-byte registers = 272 bytes
+     */
     uint8_t buf[272];
-    buf[0] = 'E'; buf[1] = 'X'; buf[2] = 'P'; buf[3] = 'T';
+    buf[0] = 'E';
+    buf[1] = 'X';
+    buf[2] = 'P';
+    buf[3] = 'T';
     memcpy(buf + 4, &expt_code, 4);
     memcpy(buf + 8, save_area, 264);
 
@@ -422,8 +411,7 @@ void exception_handler_c(uint32_t expt_code, uint32_t spc, uint32_t *save_area)
  * the 1st_read loader at boot time, matching legacy dcload behavior.
  * Nothing to do here at runtime.
  */
-void exception_init(void)
-{
+void exception_init(void) {
 }
 
 const target_ops_t dreamcast_target_ops = {

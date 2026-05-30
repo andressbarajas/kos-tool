@@ -37,26 +37,25 @@
 #define SCLSR2_REG   (*(volatile unsigned short *)0xffe80024)
 
 /* SCSPTR2 bit definitions */
-#define PTR2_RTSIO   (1 << 7)   /* RTS pin direction: 1=output */
-#define PTR2_RTSDT   (1 << 6)   /* RTS pin data (active low CS) */
-#define PTR2_CTSIO   (1 << 5)   /* CTS pin direction: 1=output */
-#define PTR2_CTSDT   (1 << 4)   /* CTS pin data (SCLK) */
-#define PTR2_SPB2IO  (1 << 1)   /* TxD pin direction: 1=output */
-#define PTR2_SPB2DT  (1 << 0)   /* TxD/RxD pin data (MOSI/MISO) */
+#define PTR2_RTSIO   (1 << 7) /* RTS pin direction: 1=output */
+#define PTR2_RTSDT   (1 << 6) /* RTS pin data (active low CS) */
+#define PTR2_CTSIO   (1 << 5) /* CTS pin direction: 1=output */
+#define PTR2_CTSDT   (1 << 4) /* CTS pin data (SCLK) */
+#define PTR2_SPB2IO  (1 << 1) /* TxD pin direction: 1=output */
+#define PTR2_SPB2DT  (1 << 0) /* TxD/RxD pin data (MOSI/MISO) */
 
 static unsigned short scsptr2_base;
 static int spi_initialized;
 
 /* ===== SPI Implementation ===== */
 
-static int dc_w5500_spi_init(void)
-{
-    if (spi_initialized)
+static int dc_w5500_spi_init(void) {
+    if(spi_initialized)
         return -1;
 
     /* Disable SCIF transmit/receive, clear FIFO */
     SCSCR2_REG = 0;
-    SCFCR2_REG = 0x06;     /* Reset TX and RX FIFOs */
+    SCFCR2_REG = 0x06; /* Reset TX and RX FIFOs */
     SCFCR2_REG = 0;
     SCSMR2_REG = 0;
     SCFSR2_REG = 0;
@@ -75,9 +74,8 @@ static int dc_w5500_spi_init(void)
     return 0;
 }
 
-static void dc_w5500_spi_shutdown(void)
-{
-    if (!spi_initialized)
+static void dc_w5500_spi_shutdown(void) {
+    if(!spi_initialized)
         return;
 
     spi_initialized = 0;
@@ -87,15 +85,13 @@ static void dc_w5500_spi_shutdown(void)
     scif_init(57600);
 }
 
-static void dc_w5500_spi_cs_assert(void)
-{
+static void dc_w5500_spi_cs_assert(void) {
     /* CS# active low: clear RTSDT */
     scsptr2_base &= ~PTR2_RTSDT;
     SCSPTR2_REG = scsptr2_base;
 }
 
-static void dc_w5500_spi_cs_deassert(void)
-{
+static void dc_w5500_spi_cs_deassert(void) {
     /* CS# inactive: set RTSDT */
     scsptr2_base |= PTR2_RTSDT;
     SCSPTR2_REG = scsptr2_base;
@@ -106,16 +102,15 @@ static void dc_w5500_spi_cs_deassert(void)
  * SPI Mode 0: data setup on falling SCLK, sampled on rising SCLK.
  * We set the data bit, then pulse SCLK high, then low.
  */
-static void dc_w5500_spi_write_byte(unsigned char val)
-{
+static void dc_w5500_spi_write_byte(unsigned char val) {
     unsigned short tmp = scsptr2_base & ~PTR2_CTSDT & ~PTR2_SPB2DT;
     unsigned char bit;
     int i;
 
-    for (i = 7; i >= 0; i--) {
+    for(i = 7; i >= 0; i--) {
         bit = (val >> i) & 0x01;
-        SCSPTR2_REG = tmp | bit;                /* Set MOSI, SCLK low */
-        SCSPTR2_REG = tmp | bit | PTR2_CTSDT;   /* SCLK high (W5500 samples) */
+        SCSPTR2_REG = tmp | bit;              /* Set MOSI, SCLK low */
+        SCSPTR2_REG = tmp | bit | PTR2_CTSDT; /* SCLK high (W5500 samples) */
     }
     /* Leave SCLK low */
     SCSPTR2_REG = tmp;
@@ -125,16 +120,15 @@ static void dc_w5500_spi_write_byte(unsigned char val)
  * Read one byte from MISO, MSB first.
  * Drive MOSI high (0xFF idle) while clocking.
  */
-static unsigned char dc_w5500_spi_read_byte(void)
-{
+static unsigned char dc_w5500_spi_read_byte(void) {
     unsigned short tmp = (scsptr2_base & ~PTR2_CTSDT) | PTR2_SPB2DT;
     unsigned char val = 0;
     int i;
 
-    for (i = 0; i < 8; i++) {
-        SCSPTR2_REG = tmp;                  /* SCLK low, MOSI high */
-        SCSPTR2_REG = tmp | PTR2_CTSDT;     /* SCLK high */
-        val = (val << 1) | (SCSPTR2_REG & PTR2_SPB2DT);  /* Sample MISO */
+    for(i = 0; i < 8; i++) {
+        SCSPTR2_REG = tmp;                              /* SCLK low, MOSI high */
+        SCSPTR2_REG = tmp | PTR2_CTSDT;                 /* SCLK high */
+        val = (val << 1) | (SCSPTR2_REG & PTR2_SPB2DT); /* Sample MISO */
     }
 
     return val;
@@ -145,20 +139,18 @@ static unsigned char dc_w5500_spi_read_byte(void)
  * Just loops write_byte for simplicity. Could be optimized with
  * unrolled bit-bang like KOS scif-spi.c for higher throughput.
  */
-static void dc_w5500_spi_write_data(const unsigned char *buf, int len)
-{
+static void dc_w5500_spi_write_data(const unsigned char *buf, int len) {
     int i;
-    for (i = 0; i < len; i++)
+    for(i = 0; i < len; i++)
         dc_w5500_spi_write_byte(buf[i]);
 }
 
 /*
  * Read multiple bytes (MISO).
  */
-static void dc_w5500_spi_read_data(unsigned char *buf, int len)
-{
+static void dc_w5500_spi_read_data(unsigned char *buf, int len) {
     int i;
-    for (i = 0; i < len; i++)
+    for(i = 0; i < len; i++)
         buf[i] = dc_w5500_spi_read_byte();
 }
 

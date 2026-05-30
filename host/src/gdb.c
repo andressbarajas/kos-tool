@@ -39,13 +39,13 @@ static void gdb_print_bind_failure_hint(uint16_t port) {
 }
 
 int gdb_socket_runtime_init(kostool_context_t *ctx) {
-    if (!ctx->socket_ops) {
+    if(!ctx->socket_ops) {
         fprintf(stderr, "GDB server requires socket operations\n");
         return -1;
     }
 
-    if (!ctx->sockets_initialized) {
-        if (ctx->socket_ops->init && ctx->socket_ops->init() != 0) {
+    if(!ctx->sockets_initialized) {
+        if(ctx->socket_ops->init && ctx->socket_ops->init() != 0) {
             fprintf(stderr, "Socket initialization failed\n");
             return -1;
         }
@@ -56,8 +56,8 @@ int gdb_socket_runtime_init(kostool_context_t *ctx) {
 }
 
 void gdb_socket_runtime_cleanup(kostool_context_t *ctx) {
-    if (ctx->sockets_initialized) {
-        if (ctx->socket_ops && ctx->socket_ops->cleanup)
+    if(ctx->sockets_initialized) {
+        if(ctx->socket_ops && ctx->socket_ops->cleanup)
             ctx->socket_ops->cleanup();
         ctx->sockets_initialized = 0;
     }
@@ -67,9 +67,9 @@ int gdb_send_all(kostool_context_t *ctx, int64_t sock, const void *data, size_t 
     const uint8_t *buf = (const uint8_t *)data;
     size_t sent = 0;
 
-    while (sent < len) {
+    while(sent < len) {
         int rv = ctx->socket_ops->send(sock, buf + sent, len - sent);
-        if (rv <= 0)
+        if(rv <= 0)
             return -1;
         sent += (size_t)rv;
     }
@@ -78,21 +78,21 @@ int gdb_send_all(kostool_context_t *ctx, int64_t sock, const void *data, size_t 
 }
 
 void gdb_close_client(kostool_context_t *ctx) {
-    if (ctx->gdb_client_socket >= 0) {
+    if(ctx->gdb_client_socket >= 0) {
         ctx->socket_ops->close(ctx->gdb_client_socket);
         ctx->gdb_client_socket = -1;
     }
 }
 
 void gdb_report_program_exit(kostool_context_t *ctx, int exit_code) {
-    if (ctx->gdb_client_socket >= 0) {
+    if(ctx->gdb_client_socket >= 0) {
         char payload[4];
         char packet[8];
         unsigned char checksum = 0;
 
         snprintf(payload, sizeof(payload), "W%02x", exit_code & 0xff);
 
-        for (size_t i = 0; payload[i] != '\0'; ++i)
+        for(size_t i = 0; payload[i] != '\0'; ++i)
             checksum = (unsigned char)(checksum + (unsigned char)payload[i]);
 
         snprintf(packet, sizeof(packet), "$%s#%02x", payload, checksum);
@@ -102,20 +102,20 @@ void gdb_report_program_exit(kostool_context_t *ctx, int exit_code) {
 }
 
 int gdb_init(kostool_context_t *ctx, uint16_t port) {
-    if (gdb_socket_runtime_init(ctx) != 0)
+    if(gdb_socket_runtime_init(ctx) != 0)
         return -1;
 
     int64_t sock = ctx->socket_ops->tcp_socket();
-    if (sock < 0) {
+    if(sock < 0) {
         fprintf(stderr, "Failed to create GDB server socket\n");
         return -1;
     }
 
-    if (ctx->socket_ops->setsockopt_reuse)
+    if(ctx->socket_ops->setsockopt_reuse)
         ctx->socket_ops->setsockopt_reuse(sock);
 
-    if (ctx->socket_ops->bind_listen(sock, port) < 0) {
-        if (gdb_bind_failed_port_in_use())
+    if(ctx->socket_ops->bind_listen(sock, port) < 0) {
+        if(gdb_bind_failed_port_in_use())
             gdb_print_bind_failure_hint(port);
         else
             fprintf(stderr, "Failed to bind GDB server to port %u\n", port);
@@ -134,7 +134,7 @@ int gdb_init(kostool_context_t *ctx, uint16_t port) {
 void gdb_shutdown(kostool_context_t *ctx) {
     gdb_close_client(ctx);
 
-    if (ctx->gdb_server_socket >= 0) {
+    if(ctx->gdb_server_socket >= 0) {
         ctx->socket_ops->close(ctx->gdb_server_socket);
         ctx->gdb_server_socket = -1;
     }

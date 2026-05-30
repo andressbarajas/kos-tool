@@ -35,16 +35,16 @@
 #define EE_UNCACHED(addr)      ((void *)PS2_EE_KSEG1_ADDR(addr))
 #define EE_PHYS(addr)          PS2_EE_PHYS(addr)
 
-#define POLL_TIMEOUT           100000000
-#define RPC_REPLY_TIMEOUT      (POLL_TIMEOUT * 5)
-#define SIF_PACKET_SIZE        64
-#define SIF_RECV_QWC           8
-#define SIF_RPC_PACKET_COUNT   8
-#define SIF_DMA_QUEUE_DEPTH    8
-#define SIF_DMA_MAX_DESCS      8
+#define POLL_TIMEOUT            100000000
+#define RPC_REPLY_TIMEOUT       (POLL_TIMEOUT * 5)
+#define SIF_PACKET_SIZE         64
+#define SIF_RECV_QWC            8
+#define SIF_RPC_PACKET_COUNT    8
+#define SIF_DMA_QUEUE_DEPTH     8
+#define SIF_DMA_MAX_DESCS       8
 #define SIF_DMA_JOB_STREAM_SIZE 1024
-#define SIF_DMA_MAX_CHUNK      (SIF_DMA_JOB_STREAM_SIZE - 32)
-#define SIF_CMD_RECV_BLOCK     128
+#define SIF_DMA_MAX_CHUNK       (SIF_DMA_JOB_STREAM_SIZE - 32)
+#define SIF_CMD_RECV_BLOCK      128
 
 /* RPC arg block for LOADFILE function 6 (LoadModuleBuffer). The 252-byte
  * "unused" gap mirrors the layout the resident IOP LOADFILE expects. */
@@ -68,27 +68,20 @@ SIF_ASSERT_SIZE(assert_sif_rpc_header_size, ee_sif_rpc_header_t, 28);
 SIF_ASSERT_SIZE(assert_sif_rpc_bind_size, ee_sif_rpc_bind_pkt_t, 36);
 SIF_ASSERT_SIZE(assert_sif_rpc_call_size, ee_sif_rpc_call_pkt_t, 56);
 SIF_ASSERT_SIZE(assert_sif_rpc_rend_size, ee_sif_rpc_rend_pkt_t, 48);
-SIF_ASSERT_SIZE(assert_sif_rpc_other_data_size,
-                ee_sif_rpc_other_data_pkt_t, 44);
+SIF_ASSERT_SIZE(assert_sif_rpc_other_data_size, ee_sif_rpc_other_data_pkt_t, 44);
 SIF_ASSERT_SIZE(assert_sif_rpc_client_size, ee_sif_rpc_client_t, 40);
 SIF_ASSERT_SIZE(assert_sif_rpc_server_size, ee_sif_rpc_server_t, 68);
 SIF_ASSERT_SIZE(assert_sif_rpc_queue_size, ee_sif_rpc_queue_t, 24);
 
 static ee_sif_status_fn_t g_status_fn;
 
-static volatile uint8_t sif_recv_buf[SIF_RECV_QWC * 16]
-    __attribute__((aligned(64)));
-static volatile uint8_t sif_rpc_packets[SIF_RPC_PACKET_COUNT][SIF_PACKET_SIZE]
-    __attribute__((aligned(64)));
-static volatile ee_sif_rpc_client_t iopheap_client
-    __attribute__((aligned(64)));
-static volatile ee_sif_rpc_client_t loadfile_client
-    __attribute__((aligned(64)));
-static volatile ee_sif_load_module_args_t load_args
-    __attribute__((aligned(64)));
-static volatile ee_sif_load_module_result_t load_result
-    __attribute__((aligned(64)));
-static volatile uint32_t iopheap_arg __attribute__((aligned(64)));
+static volatile uint8_t sif_recv_buf[SIF_RECV_QWC * 16] __attribute__((aligned(64)));
+static volatile uint8_t sif_rpc_packets[SIF_RPC_PACKET_COUNT][SIF_PACKET_SIZE] __attribute__((aligned(64)));
+static volatile ee_sif_rpc_client_t         iopheap_client __attribute__((aligned(64)));
+static volatile ee_sif_rpc_client_t         loadfile_client __attribute__((aligned(64)));
+static volatile ee_sif_load_module_args_t   load_args __attribute__((aligned(64)));
+static volatile ee_sif_load_module_result_t load_result __attribute__((aligned(64)));
+static volatile uint32_t                    iopheap_arg __attribute__((aligned(64)));
 typedef struct {
     uint32_t id;
     uint32_t stream_size;
@@ -96,8 +89,7 @@ typedef struct {
     uint8_t stream[SIF_DMA_JOB_STREAM_SIZE] __attribute__((aligned(64)));
 } ee_sif_dma_job_t;
 
-static ee_sif_dma_job_t sif1_dma_jobs[SIF_DMA_QUEUE_DEPTH]
-    __attribute__((aligned(64)));
+static ee_sif_dma_job_t sif1_dma_jobs[SIF_DMA_QUEUE_DEPTH] __attribute__((aligned(64)));
 static uint8_t sif1_dma_queue[SIF_DMA_QUEUE_DEPTH];
 
 static uint32_t sif_subaddr;
@@ -124,14 +116,14 @@ static uint32_t sif_sreg_shadow[256];
 #define SIF_DMA_JOB_QUEUED   1
 #define SIF_DMA_JOB_RUNNING  2
 
-#define IOP_RAM_BASE_EE      PS2_EE_IOP_RAM_UNCACHED_BASE
-#define LF_DISPATCH_SIG_0    0x27bdffe8
-#define LF_DISPATCH_SIG_1A   0x2c820006
-#define LF_DISPATCH_SIG_1B   0x2c820007
-#define LF_DISPATCH_SIG_2    0x14400003
-#define LF_DISPATCH_SIG_3    0xafbf0010
-#define IOP_LOADCORE_LIBLIST_HEAD  0x00000800
-#define LIB_ENTRY_EXPORTS_OFF      0x18
+#define IOP_RAM_BASE_EE           PS2_EE_IOP_RAM_UNCACHED_BASE
+#define LF_DISPATCH_SIG_0         0x27bdffe8
+#define LF_DISPATCH_SIG_1A        0x2c820006
+#define LF_DISPATCH_SIG_1B        0x2c820007
+#define LF_DISPATCH_SIG_2         0x14400003
+#define LF_DISPATCH_SIG_3         0xafbf0010
+#define IOP_LOADCORE_LIBLIST_HEAD 0x00000800
+#define LIB_ENTRY_EXPORTS_OFF     0x18
 
 #define SIFRPC_REC_ID_FOR(rid) (((rid) << 16) | 0x05)
 
@@ -147,7 +139,7 @@ void ee_sif_set_status_callback(ee_sif_status_fn_t fn) {
 
 static void ee_delay(unsigned long loops) {
     volatile unsigned long i;
-    for (i = 0; i < loops; i++)
+    for(i = 0; i < loops; i++)
         ;
 }
 
@@ -157,7 +149,7 @@ void ee_sif_reset_state(void) {
     memset((void *)sif_sreg_shadow, 0, sizeof(sif_sreg_shadow));
     memset((void *)&iopheap_client, 0, sizeof(iopheap_client));
     memset((void *)&loadfile_client, 0, sizeof(loadfile_client));
-    for (i = 0; i < SIF_DMA_QUEUE_DEPTH; i++) {
+    for(i = 0; i < SIF_DMA_QUEUE_DEPTH; i++) {
         sif1_dma_jobs[i].id = 0;
         sif1_dma_jobs[i].stream_size = 0;
         sif1_dma_jobs[i].state = SIF_DMA_JOB_FREE;
@@ -174,22 +166,37 @@ void ee_sif_reset_state(void) {
 }
 
 static int ee_sif_set_reg(uint32_t reg, uint32_t value) {
-    switch (reg) {
-    case SIF_REG_MAINADDR: SBUS_MSCOM  = value; return 0;
-    case SIF_REG_SUBADDR:  SBUS_SMCOM  = value; return 0;
-    case SIF_REG_MSFLAG:   SBUS_MSFLAG = value; return 0;
-    case SIF_REG_SMFLAG:   SBUS_SMFLAG = value; return 0;
-    default:               sif_sreg_shadow[reg & 0xff] = value; return 0;
+    switch(reg) {
+    case SIF_REG_MAINADDR:
+        SBUS_MSCOM = value;
+        return 0;
+    case SIF_REG_SUBADDR:
+        SBUS_SMCOM = value;
+        return 0;
+    case SIF_REG_MSFLAG:
+        SBUS_MSFLAG = value;
+        return 0;
+    case SIF_REG_SMFLAG:
+        SBUS_SMFLAG = value;
+        return 0;
+    default:
+        sif_sreg_shadow[reg & 0xff] = value;
+        return 0;
     }
 }
 
 static int ee_sif_get_reg(uint32_t reg) {
-    switch (reg) {
-    case SIF_REG_MAINADDR: return (int)SBUS_MSCOM;
-    case SIF_REG_SUBADDR:  return (int)SBUS_SMCOM;
-    case SIF_REG_SMFLAG:   return (int)SBUS_SMFLAG;
-    case SIF_REG_MSFLAG:   return (int)SBUS_MSFLAG;
-    default:               return (int)sif_sreg_shadow[reg & 0xff];
+    switch(reg) {
+    case SIF_REG_MAINADDR:
+        return (int)SBUS_MSCOM;
+    case SIF_REG_SUBADDR:
+        return (int)SBUS_SMCOM;
+    case SIF_REG_SMFLAG:
+        return (int)SBUS_SMFLAG;
+    case SIF_REG_MSFLAG:
+        return (int)SBUS_MSFLAG;
+    default:
+        return (int)sif_sreg_shadow[reg & 0xff];
     }
 }
 
@@ -216,34 +223,33 @@ int ee_sif_sreg_publish(uint32_t index, uint32_t value) {
 }
 
 static void ee_sif_dispatch_cmd(volatile ee_sif_cmd_header_t *hdr) {
-    switch (hdr->cid) {
-        case EE_SIF_CMD_CHANGE_SADDR:
-            break;
+    switch(hdr->cid) {
+    case EE_SIF_CMD_CHANGE_SADDR:
+        break;
 
-        case EE_SIF_CMD_SET_SREG: {
-            volatile ee_sif_set_sreg_t *pkt =
-                (volatile ee_sif_set_sreg_t *)hdr;
-            /* Index 0 is the resident RPCINIT handshake during bring-up. */
-            if(pkt->index == 0)
-                ee_sif_set_reg(SIF_SYSREG_RPCINIT, pkt->value);
-            /* Publish every inbound SET_SREG into the software shadow so
-             * later ee_sif_sreg_read() (and the broker get_sreg op) can
-             * observe values an IOP module pushed to us. Goes straight to
-             * the shadow array — NOT ee_sif_set_reg() — so a hostile/stray
-             * index in 1..4 can't clobber the live SBUS MMIO registers. */
-            sif_sreg_shadow[pkt->index & 0xff] = pkt->value;
-            break;
-        }
+    case EE_SIF_CMD_SET_SREG: {
+        volatile ee_sif_set_sreg_t *pkt = (volatile ee_sif_set_sreg_t *)hdr;
+        /* Index 0 is the resident RPCINIT handshake during bring-up. */
+        if(pkt->index == 0)
+            ee_sif_set_reg(SIF_SYSREG_RPCINIT, pkt->value);
+        /* Publish every inbound SET_SREG into the software shadow so
+         * later ee_sif_sreg_read() (and the broker get_sreg op) can
+         * observe values an IOP module pushed to us. Goes straight to
+         * the shadow array — NOT ee_sif_set_reg() — so a hostile/stray
+         * index in 1..4 can't clobber the live SBUS MMIO registers. */
+        sif_sreg_shadow[pkt->index & 0xff] = pkt->value;
+        break;
+    }
 
-        case EE_SIF_CMD_INIT_CMD:
-        case EE_SIF_CMD_IOP_RESET:
-            break;
+    case EE_SIF_CMD_INIT_CMD:
+    case EE_SIF_CMD_IOP_RESET:
+        break;
 
-        case EE_SIF_CMD_RPC_END:
-        case EE_SIF_CMD_RPC_BIND:
-        case EE_SIF_CMD_RPC_CALL:
-        default:
-            break;
+    case EE_SIF_CMD_RPC_END:
+    case EE_SIF_CMD_RPC_BIND:
+    case EE_SIF_CMD_RPC_CALL:
+    default:
+        break;
     }
 }
 
@@ -275,7 +281,8 @@ static void dmac_resume(uint32_t saved) {
 
 static void dmac_stop_channel_held(volatile uint32_t *chcr) {
     *chcr = 0;
-    (void)*chcr;            /* MMIO read-back drains WBB before re-enable; matches BIOS isceSifSetDma at 0x80006800. */
+    (void)*chcr; /* MMIO read-back drains WBB before re-enable; matches BIOS
+                    isceSifSetDma at 0x80006800. */
 }
 
 static void dmac_force_stop(volatile uint32_t *chcr) {
@@ -316,7 +323,7 @@ static uint32_t ee_sif_next_dma_id(void) {
 static int ee_sif_find_free_dma_job(void) {
     uint32_t i;
 
-    for (i = 0; i < SIF_DMA_QUEUE_DEPTH; i++) {
+    for(i = 0; i < SIF_DMA_QUEUE_DEPTH; i++) {
         if(sif1_dma_jobs[i].state == SIF_DMA_JOB_FREE)
             return (int)i;
     }
@@ -324,9 +331,7 @@ static int ee_sif_find_free_dma_job(void) {
     return -1;
 }
 
-static int ee_sif_build_dma_job(ee_sif_dma_job_t *job,
-                                ee_sif_dma_transfer_t *dmat,
-                                int count) {
+static int ee_sif_build_dma_job(ee_sif_dma_job_t *job, ee_sif_dma_transfer_t *dmat, int count) {
     uint32_t scratch_off;
     uint8_t *stream;
     int i;
@@ -338,7 +343,7 @@ static int ee_sif_build_dma_job(ee_sif_dma_job_t *job,
     stream = job->stream;
     memset(stream, 0, sizeof(job->stream));
 
-    for (i = 0; i < count; i++) {
+    for(i = 0; i < count; i++) {
         uint32_t bytes = (uint32_t)dmat[i].size;
         uint32_t dest = (uint32_t)dmat[i].dest & 0x1fffffff;
         uint32_t attr = (uint32_t)dmat[i].attr;
@@ -407,7 +412,8 @@ static void ee_sif_start_dma_job(int slot) {
     D6_TADR = EE_PHYS(job->stream);
     D6_QWC = 0;
     D6_CHCR = SIF1_SOURCE_CHCR;
-    (void)D6_CHCR;          /* MMIO read-back drains WBB; matches BIOS isceSifSetDma at 0x8000693c. */
+    (void)D6_CHCR; /* MMIO read-back drains WBB; matches BIOS isceSifSetDma at
+                      0x8000693c. */
     job->state = SIF_DMA_JOB_RUNNING;
     sif1_dma_current = slot;
 }
@@ -423,13 +429,10 @@ static void ee_sif_dma_pump(void) {
         sif1_dma_current = -1;
     }
 
-    if(sif1_dma_current < 0 &&
-        sif1_dma_queue_count > 0 &&
-        (D6_CHCR & CHCR_STR) == 0) {
+    if(sif1_dma_current < 0 && sif1_dma_queue_count > 0 && (D6_CHCR & CHCR_STR) == 0) {
         int slot = (int)sif1_dma_queue[sif1_dma_queue_head];
 
-        sif1_dma_queue_head =
-            (sif1_dma_queue_head + 1) % SIF_DMA_QUEUE_DEPTH;
+        sif1_dma_queue_head = (sif1_dma_queue_head + 1) % SIF_DMA_QUEUE_DEPTH;
         sif1_dma_queue_count--;
         ee_sif_start_dma_job(slot);
     }
@@ -461,8 +464,7 @@ int ee_sif_set_dma(ee_sif_dma_transfer_t *dmat, int count) {
     }
 
     sif1_dma_queue[sif1_dma_queue_tail] = (uint8_t)slot;
-    sif1_dma_queue_tail =
-        (sif1_dma_queue_tail + 1) % SIF_DMA_QUEUE_DEPTH;
+    sif1_dma_queue_tail = (sif1_dma_queue_tail + 1) % SIF_DMA_QUEUE_DEPTH;
     sif1_dma_queue_count++;
 
     ee_sif_dma_pump();
@@ -478,7 +480,7 @@ int ee_sif_dma_stat(int trid) {
 
     ee_sif_dma_pump();
 
-    for (i = 0; i < SIF_DMA_QUEUE_DEPTH; i++) {
+    for(i = 0; i < SIF_DMA_QUEUE_DEPTH; i++) {
         if(sif1_dma_jobs[i].id != id)
             continue;
         if(sif1_dma_jobs[i].state == SIF_DMA_JOB_QUEUED)
@@ -498,7 +500,8 @@ void ee_sif_set_dchain(void) {
     D_STAT = D_STAT_SIF0;
     D5_QWC = 0;
     D5_CHCR = SIF0_DCHAIN_CHCR;
-    (void)D5_CHCR;          /* MMIO read-back drains WBB; matches BIOS isceSifSetDChain at 0x8000636c. */
+    (void)D5_CHCR; /* MMIO read-back drains WBB; matches BIOS isceSifSetDChain
+                      at 0x8000636c. */
 }
 
 static int wait_dma_done(int trid) {
@@ -507,7 +510,7 @@ static int wait_dma_done(int trid) {
     if(trid <= 0)
         return -1;
 
-    for (i = 0; i < POLL_TIMEOUT; i++) {
+    for(i = 0; i < POLL_TIMEOUT; i++) {
         if(ee_sif_dma_stat(trid) < 0)
             return 0;
     }
@@ -533,13 +536,11 @@ void ee_sif_enable_sif0_irq(void) {
     /* D_STAT upper-half bits TOGGLE on write. Read the current mask;
      * if SIF0 mask is already on, leave it. Otherwise write 1 to flip on. */
     uint32_t stat = D_STAT;
-    if ((stat & (D_STAT_SIF0 << 16)) == 0)
+    if((stat & (D_STAT_SIF0 << 16)) == 0)
         D_STAT = (D_STAT_SIF0 << 16);
 }
 
-static void ee_sif_fill_header(ee_sif_cmd_header_t *hdr,
-                               uint32_t cid,
-                               uint32_t packet_size) {
+static void ee_sif_fill_header(ee_sif_cmd_header_t *hdr, uint32_t cid, uint32_t packet_size) {
     hdr->psize = (uint8_t)(packet_size & 0xff);
     hdr->dsize = 0;
     hdr->dest = (void *)sif_subaddr;
@@ -547,8 +548,7 @@ static void ee_sif_fill_header(ee_sif_cmd_header_t *hdr,
     hdr->opt = 0;
 }
 
-int ee_sif_send_cmd(uint32_t cid, void *packet, uint32_t packet_size,
-                    const void *extra_src, void *extra_dest,
+int ee_sif_send_cmd(uint32_t cid, void *packet, uint32_t packet_size, const void *extra_src, void *extra_dest,
                     uint32_t extra_size) {
     ee_sif_dma_transfer_t dmat[2];
     int count = 0;
@@ -559,8 +559,7 @@ int ee_sif_send_cmd(uint32_t cid, void *packet, uint32_t packet_size,
 
     ((ee_sif_cmd_header_t *)packet)->psize = (uint8_t)(packet_size & 0xff);
     ((ee_sif_cmd_header_t *)packet)->dsize = extra_size;
-    ((ee_sif_cmd_header_t *)packet)->dest =
-        (extra_size != 0) ? extra_dest : 0;
+    ((ee_sif_cmd_header_t *)packet)->dest = (extra_size != 0) ? extra_dest : 0;
     ((ee_sif_cmd_header_t *)packet)->cid = cid;
 
     if(extra_size != 0) {
@@ -595,7 +594,7 @@ int ee_sif_iop_write(void *iop_dest, const void *src, uint32_t size) {
     src_bytes = (const uint8_t *)src;
     dest_addr = (uint32_t)iop_dest;
     offset = 0;
-    while (offset < size) {
+    while(offset < size) {
         uint32_t chunk = size - offset;
         int trid;
 
@@ -635,7 +634,7 @@ static int ee_sif_get_other_data(uint32_t src_iop, void *dst_ee, uint32_t size) 
 
     uc_dst = (volatile uint32_t *)EE_UNCACHED(dst_ee);
     poll_words = (size + 3) >> 2;
-    for (i = 0; i < poll_words; i++)
+    for(i = 0; i < poll_words; i++)
         uc_dst[i] = 0x5A5A5A5A;
 
     memset((void *)pkt, 0, sizeof(pkt));
@@ -644,15 +643,14 @@ static int ee_sif_get_other_data(uint32_t src_iop, void *dst_ee, uint32_t size) 
     pkt_data->dest = (void *)EE_PHYS(dst_ee);
     pkt_data->size = (int32_t)size;
 
-    rc = ee_sif_send_cmd(EE_SIF_CMD_GET_OTHER_DATA,
-                         (void *)pkt, 64, 0, 0, 0);
+    rc = ee_sif_send_cmd(EE_SIF_CMD_GET_OTHER_DATA, (void *)pkt, 64, 0, 0, 0);
     if(rc < 0)
         return -2;
 
-    for (i = 0; i < POLL_TIMEOUT; i++) {
+    for(i = 0; i < POLL_TIMEOUT; i++) {
         if(uc_dst[0] != 0x5A5A5A5A) {
             unsigned int j;
-            for (j = 0; j < POLL_TIMEOUT / 256; j++) {
+            for(j = 0; j < POLL_TIMEOUT / 256; j++) {
                 if((D_STAT & D_STAT_SIF0) != 0)
                     break;
             }
@@ -670,7 +668,7 @@ int ee_sif_iop_read(uint32_t src_iop, void *dst_ee, uint32_t size) {
     uint8_t *out = (uint8_t *)dst_ee;
     uint32_t offset = 0;
 
-    while (offset < size) {
+    while(offset < size) {
         uint32_t chunk = size - offset;
         volatile uint8_t *src_uc;
         uint32_t i;
@@ -681,7 +679,7 @@ int ee_sif_iop_read(uint32_t src_iop, void *dst_ee, uint32_t size) {
             return -1;
 
         src_uc = (volatile uint8_t *)EE_UNCACHED(scratch);
-        for (i = 0; i < chunk; i++)
+        for(i = 0; i < chunk; i++)
             out[offset + i] = src_uc[i];
 
         offset += chunk;
@@ -702,13 +700,12 @@ int ee_sif_iop_read_word(uint32_t src_iop, uint32_t *out) {
     return 0;
 }
 
-volatile ee_sif_cmd_header_t *ee_sif_poll_packet(uint32_t cid,
-                                                 unsigned int timeout) {
+volatile ee_sif_cmd_header_t *ee_sif_poll_packet(uint32_t cid, unsigned int timeout) {
     volatile ee_sif_cmd_header_t *hdr;
     unsigned int i;
 
     hdr = (volatile ee_sif_cmd_header_t *)EE_UNCACHED(sif_recv_buf);
-    for (i = 0; i < timeout; i++) {
+    for(i = 0; i < timeout; i++) {
         if((D_STAT & D_STAT_SIF0) == 0)
             continue;
 
@@ -732,16 +729,16 @@ int ee_sif_wait_iop_bootend(void) {
      *   1. BIOS EESYNC raises BOOTEND in SMFLG after LOADCORE phase 2.
      *      Set on real hardware before any user ELF runs.
      *   2. IOP-side SIFCMD writes its recv-buffer address into SUBADDR
-     *      (SMCOM) when its initialisation completes.  This is the only 
-     *      one PCSX2 reliably sets — its BIOS HLE skips the BOOTEND 
+     *      (SMCOM) when its initialisation completes.  This is the only
+     *      one PCSX2 reliably sets — its BIOS HLE skips the BOOTEND
      *      SMFLG write.
      * Either is sufficient for our purposes; exit on whichever appears
      * first.  On real hardware BOOTEND wins on iteration 0; on PCSX2
      * SUBADDR is already non-zero by the time we get here. */
-    for (i = 0; i < POLL_TIMEOUT; i++) {
-        if ((uint32_t)ee_sif_get_reg(SIF_REG_SMFLAG) & EE_SIF_STAT_BOOTEND)
+    for(i = 0; i < POLL_TIMEOUT; i++) {
+        if((uint32_t)ee_sif_get_reg(SIF_REG_SMFLAG) & EE_SIF_STAT_BOOTEND)
             return 0;
-        if ((uint32_t)ee_sif_get_reg(SIF_REG_SUBADDR) != 0)
+        if((uint32_t)ee_sif_get_reg(SIF_REG_SUBADDR) != 0)
             return 0;
     }
 
@@ -750,7 +747,7 @@ int ee_sif_wait_iop_bootend(void) {
 
 int ee_sif_cmd_init(void) {
     ee_sif_saddr_pkt_t saddr_pkt;
-    ee_sif_init_pkt_t init_pkt;
+    ee_sif_init_pkt_t  init_pkt;
 
     ee_sif_status("PHASE1: SIFCMD ARM RX");
     memset((void *)sif_recv_buf, 0, sizeof(sif_recv_buf));
@@ -771,24 +768,20 @@ int ee_sif_cmd_init(void) {
 
     ee_sif_status("PHASE1: BUILD CHANGE_SADDR");
     memset(&saddr_pkt, 0, sizeof(saddr_pkt));
-    ee_sif_fill_header(&saddr_pkt.header, EE_SIF_CMD_CHANGE_SADDR,
-                       sizeof(saddr_pkt));
+    ee_sif_fill_header(&saddr_pkt.header, EE_SIF_CMD_CHANGE_SADDR, sizeof(saddr_pkt));
     saddr_pkt.buff = (void *)EE_PHYS(sif_recv_buf);
 
     ee_sif_status("PHASE1: SEND CHANGE_SADDR");
-    if(ee_sif_send_cmd(EE_SIF_CMD_CHANGE_SADDR, &saddr_pkt,
-                        sizeof(saddr_pkt), 0, 0, 0) < 0) {
+    if(ee_sif_send_cmd(EE_SIF_CMD_CHANGE_SADDR, &saddr_pkt, sizeof(saddr_pkt), 0, 0, 0) < 0) {
         ee_sif_status("PHASE1: SEND TIMEOUT");
         return -3;
     }
 
     ee_sif_status("PHASE1: SEND INIT_ADDR");
     memset(&init_pkt, 0, sizeof(init_pkt));
-    ee_sif_fill_header(&init_pkt.header, EE_SIF_CMD_INIT_CMD,
-                       sizeof(init_pkt));
+    ee_sif_fill_header(&init_pkt.header, EE_SIF_CMD_INIT_CMD, sizeof(init_pkt));
     init_pkt.buff = (void *)EE_PHYS(sif_recv_buf);
-    if(ee_sif_send_cmd(EE_SIF_CMD_INIT_CMD, &init_pkt,
-                        sizeof(init_pkt), 0, 0, 0) < 0) {
+    if(ee_sif_send_cmd(EE_SIF_CMD_INIT_CMD, &init_pkt, sizeof(init_pkt), 0, 0, 0) < 0) {
         ee_sif_status("PHASE1: INIT_ADDR FAIL");
         return -4;
     }
@@ -827,9 +820,8 @@ int ee_sif_rpc_init(void) {
     (void)ee_sif_set_reg(SIF_SYSREG_RPCINIT, 0);
 
     ee_sif_status("PHASE1: WAIT RPCINIT");
-    for (i = 0; i < POLL_TIMEOUT / 256; i++) {
-        volatile ee_sif_cmd_header_t *hdr =
-            ee_sif_poll_packet(EE_SIF_CMD_SET_SREG, 256);
+    for(i = 0; i < POLL_TIMEOUT / 256; i++) {
+        volatile ee_sif_cmd_header_t *hdr = ee_sif_poll_packet(EE_SIF_CMD_SET_SREG, 256);
         if(hdr != 0) {
             ee_sif_dispatch_cmd(hdr);
             ee_sif_rearm_receive();
@@ -849,8 +841,7 @@ void ee_sif_rpc_client_clear(volatile ee_sif_rpc_client_t *client) {
         memset((void *)client, 0, sizeof(*client));
 }
 
-int ee_sif_rpc_bind(volatile ee_sif_rpc_client_t *client,
-                    uint32_t server_id) {
+int ee_sif_rpc_bind(volatile ee_sif_rpc_client_t *client, uint32_t server_id) {
     volatile ee_sif_rpc_bind_pkt_t *pkt;
     volatile ee_sif_rpc_rend_pkt_t *reply;
     uint32_t rid;
@@ -860,8 +851,7 @@ int ee_sif_rpc_bind(volatile ee_sif_rpc_client_t *client,
 
     ee_sif_status("PHASE1: RPC BIND");
     pkt = (volatile ee_sif_rpc_bind_pkt_t *)rpc_alloc_packet();
-    ee_sif_fill_header((ee_sif_cmd_header_t *)&pkt->sifcmd,
-                       EE_SIF_CMD_RPC_BIND, SIF_PACKET_SIZE);
+    ee_sif_fill_header((ee_sif_cmd_header_t *)&pkt->sifcmd, EE_SIF_CMD_RPC_BIND, SIF_PACKET_SIZE);
     rid = ++sifrpc_next_rid;
     pkt->rec_id = (int32_t)SIFRPC_REC_ID_FOR(rid);
     pkt->pkt_addr = (void *)EE_UNCACHED(pkt);
@@ -875,12 +865,10 @@ int ee_sif_rpc_bind(volatile ee_sif_rpc_client_t *client,
     client->mode = 0;
     client->server = 0;
 
-    if(ee_sif_send_cmd(EE_SIF_CMD_RPC_BIND, (void *)pkt,
-                        SIF_PACKET_SIZE, 0, 0, 0) < 0)
+    if(ee_sif_send_cmd(EE_SIF_CMD_RPC_BIND, (void *)pkt, SIF_PACKET_SIZE, 0, 0, 0) < 0)
         return -1;
 
-    reply = (volatile ee_sif_rpc_rend_pkt_t *)
-        ee_sif_poll_packet(EE_SIF_CMD_RPC_END, POLL_TIMEOUT);
+    reply = (volatile ee_sif_rpc_rend_pkt_t *)ee_sif_poll_packet(EE_SIF_CMD_RPC_END, POLL_TIMEOUT);
     if(reply == 0) {
         ee_sif_status("PHASE1: BIND NO REPLY");
         ee_sif_rearm_receive();
@@ -906,13 +894,11 @@ int ee_sif_rpc_bind(volatile ee_sif_rpc_client_t *client,
     return 0;
 }
 
-int ee_sif_rpc_bind_retry(volatile ee_sif_rpc_client_t *client,
-                          uint32_t server_id,
-                          unsigned int attempts) {
+int ee_sif_rpc_bind_retry(volatile ee_sif_rpc_client_t *client, uint32_t server_id, unsigned int attempts) {
     unsigned int i;
     int rc = -3;
 
-    for (i = 0; i < attempts; i++) {
+    for(i = 0; i < attempts; i++) {
         rc = ee_sif_rpc_bind(client, server_id);
         if(rc == 0)
             return 0;
@@ -924,9 +910,8 @@ int ee_sif_rpc_bind_retry(volatile ee_sif_rpc_client_t *client,
     return rc;
 }
 
-int ee_sif_rpc_call(volatile ee_sif_rpc_client_t *client, int rpc_number,
-                    const void *sendbuf, uint32_t send_size,
-                    void *recvbuf, uint32_t recv_size) {
+int ee_sif_rpc_call(volatile ee_sif_rpc_client_t *client, int rpc_number, const void *sendbuf,
+                    uint32_t send_size, void *recvbuf, uint32_t recv_size) {
     volatile ee_sif_rpc_call_pkt_t *pkt;
     volatile ee_sif_rpc_header_t *reply;
     uint32_t rid;
@@ -935,8 +920,7 @@ int ee_sif_rpc_call(volatile ee_sif_rpc_client_t *client, int rpc_number,
         return -1;
 
     pkt = (volatile ee_sif_rpc_call_pkt_t *)rpc_alloc_packet();
-    ee_sif_fill_header((ee_sif_cmd_header_t *)&pkt->sifcmd,
-                       EE_SIF_CMD_RPC_CALL, SIF_PACKET_SIZE);
+    ee_sif_fill_header((ee_sif_cmd_header_t *)&pkt->sifcmd, EE_SIF_CMD_RPC_CALL, SIF_PACKET_SIZE);
     rid = ++sifrpc_next_rid;
     pkt->rec_id = (int32_t)SIFRPC_REC_ID_FOR(rid);
     pkt->pkt_addr = (void *)EE_UNCACHED(pkt);
@@ -957,12 +941,11 @@ int ee_sif_rpc_call(volatile ee_sif_rpc_client_t *client, int rpc_number,
     if(recv_size != 0)
         cache_flush_dc(recvbuf, recv_size);
 
-    if(ee_sif_send_cmd(EE_SIF_CMD_RPC_CALL, (void *)pkt, SIF_PACKET_SIZE,
-                        sendbuf, client->buf, send_size) < 0)
+    if(ee_sif_send_cmd(EE_SIF_CMD_RPC_CALL, (void *)pkt, SIF_PACKET_SIZE, sendbuf, client->buf, send_size) <
+       0)
         return -2;
 
-    reply = (volatile ee_sif_rpc_header_t *)
-        ee_sif_poll_packet(EE_SIF_CMD_RPC_END, RPC_REPLY_TIMEOUT);
+    reply = (volatile ee_sif_rpc_header_t *)ee_sif_poll_packet(EE_SIF_CMD_RPC_END, RPC_REPLY_TIMEOUT);
     if(reply == 0) {
         ee_sif_status("PHASE1: RPC NO REPLY");
         return -3;
@@ -976,16 +959,15 @@ void *ee_sif_alloc_iop_heap(uint32_t size) {
     volatile uint32_t *result_view;
 
     if(iopheap_client.server == 0) {
-        //ee_sif_status("PHASE1: HEAP BIND");
+        // ee_sif_status("PHASE1: HEAP BIND");
         if(ee_sif_rpc_bind(&iopheap_client, EE_SIF_IOPHEAP_RPC_ID) < 0)
             return 0;
     }
 
     iopheap_arg = size;
     cache_flush_dc((const void *)&iopheap_arg, sizeof(iopheap_arg));
-    if(ee_sif_rpc_call(&iopheap_client, IOPHEAP_ALLOC_CID,
-                        (const void *)&iopheap_arg, sizeof(iopheap_arg),
-                        (void *)&iopheap_arg, sizeof(iopheap_arg)) < 0)
+    if(ee_sif_rpc_call(&iopheap_client, IOPHEAP_ALLOC_CID, (const void *)&iopheap_arg, sizeof(iopheap_arg),
+                       (void *)&iopheap_arg, sizeof(iopheap_arg)) < 0)
         return 0;
 
     result_view = (volatile uint32_t *)EE_UNCACHED(&iopheap_arg);
@@ -1005,9 +987,8 @@ int ee_sif_free_iop_heap(void *iop_addr) {
 
     iopheap_arg = (uint32_t)iop_addr;
     cache_flush_dc((const void *)&iopheap_arg, sizeof(iopheap_arg));
-    if(ee_sif_rpc_call(&iopheap_client, IOPHEAP_FREE_CID,
-                        (const void *)&iopheap_arg, sizeof(iopheap_arg),
-                        (void *)&iopheap_arg, sizeof(iopheap_arg)) < 0)
+    if(ee_sif_rpc_call(&iopheap_client, IOPHEAP_FREE_CID, (const void *)&iopheap_arg, sizeof(iopheap_arg),
+                       (void *)&iopheap_arg, sizeof(iopheap_arg)) < 0)
         return -1;
 
     /* IOPHEAP HFREE reply is the freed address (or 0 on failure). */
@@ -1015,8 +996,7 @@ int ee_sif_free_iop_heap(void *iop_addr) {
     return (*result_view != 0) ? 0 : -1;
 }
 
-int ee_sif_load_module_buffer(const void *irx, uint32_t irx_size,
-                              const char *args, uint32_t arg_len,
+int ee_sif_load_module_buffer(const void *irx, uint32_t irx_size, const char *args, uint32_t arg_len,
                               ee_sif_load_module_result_t *out) {
     volatile ee_sif_load_module_result_t *result_view;
     void *irx_iop_addr;
@@ -1028,8 +1008,7 @@ int ee_sif_load_module_buffer(const void *irx, uint32_t irx_size,
         return -1;
 
     if(loadfile_client.server == 0) {
-        if(ee_sif_rpc_bind_retry(&loadfile_client,
-                                  EE_SIF_LOADFILE_RPC_ID, 64) < 0)
+        if(ee_sif_rpc_bind_retry(&loadfile_client, EE_SIF_LOADFILE_RPC_ID, 64) < 0)
             return -2;
     }
 
@@ -1042,8 +1021,7 @@ int ee_sif_load_module_buffer(const void *irx, uint32_t irx_size,
 
     memset((void *)&load_args, 0, sizeof(load_args));
     memset((void *)&load_result, 0, sizeof(load_result));
-    load_args.module_ptr =
-        EE_SIF_IOP_KSEG1_BASE | (((uint32_t)irx_iop_addr) & 0x1fffff);
+    load_args.module_ptr = EE_SIF_IOP_KSEG1_BASE | (((uint32_t)irx_iop_addr) & 0x1fffff);
     load_args.arg_len = arg_len;
     if(arg_len != 0)
         memcpy((void *)load_args.args, args, arg_len);
@@ -1051,13 +1029,11 @@ int ee_sif_load_module_buffer(const void *irx, uint32_t irx_size,
     cache_flush_dc((const void *)&load_args, sizeof(load_args));
     cache_flush_dc((const void *)&load_result, sizeof(load_result));
 
-    if(ee_sif_rpc_call(&loadfile_client, LOADFILE_LOAD_BUF_CID,
-                        (const void *)&load_args, sizeof(load_args),
-                        (void *)&load_result, sizeof(load_result)) < 0)
+    if(ee_sif_rpc_call(&loadfile_client, LOADFILE_LOAD_BUF_CID, (const void *)&load_args, sizeof(load_args),
+                       (void *)&load_result, sizeof(load_result)) < 0)
         return -5;
 
-    result_view =
-        (volatile ee_sif_load_module_result_t *)EE_UNCACHED(&load_result);
+    result_view = (volatile ee_sif_load_module_result_t *)EE_UNCACHED(&load_result);
     if(out != 0) {
         out->result = result_view->result;
         out->modres = result_view->modres;
@@ -1076,13 +1052,17 @@ static inline void iop_write_word_direct(uint32_t iop_addr, uint32_t value) {
 
 static uint32_t lmb_find_loadfile_dispatcher(void) {
     uint32_t addr;
-    for (addr = 0x00010000; addr < EE_SIF_IOP_RAM_SIZE - 16; addr += 4) {
+    for(addr = 0x00010000; addr < EE_SIF_IOP_RAM_SIZE - 16; addr += 4) {
         uint32_t w1;
-        if(iop_read_word_direct(addr) != LF_DISPATCH_SIG_0) continue;
+        if(iop_read_word_direct(addr) != LF_DISPATCH_SIG_0)
+            continue;
         w1 = iop_read_word_direct(addr + 4);
-        if(w1 != LF_DISPATCH_SIG_1A && w1 != LF_DISPATCH_SIG_1B) continue;
-        if(iop_read_word_direct(addr + 8) != LF_DISPATCH_SIG_2) continue;
-        if(iop_read_word_direct(addr + 12) != LF_DISPATCH_SIG_3) continue;
+        if(w1 != LF_DISPATCH_SIG_1A && w1 != LF_DISPATCH_SIG_1B)
+            continue;
+        if(iop_read_word_direct(addr + 8) != LF_DISPATCH_SIG_2)
+            continue;
+        if(iop_read_word_direct(addr + 12) != LF_DISPATCH_SIG_3)
+            continue;
         return addr;
     }
     return 0;
@@ -1091,7 +1071,7 @@ static uint32_t lmb_find_loadfile_dispatcher(void) {
 static uint32_t lmb_walk_for_modload(void) {
     uint32_t head;
     uint32_t entry;
-    int safety;
+    int      safety;
 
     if(ee_sif_iop_read_word(IOP_LOADCORE_LIBLIST_HEAD, &head) < 0)
         return 0;
@@ -1099,7 +1079,7 @@ static uint32_t lmb_walk_for_modload(void) {
         return 0;
 
     entry = head;
-    for (safety = 0; safety < 64; safety++) {
+    for(safety = 0; safety < 64; safety++) {
         uint32_t next_ptr;
         uint32_t name_w0;
         uint32_t name_w1;
@@ -1107,14 +1087,16 @@ static uint32_t lmb_walk_for_modload(void) {
         if(entry == 0 || entry >= EE_SIF_IOP_RAM_SIZE)
             break;
 
-        if(ee_sif_iop_read_word(entry + 0x0C, &name_w0) < 0) break;
-        if(ee_sif_iop_read_word(entry + 0x10, &name_w1) < 0) break;
+        if(ee_sif_iop_read_word(entry + 0x0C, &name_w0) < 0)
+            break;
+        if(ee_sif_iop_read_word(entry + 0x10, &name_w1) < 0)
+            break;
 
-        if(name_w0 == 0x6C646F6D &&
-            (name_w1 & 0x00FFFFFF) == 0x0064616F)
+        if(name_w0 == 0x6C646F6D && (name_w1 & 0x00FFFFFF) == 0x0064616F)
             return entry + LIB_ENTRY_EXPORTS_OFF;
 
-        if(ee_sif_iop_read_word(entry + 0x00, &next_ptr) < 0) break;
+        if(ee_sif_iop_read_word(entry + 0x00, &next_ptr) < 0)
+            break;
         entry = next_ptr;
     }
 
@@ -1123,38 +1105,33 @@ static uint32_t lmb_walk_for_modload(void) {
 
 static uint32_t lmb_scan_for_modload(void) {
     uint32_t addr;
-    for (addr = 0x800; addr < EE_SIF_IOP_RAM_SIZE - 16; addr += 4) {
-        if(iop_read_word_direct(addr) != 0x6C646F6D) continue;
-        if((iop_read_word_direct(addr + 4) & 0x00FFFFFF) !=
-            0x0064616F) continue;
+    for(addr = 0x800; addr < EE_SIF_IOP_RAM_SIZE - 16; addr += 4) {
+        if(iop_read_word_direct(addr) != 0x6C646F6D)
+            continue;
+        if((iop_read_word_direct(addr + 4) & 0x00FFFFFF) != 0x0064616F)
+            continue;
         return addr + 0x8;
     }
     return 0;
 }
 
-static void lmb_build_stub(uint32_t *stub,
-                           uint32_t load_module_buffer,
-                           uint32_t start_module,
+static void lmb_build_stub(uint32_t *stub, uint32_t load_module_buffer, uint32_t start_module,
                            uint32_t result_iop_addr) {
-    uint32_t jal_lmb =
-        0x0c000000 | ((load_module_buffer >> 2) & 0x03FFFFFF);
-    uint32_t jal_sm =
-        0x0c000000 | ((start_module >> 2) & 0x03FFFFFF);
-    uint32_t lui_s1 =
-        0x3c110000 | ((result_iop_addr >> 16) & 0xFFFF);
-    uint32_t ori_s1 =
-        0x36310000 | (result_iop_addr & 0xFFFF);
+    uint32_t jal_lmb = 0x0c000000 | ((load_module_buffer >> 2) & 0x03FFFFFF);
+    uint32_t jal_sm = 0x0c000000 | ((start_module >> 2) & 0x03FFFFFF);
+    uint32_t lui_s1 = 0x3c110000 | ((result_iop_addr >> 16) & 0xFFFF);
+    uint32_t ori_s1 = 0x36310000 | (result_iop_addr & 0xFFFF);
 
-    stub[ 0] = 0x27bdffd8;
-    stub[ 1] = 0xafb00018;
-    stub[ 2] = 0xafbf0020;
-    stub[ 3] = 0x00808021;
-    stub[ 4] = 0x8c840000;
-    stub[ 5] = jal_lmb;
-    stub[ 6] = 0xafb1001c;
-    stub[ 7] = lui_s1;
-    stub[ 8] = 0x04400008;
-    stub[ 9] = ori_s1;
+    stub[0] = 0x27bdffd8;
+    stub[1] = 0xafb00018;
+    stub[2] = 0xafbf0020;
+    stub[3] = 0x00808021;
+    stub[4] = 0x8c840000;
+    stub[5] = jal_lmb;
+    stub[6] = 0xafb1001c;
+    stub[7] = lui_s1;
+    stub[8] = 0x04400008;
+    stub[9] = ori_s1;
     stub[10] = 0x00402021;
     stub[11] = 0x26250008;
     stub[12] = 0x8e060004;
@@ -1212,8 +1189,7 @@ int ee_sif_apply_lmb_patch(void) {
 
     lui_at_inst = iop_read_word_direct(lf_dispatcher + 0x1C);
     lw_v0_inst = iop_read_word_direct(lf_dispatcher + 0x24);
-    jt_base = ((lui_at_inst & 0xFFFF) << 16)
-            + (uint32_t)(int32_t)(int16_t)(lw_v0_inst & 0xFFFF);
+    jt_base = ((lui_at_inst & 0xFFFF) << 16) + (uint32_t)(int32_t)(int16_t)(lw_v0_inst & 0xFFFF);
 
     patch_iop = ee_sif_alloc_iop_heap(sizeof(stub));
     if(patch_iop == 0)
@@ -1239,8 +1215,7 @@ int ee_sif_iop_reset(const char *arg) {
     unsigned int i;
 
     if(arg != 0) {
-        while (arg[arg_len] != '\0' &&
-               arg_len < (int)EE_SIF_IOP_RESET_ARG_MAX)
+        while(arg[arg_len] != '\0' && arg_len < (int)EE_SIF_IOP_RESET_ARG_MAX)
             arg_len++;
     }
     arg_len_padded = ((uint32_t)arg_len + 3) & ~3;
@@ -1248,7 +1223,7 @@ int ee_sif_iop_reset(const char *arg) {
     memset(&reset_packet, 0, sizeof(reset_packet));
     if(arg_len > 0) {
         int j;
-        for (j = 0; j < arg_len; j++)
+        for(j = 0; j < arg_len; j++)
             reset_packet.arg[j] = arg[j];
     }
     reset_packet.arg_len = (int32_t)arg_len_padded;
@@ -1256,15 +1231,14 @@ int ee_sif_iop_reset(const char *arg) {
 
     ee_sif_set_reg(SIF_REG_SMFLAG, EE_SIF_STAT_BOOTEND);
 
-    rc = ee_sif_send_cmd(EE_SIF_CMD_IOP_RESET,
-                         &reset_packet, sizeof(reset_packet), 0, 0, 0);
+    rc = ee_sif_send_cmd(EE_SIF_CMD_IOP_RESET, &reset_packet, sizeof(reset_packet), 0, 0, 0);
     if(rc < 0)
         return -1;
 
     ee_sif_set_reg(SIF_REG_SMFLAG, 0);
     ee_delay(2000000);
 
-    for (i = 0; i < POLL_TIMEOUT; i++) {
+    for(i = 0; i < POLL_TIMEOUT; i++) {
         if((uint32_t)ee_sif_get_reg(SIF_REG_SMFLAG) & EE_SIF_STAT_BOOTEND)
             goto bootend_seen;
     }

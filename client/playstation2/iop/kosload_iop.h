@@ -49,10 +49,10 @@
  * table name is exactly eight bytes; names shorter than eight bytes are
  * NUL-padded, while eight-byte names have no terminator in the header.
  */
-#define KOSLOAD_EXPORT_TABLE_MAGIC 0x41C00000u
-#define KOSLOAD_IMPORT_TABLE_MAGIC 0x41E00000u
-#define KOSLOAD_IMPORT_STUB_JR_RA  0x03E00008u
-#define KOSLOAD_IOP_LINK_TABLE_HEADER_SIZE 20u
+#define KOSLOAD_EXPORT_TABLE_MAGIC 0x41C00000
+#define KOSLOAD_IMPORT_TABLE_MAGIC 0x41E00000
+#define KOSLOAD_IMPORT_STUB_JR_RA  0x03E00008
+#define KOSLOAD_IOP_LINK_TABLE_HEADER_SIZE 20
 
 typedef struct kosload_iop_link_table_header {
     unsigned int magic;                         /* +0x00 */
@@ -95,16 +95,15 @@ enum {
  * is what works.
  *
  * Place exactly one KOSLOAD_IRX_ID() at file scope per IRX. */
-#define KOSLOAD_IRX_ID(name_str, major_v, minor_v) \
-    static const char _kosload_irx_id_name[] = name_str; \
-    struct kosload_irx_id_t { \
-        const char *name; \
-        unsigned short version; \
-    }; \
-    struct kosload_irx_id_t _irx_id \
-        __attribute__((used, section(".sdata"))) = { \
-        _kosload_irx_id_name, \
-        (unsigned short)(((major_v) << 8) | (minor_v)), \
+#define KOSLOAD_IRX_ID(name_str, major_v, minor_v)                                   \
+    static const char _kosload_irx_id_name[] = name_str;                             \
+    struct kosload_irx_id_t {                                                        \
+        const char    *name;                                                         \
+        unsigned short version;                                                      \
+    };                                                                               \
+    struct kosload_irx_id_t _irx_id __attribute__((used, section(".sdata"))) = {     \
+        _kosload_irx_id_name,                                                        \
+        (unsigned short)(((major_v) << 8) | (minor_v)),                              \
     }
 
 /* ---------------------------------------------------------------- *
@@ -171,39 +170,34 @@ enum {
  * exactly once per library before any KOSLOAD_IMPORT for that
  * library.  Local label `9` is reused safely — GAS scopes numeric
  * local labels to the most-recent definition. */
-#define KOSLOAD_IMPORT_TABLE(libname, major_ver, minor_ver) \
-    __asm__( \
-        ".pushsection .text.imports." #libname ", \"ax\", @progbits\n" \
-        ".balign 4\n" \
-        "9:\n" \
-        ".long 0x41E00000\n" \
-        ".long 0\n" \
-        ".long ((" #major_ver ") << 8) | (" #minor_ver ")\n" \
-        ".ascii \"" #libname "\"\n" \
-        ".org 9b + 20\n" \
-        ".popsection\n" \
-    )
+#define KOSLOAD_IMPORT_TABLE(libname, major_ver, minor_ver)                           \
+    __asm__(".pushsection .text.imports." #libname ", \"ax\", @progbits\n"            \
+            ".balign 4\n"                                                             \
+            "9:\n"                                                                    \
+            ".long 0x41E00000\n"                                                      \
+            ".long 0\n"                                                               \
+            ".long ((" #major_ver ") << 8) | (" #minor_ver ")\n"                      \
+            ".ascii \"" #libname "\"\n"                                               \
+            ".org 9b + 20\n"                                                          \
+            ".popsection\n")
 
 /* Emit one 8-byte stub for an imported function and declare its C
  * prototype.  After this macro, `sym(...)` is callable from C with
  * the given return type and argument list.  Pre-link the stub is a
  * no-op return; post-link LOADCORE patches it to jump to the real
  * function. */
-#define KOSLOAD_IMPORT(libname, num, sym, ret, args) \
-    extern ret sym args; \
-    __asm__( \
-        ".pushsection .text.imports." #libname ", \"ax\", @progbits\n" \
-        ".global " #sym "\n" \
-        ".type " #sym ", @function\n" \
-        ".set push\n" \
-        ".set noreorder\n" \
-        #sym ":\n" \
-        "    jr $ra\n" \
-        "    li $0, " #num "\n" \
-        ".set pop\n" \
-        ".size " #sym ", . - " #sym "\n" \
-        ".popsection\n" \
-    )
+#define KOSLOAD_IMPORT(libname, num, sym, ret, args)                                  \
+    extern ret sym args;                                                              \
+    __asm__(".pushsection .text.imports." #libname ", \"ax\", @progbits\n"            \
+            ".global " #sym "\n"                                                      \
+            ".type " #sym ", @function\n"                                             \
+            ".set push\n"                                                             \
+            ".set noreorder\n" #sym ":\n"                                             \
+            "    jr $ra\n"                                                            \
+            "    li $0, " #num "\n"                                                   \
+            ".set pop\n"                                                              \
+            ".size " #sym ", . - " #sym "\n"                                          \
+            ".popsection\n")
 
 /* ---------------------------------------------------------------- *
  * Thread descriptor for thbase::CreateThread (export #4).
@@ -228,14 +222,14 @@ enum {
  *   priority  — must be in [1, 126].  Lower = higher priority.
  *               Sony BIOS modules use 10..127. */
 typedef struct kosload_iop_thread {
-    int   attr;       /* +0 */
-    int   option;     /* +4 */
-    void *thread;     /* +8 — `void (*)(void *arg)` */
-    int   stacksize;  /* +12 */
-    int   priority;   /* +16 */
+    int   attr;      /* +0 */
+    int   option;    /* +4 */
+    void *thread;    /* +8 — `void (*)(void *arg)` */
+    int   stacksize; /* +12 */
+    int   priority;  /* +16 */
 } kosload_iop_thread_t;
 
-#define KOSLOAD_TH_C  0x02000000   /* C-language thread attribute */
+#define KOSLOAD_TH_C  0x02000000 /* C-language thread attribute */
 
 /* Emit 8 zero bytes after the last stub for one library's import
  * block.  REQUIRED after the last KOSLOAD_IMPORT for each library —
@@ -254,13 +248,11 @@ typedef struct kosload_iop_thread {
  * `.text.imports.<libname>` section and the next section in memory
  * may not be zero (in our probe, `.rodata` follows immediately and
  * starts with the test-string bytes). */
-#define KOSLOAD_IMPORT_TABLE_END(libname) \
-    __asm__( \
-        ".pushsection .text.imports." #libname ", \"ax\", @progbits\n" \
-        ".long 0\n" \
-        ".long 0\n" \
-        ".popsection\n" \
-    )
+#define KOSLOAD_IMPORT_TABLE_END(libname)                                             \
+    __asm__(".pushsection .text.imports." #libname ", \"ax\", @progbits\n"            \
+            ".long 0\n"                                                               \
+            ".long 0\n"                                                               \
+            ".popsection\n")
 
 /* ---------------------------------------------------------------- *
  * Library exports — register a library other IRXs can import from.
@@ -368,30 +360,26 @@ typedef struct kosload_iop_thread {
  * table's first byte (= the magic word).  Pass that address to
  * RegisterLibraryEntries from _start (via KOSLOAD_EXPORT_TABLE_PTR
  * for ergonomics). */
-#define KOSLOAD_EXPORT_TABLE(libname, major_v, minor_v) \
-    __asm__( \
-        ".pushsection .data.kosload_export." #libname ", \"aw\", @progbits\n" \
-        ".balign 4\n" \
-        "9:\n" \
-        ".global _kosload_export_" #libname "\n" \
-        "_kosload_export_" #libname ":\n" \
-        ".long 0x41C00000\n" \
-        ".long 0\n" \
-        ".long ((" #major_v ") << 8) | (" #minor_v ")\n" \
-        ".ascii \"" #libname "\"\n" \
-        ".org 9b + 20\n" \
-        ".popsection\n" \
-    )
+#define KOSLOAD_EXPORT_TABLE(libname, major_v, minor_v)                               \
+    __asm__(".pushsection .data.kosload_export." #libname ", \"aw\", @progbits\n"     \
+            ".balign 4\n"                                                             \
+            "9:\n"                                                                    \
+            ".global _kosload_export_" #libname "\n"                                  \
+            "_kosload_export_" #libname ":\n"                                         \
+            ".long 0x41C00000\n"                                                      \
+            ".long 0\n"                                                               \
+            ".long ((" #major_v ") << 8) | (" #minor_v ")\n"                          \
+            ".ascii \"" #libname "\"\n"                                               \
+            ".org 9b + 20\n"                                                          \
+            ".popsection\n")
 
 /* Append one funcs[] slot pointing at `sym`.  Slot index is implicit
  * — it equals the count of preceding KOSLOAD_EXPORT[_NULL] calls for
  * the same library since the matching KOSLOAD_EXPORT_TABLE. */
-#define KOSLOAD_EXPORT(libname, sym) \
-    __asm__( \
-        ".pushsection .data.kosload_export." #libname ", \"aw\", @progbits\n" \
-        ".long " #sym "\n" \
-        ".popsection\n" \
-    )
+#define KOSLOAD_EXPORT(libname, sym)                                                   \
+    __asm__(".pushsection .data.kosload_export." #libname ", \"aw\", @progbits\n"      \
+            ".long " #sym "\n"                                                         \
+            ".popsection\n")
 
 /* Append a NULL slot to funcs[].  WARNING: use this only at the
  * very end of the array (right before KOSLOAD_EXPORT_TABLE_END), or
@@ -400,32 +388,28 @@ typedef struct kosload_iop_thread {
  * export hides everything past it.  For "skip slot N" use a return-
  * stub function (Sony does this with a single `jr ra; nop` shared
  * across all unused exports).  Hardware-confirmed Stage 3.5c. */
-#define KOSLOAD_EXPORT_NULL(libname) \
-    __asm__( \
-        ".pushsection .data.kosload_export." #libname ", \"aw\", @progbits\n" \
-        ".long 0\n" \
-        ".popsection\n" \
-    )
+#define KOSLOAD_EXPORT_NULL(libname)                                                   \
+    __asm__(".pushsection .data.kosload_export." #libname ", \"aw\", @progbits\n"      \
+            ".long 0\n"                                                                \
+            ".popsection\n")
 
 /* End export table — emits the NULL terminator that
  * RegisterLibraryEntries / LinkImports use to find the end of
  * funcs[].  REQUIRED after the last KOSLOAD_EXPORT[_NULL] for each
  * library; without it LinkImports walks past the array and patches
  * stubs against whatever happens to be next in memory. */
-#define KOSLOAD_EXPORT_TABLE_END(libname) \
-    __asm__( \
-        ".pushsection .data.kosload_export." #libname ", \"aw\", @progbits\n" \
-        ".long 0\n" \
-        ".popsection\n" \
-    )
+#define KOSLOAD_EXPORT_TABLE_END(libname)                                              \
+    __asm__(".pushsection .data.kosload_export." #libname ", \"aw\", @progbits\n"      \
+            ".long 0\n"                                                                \
+            ".popsection\n")
 
 /* Yield a (void *) suitable for passing to RegisterLibraryEntries
  * or ReleaseLibraryEntries.  Resolves to the address of the export
  * table's magic word (the first byte of the header). */
-#define KOSLOAD_EXPORT_TABLE_PTR(libname)                                   \
-    ((void *)({                                                              \
-        extern char _kosload_export_##libname[];                             \
-        _kosload_export_##libname;                                           \
+#define KOSLOAD_EXPORT_TABLE_PTR(libname)                                              \
+    ((void *)({                                                                        \
+        extern char _kosload_export_##libname[];                                       \
+        _kosload_export_##libname;                                                     \
     }))
 
 #endif /* KOSLOAD_IOP_H */

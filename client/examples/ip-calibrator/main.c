@@ -7,8 +7,8 @@
  * machine-readable enough for future host-side parsing.
  */
 
-#define SYSCALL_WRITE     1
-#define SYSCALL_EXIT     15
+#define SYSCALL_WRITE 1
+#define SYSCALL_EXIT  15
 
 #if defined(__sh__) || defined(__SH4_SINGLE__)
 #define KOSLOAD_BASE 0x8c004000
@@ -38,54 +38,48 @@
 
 typedef int (*kosload_syscall_fn)(int syscall, int arg1, int arg2, int arg3);
 
-static kosload_syscall_fn get_syscall(void)
-{
-    if (KOSLOAD_MAGIC_ADDR != KOSLOAD_MAGIC)
+static kosload_syscall_fn get_syscall(void) {
+    if(KOSLOAD_MAGIC_ADDR != KOSLOAD_MAGIC)
         return (kosload_syscall_fn)0;
     return (kosload_syscall_fn)KOSLOAD_SYSCALL_ADDR;
 }
 
-static int sc(int syscall, int arg1, int arg2, int arg3)
-{
+static int sc(int syscall, int arg1, int arg2, int arg3) {
     kosload_syscall_fn fn = get_syscall();
-    if (!fn)
+    if(!fn)
         return -1;
     return fn(syscall, arg1, arg2, arg3);
 }
 
-static int slen(const char *s)
-{
+static int slen(const char *s) {
     int n = 0;
-    while (*s++)
+    while(*s++)
         n++;
     return n;
 }
 
-static void print(const char *s)
-{
+static void print(const char *s) {
     sc(SYSCALL_WRITE, 1, (int)s, slen(s));
 }
 
-static void print_u(unsigned int v)
-{
+static void print_u(unsigned int v) {
     char buf[11];
-    int pos = 10;
+    int  pos = 10;
     buf[pos] = '\0';
-    if (v == 0) {
+    if(v == 0) {
         print("0");
         return;
     }
-    while (v && pos > 0) {
+    while(v && pos > 0) {
         buf[--pos] = (char)('0' + (v % 10));
         v /= 10;
     }
     print(buf + pos);
 }
 
-static void print_end(unsigned int pass, unsigned int fail)
-{
+static void print_end(unsigned int pass, unsigned int fail) {
     char buf[32];
-    int p = 0;
+    int  p = 0;
 
     buf[p++] = 'C';
     buf[p++] = 'A';
@@ -113,15 +107,14 @@ static void print_end(unsigned int pass, unsigned int fail)
     sc(SYSCALL_WRITE, 1, (int)buf, p);
 }
 
-static int console_burst(void)
-{
+static int console_burst(void) {
     unsigned int i;
 
     print("CAL console-burst begin lines=");
     print_u(CONSOLE_LINES);
     print("\n");
 
-    for (i = 0; i < CONSOLE_LINES; i++) {
+    for(i = 0; i < CONSOLE_LINES; i++) {
         print("CAL console-line index=");
         print_u(i);
         print(" payload=abcdefghijklmnopqrstuvwxyz0123456789\n");
@@ -132,14 +125,13 @@ static int console_burst(void)
 }
 
 void start(void) __attribute__((section(".text.start")));
-void start(void)
-{
+void start(void) {
     unsigned int pass = 0;
     unsigned int fail = 0;
 
     print("\nCAL BEGIN ip-calibrator 1\n");
 
-    if (console_burst())
+    if(console_burst())
         pass++;
     else
         fail++;

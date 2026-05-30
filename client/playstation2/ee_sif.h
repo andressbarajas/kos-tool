@@ -79,12 +79,12 @@
 
     @{
 */
-#define EE_SIF_REG_MSCOM      PS2_EE_REG_SIF_MSCOM /**< \brief Main->sub command word; only writable by EE. */
-#define EE_SIF_REG_SMCOM      PS2_EE_REG_SIF_SMCOM /**< \brief Sub->main command word; only writable by IOP. */
-#define EE_SIF_REG_MSFLG      PS2_EE_REG_SIF_MSFLAG /**< \brief Main->sub flag word. EE write = set bits, IOP write = clear-mask. */
-#define EE_SIF_REG_SMFLG      PS2_EE_REG_SIF_SMFLAG /**< \brief Sub->main flag word. IOP write = set bits, EE write = clear-mask. */
-#define EE_SIF_REG_CTRL       PS2_EE_REG_SIF_CTRL /**< \brief SBUS control register; touched during init bring-up. */
-#define EE_SIF_REG_BD6        PS2_EE_REG_SIF_BD6 /**< \brief SBUS BD6 register; touched during DMA bring-up. */
+#define EE_SIF_REG_MSCOM   PS2_EE_REG_SIF_MSCOM /**< \brief Main->sub command word; only writable by EE. */
+#define EE_SIF_REG_SMCOM   PS2_EE_REG_SIF_SMCOM /**< \brief Sub->main command word; only writable by IOP. */
+#define EE_SIF_REG_MSFLG   PS2_EE_REG_SIF_MSFLAG /**< \brief Main->sub flag word. EE write = set bits, IOP write = clear-mask. */
+#define EE_SIF_REG_SMFLG   PS2_EE_REG_SIF_SMFLAG /**< \brief Sub->main flag word. IOP write = set bits, EE write = clear-mask. */
+#define EE_SIF_REG_CTRL    PS2_EE_REG_SIF_CTRL /**< \brief SBUS control register; touched during init bring-up. */
+#define EE_SIF_REG_BD6     PS2_EE_REG_SIF_BD6 /**< \brief SBUS BD6 register; touched during DMA bring-up. */
 
 /** @} */
 
@@ -230,11 +230,11 @@ typedef struct ee_sif_rpc_receive_data ee_sif_rpc_receive_data_t;
     ee_sif_send_cmd() or received through ee_sif_poll_packet().
 */
 typedef struct {
-    uint32_t psize : 8;    /**< \brief Packet size in bytes (1..112). */
-    uint32_t dsize : 24;   /**< \brief Extra-DMA size in bytes (transferred to \c dest). */
-    void *dest;            /**< \brief Optional destination for the extra DMA payload. */
-    uint32_t cid;          /**< \brief SIFCMD command ID. */
-    uint32_t opt;          /**< \brief Command-specific option word. */
+    uint32_t psize : 8;  /**< \brief Packet size in bytes (1..112). */
+    uint32_t dsize : 24; /**< \brief Extra-DMA size in bytes (transferred to \c dest). */
+    void    *dest;       /**< \brief Optional destination for the extra DMA payload. */
+    uint32_t cid;        /**< \brief SIFCMD command ID. */
+    uint32_t opt;        /**< \brief Command-specific option word. */
 } ee_sif_cmd_header_t;
 
 /** \brief   SIFCMD packet for EE_SIF_CMD_CHANGE_SADDR.
@@ -244,7 +244,8 @@ typedef struct {
     command packets should be DMAed in EE memory.
 */
 typedef struct {
-    ee_sif_cmd_header_t header; /**< \brief Common SIFCMD header (cid = EE_SIF_CMD_CHANGE_SADDR). */
+    ee_sif_cmd_header_t header; /**< \brief Common SIFCMD header (cid =
+                                   EE_SIF_CMD_CHANGE_SADDR). */
     void *buff;                 /**< \brief EE physical receive-buffer address. */
 } ee_sif_saddr_pkt_t;
 
@@ -509,8 +510,8 @@ struct ee_sif_rpc_queue {
     LOADFILE RPC result; \c modres is the loaded module's StartModule result.
 */
 typedef struct {
-    uint32_t result;  /**< \brief LOADFILE RPC result. */
-    uint32_t modres;  /**< \brief StartModule return value from the loaded IRX. */
+    uint32_t result; /**< \brief LOADFILE RPC result. */
+    uint32_t modres; /**< \brief StartModule return value from the loaded IRX. */
 } ee_sif_load_module_result_t;
 
 /** \brief   Install an optional status callback.
@@ -601,8 +602,7 @@ int ee_sif_iop_reset(const char *arg);
     ee_sif_cmd_init() must have discovered a non-zero IOP sub-address before
     this can send anything.
 */
-int ee_sif_send_cmd(uint32_t cid, void *packet, uint32_t packet_size,
-                    const void *extra_src, void *extra_dest,
+int ee_sif_send_cmd(uint32_t cid, void *packet, uint32_t packet_size, const void *extra_src, void *extra_dest,
                     uint32_t extra_size);
 
 /** \brief   Poll for an incoming SIFCMD packet.
@@ -620,8 +620,7 @@ int ee_sif_send_cmd(uint32_t cid, void *packet, uint32_t packet_size,
     \warning
     The returned pointer is invalidated by ee_sif_rearm_receive().
 */
-volatile ee_sif_cmd_header_t *ee_sif_poll_packet(uint32_t cid,
-                                                 unsigned int timeout);
+volatile ee_sif_cmd_header_t *ee_sif_poll_packet(uint32_t cid, unsigned int timeout);
 
 /** \brief   Clear and rearm the EE SIF0 receive buffer.
     \ingroup ee_sif
@@ -792,8 +791,7 @@ void ee_sif_rpc_client_clear(volatile ee_sif_rpc_client_t *client);
     \param  server_id       IOP RPC server ID.
     \return                 0 on success, negative on failure.
 */
-int ee_sif_rpc_bind(volatile ee_sif_rpc_client_t *client,
-                    uint32_t server_id);
+int ee_sif_rpc_bind(volatile ee_sif_rpc_client_t *client, uint32_t server_id);
 
 /** \brief   Bind to an IOP RPC server, retrying NULL-server replies.
     \ingroup ee_sif
@@ -807,9 +805,7 @@ int ee_sif_rpc_bind(volatile ee_sif_rpc_client_t *client,
     \param  attempts        Maximum bind attempts.
     \return                 0 on success, negative on failure.
 */
-int ee_sif_rpc_bind_retry(volatile ee_sif_rpc_client_t *client,
-                          uint32_t server_id,
-                          unsigned int attempts);
+int ee_sif_rpc_bind_retry(volatile ee_sif_rpc_client_t *client, uint32_t server_id, unsigned int attempts);
 
 /** \brief   Make a synchronous RPC call.
     \ingroup ee_sif
@@ -826,9 +822,8 @@ int ee_sif_rpc_bind_retry(volatile ee_sif_rpc_client_t *client,
     \param  recv_size       Reply size in bytes.
     \return                 0 on success, negative on failure.
 */
-int ee_sif_rpc_call(volatile ee_sif_rpc_client_t *client, int rpc_number,
-                    const void *sendbuf, uint32_t send_size,
-                    void *recvbuf, uint32_t recv_size);
+int ee_sif_rpc_call(volatile ee_sif_rpc_client_t *client, int rpc_number, const void *sendbuf,
+                    uint32_t send_size, void *recvbuf, uint32_t recv_size);
 
 /** \brief   Allocate memory from the IOP heap.
     \ingroup ee_sif
@@ -846,7 +841,8 @@ void *ee_sif_alloc_iop_heap(uint32_t size);
     Calls the resident IOPHEAP RPC server's HFREE function (RPC function 2)
     on \p iop_addr. Lazily binds the client if needed.
 
-    \param  iop_addr        IOP heap address returned by ee_sif_alloc_iop_heap().
+    \param  iop_addr        IOP heap address returned by
+   ee_sif_alloc_iop_heap().
     \return                 0 on success, negative on failure.
 */
 int ee_sif_free_iop_heap(void *iop_addr);
@@ -870,8 +866,7 @@ int ee_sif_free_iop_heap(void *iop_addr);
     ee_sif_apply_lmb_patch() must have succeeded first. Stock BIOS LOADFILE
     rejects the LoadModuleBuffer RPC function used by this helper.
 */
-int ee_sif_load_module_buffer(const void *irx, uint32_t irx_size,
-                              const char *args, uint32_t arg_len,
+int ee_sif_load_module_buffer(const void *irx, uint32_t irx_size, const char *args, uint32_t arg_len,
                               ee_sif_load_module_result_t *out);
 
 /** \brief   Patch resident LOADFILE to allow LoadModuleBuffer.

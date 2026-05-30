@@ -30,81 +30,81 @@ struct adapter_s;
  * All transfers are MSB-first, SPI mode 0 (CPOL=0, CPHA=0).
  */
 typedef struct {
-    int  (*init)(void);                             /* Initialize SPI hardware */
-    void (*shutdown)(void);                         /* Shutdown SPI hardware */
-    void (*cs_assert)(void);                        /* Assert chip select (active low) */
-    void (*cs_deassert)(void);                      /* Deassert chip select */
-    void (*write_byte)(unsigned char val);           /* Write one byte */
-    unsigned char (*read_byte)(void);                /* Read one byte */
-    void (*write_data)(const unsigned char *buf, int len);  /* Write multiple bytes */
-    void (*read_data)(unsigned char *buf, int len);         /* Read multiple bytes */
+    int (*init)(void);                                     /* Initialize SPI hardware */
+    void (*shutdown)(void);                                /* Shutdown SPI hardware */
+    void (*cs_assert)(void);                               /* Assert chip select (active low) */
+    void (*cs_deassert)(void);                             /* Deassert chip select */
+    void (*write_byte)(unsigned char val);                 /* Write one byte */
+    unsigned char (*read_byte)(void);                      /* Read one byte */
+    void (*write_data)(const unsigned char *buf, int len); /* Write multiple bytes */
+    void (*read_data)(unsigned char *buf, int len);        /* Read multiple bytes */
 } w5500_spi_ops_t;
 
 /* ===== W5500 Block Select Codes ===== */
 
-#define W5500_COMMON_BLOCK  0x00    /* Common registers */
-#define W5500_S0_REG_BLOCK  0x01    /* Socket 0 registers */
-#define W5500_S0_TX_BLOCK   0x02    /* Socket 0 TX buffer */
-#define W5500_S0_RX_BLOCK   0x03    /* Socket 0 RX buffer */
+#define W5500_COMMON_BLOCK  0x00 /* Common registers */
+#define W5500_S0_REG_BLOCK  0x01 /* Socket 0 registers */
+#define W5500_S0_TX_BLOCK   0x02 /* Socket 0 TX buffer */
+#define W5500_S0_RX_BLOCK   0x03 /* Socket 0 RX buffer */
 
 /* ===== Common Register Addresses ===== */
 
-#define W5500_MR            0x0000  /* Mode Register */
-#define W5500_SHAR          0x0009  /* Source Hardware Address (MAC, 6 bytes) */
-#define W5500_PHYCFGR       0x002E  /* PHY Configuration Register */
-#define W5500_VERSIONR      0x0039  /* Chip Version Register (should read 0x04) */
+#define W5500_MR            0x0000 /* Mode Register */
+#define W5500_SHAR          0x0009 /* Source Hardware Address (MAC, 6 bytes) */
+#define W5500_PHYCFGR       0x002E /* PHY Configuration Register */
+#define W5500_VERSIONR      0x0039 /* Chip Version Register (should read 0x04) */
 
 /* ===== PHY Configuration Register Bits ===== */
 
-#define W5500_PHYCFGR_LNK   0x01    /* Link status: Ethernet link is up */
+#define W5500_PHYCFGR_LNK   0x01 /* Link status: Ethernet link is up */
 
 /* ===== Socket 0 Register Addresses ===== */
 
-#define W5500_Sn_MR         0x0000  /* Socket Mode */
-#define W5500_Sn_CR         0x0001  /* Socket Command */
-#define W5500_Sn_IR         0x0002  /* Socket Interrupt */
-#define W5500_Sn_SR         0x0003  /* Socket Status */
-#define W5500_Sn_PORT       0x0004  /* Socket Source Port (2 bytes) */
-#define W5500_Sn_RXBUF_SIZE 0x001E  /* RX Buffer Size (KB) */
-#define W5500_Sn_TXBUF_SIZE 0x001F  /* TX Buffer Size (KB) */
-#define W5500_Sn_TX_FSR     0x0020  /* TX Free Size (2 bytes) */
-#define W5500_Sn_TX_RD      0x0022  /* TX Read Pointer (2 bytes) */
-#define W5500_Sn_TX_WR      0x0024  /* TX Write Pointer (2 bytes) */
-#define W5500_Sn_RX_RSR     0x0026  /* RX Received Size (2 bytes) */
-#define W5500_Sn_RX_RD      0x0028  /* RX Read Pointer (2 bytes) */
-#define W5500_Sn_RX_WR      0x002A  /* RX Write Pointer (2 bytes) */
-#define W5500_Sn_IMR        0x002C  /* Socket Interrupt Mask */
+#define W5500_Sn_MR         0x0000 /* Socket Mode */
+#define W5500_Sn_CR         0x0001 /* Socket Command */
+#define W5500_Sn_IR         0x0002 /* Socket Interrupt */
+#define W5500_Sn_SR         0x0003 /* Socket Status */
+#define W5500_Sn_PORT       0x0004 /* Socket Source Port (2 bytes) */
+#define W5500_Sn_RXBUF_SIZE 0x001E /* RX Buffer Size (KB) */
+#define W5500_Sn_TXBUF_SIZE 0x001F /* TX Buffer Size (KB) */
+#define W5500_Sn_TX_FSR     0x0020 /* TX Free Size (2 bytes) */
+#define W5500_Sn_TX_RD      0x0022 /* TX Read Pointer (2 bytes) */
+#define W5500_Sn_TX_WR      0x0024 /* TX Write Pointer (2 bytes) */
+#define W5500_Sn_RX_RSR     0x0026 /* RX Received Size (2 bytes) */
+#define W5500_Sn_RX_RD      0x0028 /* RX Read Pointer (2 bytes) */
+#define W5500_Sn_RX_WR      0x002A /* RX Write Pointer (2 bytes) */
+#define W5500_Sn_IMR        0x002C /* Socket Interrupt Mask */
 
 /* ===== Command Register Values ===== */
 
-#define W5500_CR_OPEN       0x01    /* Open socket */
-#define W5500_CR_CLOSE      0x10    /* Close socket */
-#define W5500_CR_SEND       0x20    /* Send data */
-#define W5500_CR_RECV       0x40    /* Receive complete */
+#define W5500_CR_OPEN       0x01 /* Open socket */
+#define W5500_CR_CLOSE      0x10 /* Close socket */
+#define W5500_CR_SEND       0x20 /* Send data */
+#define W5500_CR_RECV       0x40 /* Receive complete */
 
 /* ===== Mode Register Bits ===== */
 
-#define W5500_MR_RST        0x80    /* Software reset */
+#define W5500_MR_RST        0x80 /* Software reset */
 
 /* ===== Socket Mode Bits ===== */
 
-#define W5500_Sn_MR_MACRAW  0x04    /* MACRAW mode */
-#define W5500_Sn_MR_MFEN    0x80    /* MAC filter enable */
+#define W5500_Sn_MR_MACRAW  0x04 /* MACRAW mode */
+#define W5500_Sn_MR_MFEN    0x80 /* MAC filter enable */
 
 /* ===== Socket Status Values ===== */
 
-#define W5500_SOCK_MACRAW   0x42    /* Socket in MACRAW mode */
+#define W5500_SOCK_MACRAW   0x42 /* Socket in MACRAW mode */
 
 /* ===== Socket Interrupt Bits ===== */
 
-#define W5500_Sn_IR_SENDOK  0x10    /* Send complete */
-#define W5500_Sn_IR_RECV    0x04    /* Data received */
+#define W5500_Sn_IR_SENDOK  0x10 /* Send complete */
+#define W5500_Sn_IR_RECV    0x04 /* Data received */
 
 /* ===== SPI Control Phase Bits ===== */
 
-#define W5500_SPI_READ      (0x00 << 2)  /* Read access */
-#define W5500_SPI_WRITE     (0x01 << 2)  /* Write access */
-#define W5500_SPI_VDM       0x00         /* Variable Data Length Mode */
+#define W5500_SPI_READ     (0x00 << 2) /* Read access */
+#define W5500_SPI_WRITE    (0x01 << 2) /* Write access */
+#define W5500_SPI_VDM      0x00        /* Variable Data Length Mode */
 
 /* ===== W5500 Chip Version ===== */
 

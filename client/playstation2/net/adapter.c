@@ -21,41 +21,38 @@ __attribute__((aligned(2))) unsigned char *current_pkt = &(raw_current_pkt[2]);
 static const char *last_error = "NO ETHERNET ADAPTER DETECTED!";
 
 int adapter_detect(void) {
-	if (adapter_smap.detect() >= 0) {
-		bb = &adapter_smap;
-		if (bb->init() < 0) {
-			last_error = "SMAP INIT FAILED!";
-			return -1;
-		}
-		last_error = "NO ETHERNET ADAPTER DETECTED!";
-		escape_loop = 0;
-		return 0;
-	}
+    if(adapter_smap.detect() >= 0) {
+        bb = &adapter_smap;
+        if(bb->init() < 0) {
+            last_error = "SMAP INIT FAILED!";
+            return -1;
+        }
+        last_error = "NO ETHERNET ADAPTER DETECTED!";
+        escape_loop = 0;
+        return 0;
+    }
 
-	last_error = smap_get_last_error();
-	return -1;
+    last_error = smap_get_last_error();
+    return -1;
 }
 
-const char *adapter_get_last_error(void)
-{
-	return last_error;
+const char *adapter_get_last_error(void) {
+    return last_error;
 }
 
-const char *adapter_get_phase_status(void)
-{
-	/* When DEV9 / SMAP bringup fails, the network-init error screen
-	 * prefixes our last phase-status string onto the user-facing
-	 * "DEV9 INIT FAILED" message so it's clear which sub-step died
-	 * (e.g. "PHASE1: IOP RESET FAIL | DEV9 INIT FAILED").  On a
-	 * successful boot this string is just "PHASE1: SMAP LOADED" and
-	 * is never displayed (we only render network_init_error_msg on
-	 * the red error path).  See network_transport.c:
-	 * set_network_init_error_with_phase. */
-	return 0;//iop_dev9_phase1_status();
+const char *adapter_get_phase_status(void) {
+    /* When DEV9 / SMAP bringup fails, the network-init error screen
+     * prefixes our last phase-status string onto the user-facing
+     * "DEV9 INIT FAILED" message so it's clear which sub-step died
+     * (e.g. "PHASE1: IOP RESET FAIL | DEV9 INIT FAILED").  On a
+     * successful boot this string is just "PHASE1: SMAP LOADED" and
+     * is never displayed (we only render network_init_error_msg on
+     * the red error path).  See network_transport.c:
+     * set_network_init_error_with_phase. */
+    return 0;  // iop_dev9_phase1_status();
 }
 
-void adapter_start_static_ip(void)
-{
-	if (bb == &adapter_smap)
-		bb->start();
+void adapter_start_static_ip(void) {
+    if(bb == &adapter_smap)
+        bb->start();
 }

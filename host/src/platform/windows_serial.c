@@ -18,15 +18,11 @@ typedef struct {
     HANDLE hComm;
 } win_serial_t;
 
-static int win_serial_purge(HANDLE hComm)
-{
-    return PurgeComm(hComm,
-                     PURGE_RXABORT | PURGE_RXCLEAR |
-                     PURGE_TXABORT | PURGE_TXCLEAR) ? 0 : -1;
+static int win_serial_purge(HANDLE hComm) {
+    return PurgeComm(hComm, PURGE_RXABORT | PURGE_RXCLEAR | PURGE_TXABORT | PURGE_TXCLEAR) ? 0 : -1;
 }
 
-static int win_serial_set_timeouts(HANDLE hComm)
-{
+static int win_serial_set_timeouts(HANDLE hComm) {
     COMMTIMEOUTS timeouts;
 
     memset(&timeouts, 0, sizeof(timeouts));
@@ -42,14 +38,13 @@ static int win_serial_set_timeouts(HANDLE hComm)
     return SetCommTimeouts(hComm, &timeouts) ? 0 : -1;
 }
 
-static int win_serial_configure_port(HANDLE hComm, uint32_t baud)
-{
+static int win_serial_configure_port(HANDLE hComm, uint32_t baud) {
     DCB dcb;
 
     memset(&dcb, 0, sizeof(dcb));
     dcb.DCBlength = sizeof(dcb);
 
-    if (!GetCommState(hComm, &dcb))
+    if(!GetCommState(hComm, &dcb))
         return -1;
 
     dcb.BaudRate = baud;
@@ -72,7 +67,7 @@ static int win_serial_configure_port(HANDLE hComm, uint32_t baud)
     dcb.fRtsControl = RTS_CONTROL_ENABLE;
     dcb.fAbortOnError = FALSE;
 
-    if (!SetCommState(hComm, &dcb))
+    if(!SetCommState(hComm, &dcb))
         return -1;
 
     return win_serial_purge(hComm);
@@ -80,31 +75,32 @@ static int win_serial_configure_port(HANDLE hComm, uint32_t baud)
 
 static void *win_serial_open(const char *device, uint32_t initial_baud) {
     win_serial_t *s = calloc(1, sizeof(*s));
-    if (!s) return NULL;
+    if(!s)
+        return NULL;
 
-    s->hComm = CreateFileA(device, GENERIC_READ | GENERIC_WRITE, 0,
-                           NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
-    if (s->hComm == INVALID_HANDLE_VALUE) {
+    s->hComm =
+        CreateFileA(device, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+    if(s->hComm == INVALID_HANDLE_VALUE) {
         fprintf(stderr, "Error opening %s\n", device);
         free(s);
         return NULL;
     }
 
-    if (!SetupComm(s->hComm, 4096, 4096)) {
+    if(!SetupComm(s->hComm, 4096, 4096)) {
         fprintf(stderr, "Error setting serial queue sizes\n");
         CloseHandle(s->hComm);
         free(s);
         return NULL;
     }
 
-    if (win_serial_set_timeouts(s->hComm) != 0) {
+    if(win_serial_set_timeouts(s->hComm) != 0) {
         fprintf(stderr, "Error setting serial port timeouts\n");
         CloseHandle(s->hComm);
         free(s);
         return NULL;
     }
 
-    if (win_serial_configure_port(s->hComm, initial_baud) != 0) {
+    if(win_serial_configure_port(s->hComm, initial_baud) != 0) {
         fprintf(stderr, "Error configuring serial port state\n");
         CloseHandle(s->hComm);
         free(s);
@@ -116,7 +112,8 @@ static void *win_serial_open(const char *device, uint32_t initial_baud) {
 
 static void win_serial_close(void *handle) {
     win_serial_t *s = handle;
-    if (!s) return;
+    if(!s)
+        return;
     /* Match the POSIX backends: discard queued I/O on close instead of
      * blocking until the peer drains every byte. This keeps `-n` from
      * hanging after EXEC on Windows serial links with hardware flow control. */
@@ -128,7 +125,7 @@ static void win_serial_close(void *handle) {
 static int win_serial_read(void *handle, void *buffer, size_t count) {
     win_serial_t *s = handle;
     DWORD bytesRead = 0;
-    if (!ReadFile(s->hComm, buffer, (DWORD)count, &bytesRead, NULL))
+    if(!ReadFile(s->hComm, buffer, (DWORD)count, &bytesRead, NULL))
         return -1;
     return (int)bytesRead;
 }
@@ -136,7 +133,7 @@ static int win_serial_read(void *handle, void *buffer, size_t count) {
 static int win_serial_write(void *handle, const void *buffer, size_t count) {
     win_serial_t *s = handle;
     DWORD bytesWritten = 0;
-    if (!WriteFile(s->hComm, buffer, (DWORD)count, &bytesWritten, NULL))
+    if(!WriteFile(s->hComm, buffer, (DWORD)count, &bytesWritten, NULL))
         return -1;
     return (int)bytesWritten;
 }
@@ -146,7 +143,7 @@ static int win_serial_bytes_available(void *handle) {
     COMSTAT stat;
     DWORD errors = 0;
 
-    if (!ClearCommError(s->hComm, &errors, &stat))
+    if(!ClearCommError(s->hComm, &errors, &stat))
         return -1;
 
     return (int)stat.cbInQue;

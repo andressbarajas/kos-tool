@@ -63,24 +63,24 @@
 
 /* ===== Network Protocol Command IDs (4-byte ASCII) ===== */
 
-#define NET_CMD_EXECUTE   "EXEC"    /* Execute at address */
-#define NET_CMD_LOADBIN   "LBIN"    /* Begin receiving binary */
-#define NET_CMD_PARTBIN   "PBIN"    /* Part of a binary */
-#define NET_CMD_DONEBIN   "DBIN"    /* End receiving binary */
-#define NET_CMD_SENDBIN   "SBIN"    /* Send a binary */
-#define NET_CMD_SENDBINQ  "SBIQ"    /* Send a binary, quiet */
-#define NET_CMD_VERSION   "VERS"    /* Version info exchange */
+#define NET_CMD_EXECUTE      "EXEC" /* Execute at address */
+#define NET_CMD_LOADBIN      "LBIN" /* Begin receiving binary */
+#define NET_CMD_PARTBIN      "PBIN" /* Part of a binary */
+#define NET_CMD_DONEBIN      "DBIN" /* End receiving binary */
+#define NET_CMD_SENDBIN      "SBIN" /* Send a binary */
+#define NET_CMD_SENDBINQ     "SBIQ" /* Send a binary, quiet */
+#define NET_CMD_VERSION      "VERS" /* Version info exchange */
 #define NET_CMD_CAPABILITIES "CAPS" /* Query capability bitmask */
-#define NET_CMD_RETVAL    "RETV"    /* Return value */
-#define NET_CMD_REBOOT    "RBOT"    /* Reboot console */
-#define NET_CMD_MAPLE     "MAPL"    /* Maple bus passthrough */
-#define NET_CMD_PMCR      "PMCR"    /* Performance counter */
-#define NET_CMD_SETRTC    "SRTC"    /* Set RTC to host time */
+#define NET_CMD_RETVAL       "RETV" /* Return value */
+#define NET_CMD_REBOOT       "RBOT" /* Reboot console */
+#define NET_CMD_MAPLE        "MAPL" /* Maple bus passthrough */
+#define NET_CMD_PMCR         "PMCR" /* Performance counter */
+#define NET_CMD_SETRTC       "SRTC" /* Set RTC to host time */
 
 /* Network console syscall command IDs (4-byte ASCII) */
 #define NET_SYSCALL_EXIT      "DC00"
 #define NET_SYSCALL_FSTAT     "DC01"
-#define NET_SYSCALL_WRITE_OLD "DD02"    /* Legacy write command */
+#define NET_SYSCALL_WRITE_OLD "DD02" /* Legacy write command */
 #define NET_SYSCALL_WRITE     "DC02"
 #define NET_SYSCALL_READ      "DC03"
 #define NET_SYSCALL_OPEN      "DC04"
@@ -113,21 +113,22 @@
 #define KOSLOAD_CAP_CDFS_REDIR (1 << 4)
 #define KOSLOAD_CAP_ARGV       (1 << 5)
 
-#define KOSLOAD_EXCEPTION_TAG "EXPT"    /* Exception frame marker (both serial and network) */
+#define KOSLOAD_EXCEPTION_TAG "EXPT" /* Exception frame marker (both serial and network) */
 
 /* ===== NET_CMD_EXECUTE flag bits (carried in command->size) ===== */
 
-#define KOSLOAD_EXEC_CONSOLE   (1 << 0)  /* enable console redirection while program runs */
-#define KOSLOAD_EXEC_CDFS      (1 << 1)  /* enable CDFS redir while program runs */
-#define KOSLOAD_EXEC_FW_UPDATE (1 << 2)  /* target is a firmware-update
-                                          * trampoline: skip the console/CDFS
-                                          * setup meant for user programs.
-                                          * The execute path is otherwise the
-                                          * same as a normal program launch. */
+#define KOSLOAD_EXEC_CONSOLE (1 << 0) /* enable console redirection while program runs */
+#define KOSLOAD_EXEC_CDFS    (1 << 1) /* enable CDFS redir while program runs */
+#define KOSLOAD_EXEC_FW_UPDATE                                                                               \
+    (1 << 2) /* target is a firmware-update                                                                  \
+              * trampoline: skip the console/CDFS                                                            \
+              * setup meant for user programs.                                                               \
+              * The execute path is otherwise the                                                            \
+              * same as a normal program launch. */
 
 /* ===== Network Packet Structures ===== */
 
-#define NET_COMMAND_LEN     12
+#define NET_COMMAND_LEN   12
 
 /* Network command packet (UDP payload) */
 typedef struct {
@@ -167,8 +168,8 @@ typedef struct {
 } __attribute__((packed)) net_command_int_string_t;
 
 typedef struct {
-    uint8_t  id[4];
-    char     string[];
+    uint8_t id[4];
+    char string[];
 } __attribute__((packed)) net_command_string_t;
 
 typedef struct {
@@ -185,9 +186,9 @@ typedef struct {
 #define NET_DEFAULT_PORT        53535
 #define NET_LEGACY_PAYLOAD_SIZE 1024
 #define NET_PAYLOAD_SIZE        1440
-#define NET_PACKET_TIMEOUT_USEC 250000  /* 250ms */
+#define NET_PACKET_TIMEOUT_USEC 250000 /* 250ms */
 
-#define NET_GDB_PORT            2159
+#define NET_GDB_PORT    2159
 
 /* ===== Optional syscall extensions ===== */
 /*
@@ -228,14 +229,14 @@ typedef struct {
 /* ===== Adapter Type Constants ===== */
 
 #define ADAPTER_NONE         0x0000
-#define ADAPTER_DC_BBA       0x0400  /* Dreamcast Broadband Adapter (RTL8139C) */
-#define ADAPTER_DC_LAN       0x0300  /* Dreamcast LAN Adapter */
-#define ADAPTER_DC_W5500     0x5500  /* Dreamcast W5500 (SCIF-SPI) */
-#define ADAPTER_GC_BBA       0x0015  /* GameCube Broadband Adapter */
-#define ADAPTER_GC_ENC       0x2860  /* GameCube ENC28J60 (EXI-SPI) */
-#define ADAPTER_GC_W5500     0x5501  /* GameCube W5500 (EXI-SPI) */
-#define ADAPTER_PS2_BBA      0x0500  /* PlayStation 2 Broadband Adapter */
-#define ADAPTER_WII_LAN_WIFI 0x0E58  /* Wii IOS net — USB LAN Adapter (RVL-015) or internal Wi-Fi */
+#define ADAPTER_DC_BBA          0x0400 /* Dreamcast Broadband Adapter (RTL8139C) */
+#define ADAPTER_DC_LAN          0x0300 /* Dreamcast LAN Adapter */
+#define ADAPTER_DC_W5500        0x5500 /* Dreamcast W5500 (SCIF-SPI) */
+#define ADAPTER_GC_BBA          0x0015 /* GameCube Broadband Adapter */
+#define ADAPTER_GC_ENC          0x2860 /* GameCube ENC28J60 (EXI-SPI) */
+#define ADAPTER_GC_W5500        0x5501 /* GameCube W5500 (EXI-SPI) */
+#define ADAPTER_PS2_BBA         0x0500 /* PlayStation 2 Broadband Adapter */
+#define ADAPTER_WII_LAN_WIFI    0x0E58 /* Wii IOS net — USB LAN Adapter (RVL-015) or internal Wi-Fi */
 
 /* ===== Serial Constants ===== */
 
@@ -253,23 +254,23 @@ typedef struct {
  * (see mk/memory.mk), which differs from the hardware-architectural ceiling.
  * Defining the architectural value here too would shadow the build-system
  * value with a redefinition warning, and no source consumer needs it. */
-#define DC_RAM_TOP          0x8d000000  /* 16 MB SH4 RAM */
-#define GC_RAM_TOP          0x81800000  /* 24 MB MEM1 */
-#define PS2_RAM_TOP         0x02000000  /* 32 MB EE RAM */
+#define DC_RAM_TOP     0x8d000000 /* 16 MB SH4 RAM */
+#define GC_RAM_TOP     0x81800000 /* 24 MB MEM1 */
+#define PS2_RAM_TOP    0x02000000 /* 32 MB EE RAM */
 
 #ifndef GC_LOADER_BASE
-#define GC_LOADER_BASE      0x817EC000  /* keep in sync with mk/memory.mk */
+#define GC_LOADER_BASE     0x817EC000 /* keep in sync with mk/memory.mk */
 #endif
 #ifndef PS2_LOADER_BASE
-#define PS2_LOADER_BASE     0x00100000  /* keep in sync with mk/memory.mk */
+#define PS2_LOADER_BASE    0x00100000 /* keep in sync with mk/memory.mk */
 #endif
 
-#define LZO_WRKMEM_SIZE     0x10000     /* 64 KB — LZO1X_1_MEM_COMPRESS */
+#define LZO_WRKMEM_SIZE    0x10000 /* 64 KB — LZO1X_1_MEM_COMPRESS */
 
 /* LZO work memory addresses for serial downloads.
  * Placed just below the top of usable RAM on each console. */
-#define DC_LZO_WRKMEM_ADDR  (DC_RAM_TOP - LZO_WRKMEM_SIZE)         /* 0x8cff0000 */
-#define GC_LZO_WRKMEM_ADDR  (GC_LOADER_BASE - LZO_WRKMEM_SIZE)     /* 0x817DC000 */
+#define DC_LZO_WRKMEM_ADDR   (DC_RAM_TOP - LZO_WRKMEM_SIZE)     /* 0x8cff0000 */
+#define GC_LZO_WRKMEM_ADDR   (GC_LOADER_BASE - LZO_WRKMEM_SIZE) /* 0x817DC000 */
 
 /* ===== KOS Open Flags (for flag translation) ===== */
 
@@ -285,9 +286,9 @@ typedef struct {
  * strategy (2-byte offset from 32-byte aligned raw buffer). */
 
 typedef struct {
-    uint8_t  dest[6];
-    uint8_t  src[6];
-    uint8_t  type[2];
+    uint8_t dest[6];
+    uint8_t src[6];
+    uint8_t type[2];
 } __attribute__((packed, aligned(2))) ether_header_t;
 
 typedef struct {

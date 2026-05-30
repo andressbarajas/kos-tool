@@ -19,9 +19,14 @@ extern void exception_init(void);
 
 /* Required only so kosload_common.a links.  Interrupts stay disabled while
  * this bootstrap runs, so this function is never expected to execute. */
-void interrupt_handler_c(void) {}
+void interrupt_handler_c(void) {
+}
 
-#define STUB_INT(name) int name(void); int name(void) { return -1; }
+#define STUB_INT(name)                                                                                       \
+    int name(void);                                                                                          \
+    int name(void) {                                                                                         \
+        return -1;                                                                                           \
+    }
 STUB_INT(read)
 STUB_INT(write)
 STUB_INT(open)
@@ -46,10 +51,10 @@ STUB_INT(mkdir)
 STUB_INT(rewinddir)
 
 __attribute__((noreturn)) void progexit(int status);
-__attribute__((noreturn)) void progexit(int status)
-{
+__attribute__((noreturn)) void progexit(int status) {
     (void)status;
-    for (;;) {}
+    for(;;) {
+    }
 }
 
 /* Embedded inner-loader blob.  objcopy creates these symbols when
@@ -60,13 +65,11 @@ extern uint8_t _binary_ps2_load_ip_image_bin_end[];
 /* Two ways to address the same RAM:
  *   KSEG1 writes bypass the data cache, so the copy reaches RAM directly.
  *   KSEG0 executes through the normal cached instruction path. */
-#define DEST_KSEG0  ((uint32_t)PS2_INNER_LOADER_BASE)
-#define DEST_KSEG1  (((uint32_t)PS2_INNER_LOADER_BASE & 0x1FFFFFFFu) | 0xA0000000u)
+#define DEST_KSEG0 ((uint32_t)PS2_INNER_LOADER_BASE)
+#define DEST_KSEG1 (((uint32_t)PS2_INNER_LOADER_BASE & 0x1FFFFFFF) | 0xA0000000)
 
-void main(void)
-{
-    uint32_t blob_size = (uint32_t)(_binary_ps2_load_ip_image_bin_end -
-                                     _binary_ps2_load_ip_image_bin_start);
+void main(void) {
+    uint32_t blob_size = (uint32_t)(_binary_ps2_load_ip_image_bin_end - _binary_ps2_load_ip_image_bin_start);
     uint32_t blob_words = blob_size / 4;
     volatile uint32_t *dst = (volatile uint32_t *)DEST_KSEG1;
     uint32_t *src = (uint32_t *)_binary_ps2_load_ip_image_bin_start;
@@ -74,7 +77,8 @@ void main(void)
     uint32_t i;
 
     /* Copy the embedded real loader to its runtime address. */
-    for (i = 0; i < blob_words; i++) dst[i] = src[i];
+    for(i = 0; i < blob_words; i++)
+        dst[i] = src[i];
     __asm__ volatile("sync.l" ::: "memory");
 
     /* Clear stale data-cache lines left by the launcher.  Otherwise an old
@@ -83,36 +87,32 @@ void main(void)
 
     /* Clear stale instruction-cache lines before executing the copied code. */
     __asm__ volatile("sync.p" ::: "memory");
-    for (addr = 0x80000000u; addr < 0x80002000u; addr += 64) {
-        __asm__ volatile(
-            ".set push\n"
-            ".set noreorder\n"
-            "cache 0x07, 0(%0)\n"          /* IXIN way 0 */
-            "cache 0x07, 1(%0)\n"          /* IXIN way 1 */
-            ".set pop\n"
-            :: "r"(addr) : "memory"
-        );
+    for(addr = 0x80000000; addr < 0x80002000; addr += 64) {
+        __asm__ volatile(".set push\n"
+                         ".set noreorder\n"
+                         "cache 0x07, 0(%0)\n" /* IXIN way 0 */
+                         "cache 0x07, 1(%0)\n" /* IXIN way 1 */
+                         ".set pop\n" ::"r"(addr)
+                         : "memory");
     }
     __asm__ volatile("sync.p" ::: "memory");
 
     /* Jump with ERET rather than a plain JR.  The BIOS uses the same style
      * for ExecPS2 because it cleanly restarts instruction fetch at ErrorEPC. */
-    __asm__ volatile(
-        ".set push\n"
-        ".set noreorder\n"
-        "mtc0   %0, $30\n"            /* ErrorEPC <- target */
-        "sync.p\n"
-        "mfc0   $t0, $12\n"           /* read Status */
-        "ori    $t0, $t0, 0x4\n"      /* set ERL (bit 2) */
-        "mtc0   $t0, $12\n"           /* Status.ERL = 1 */
-        "sync.p\n"
-        "eret\n"
-        "nop\n"
-        ".set pop\n"
-        :: "r"((uint32_t)DEST_KSEG0)
-        : "$t0", "memory"
-    );
+    __asm__ volatile(".set push\n"
+                     ".set noreorder\n"
+                     "mtc0   %0, $30\n" /* ErrorEPC <- target */
+                     "sync.p\n"
+                     "mfc0   $t0, $12\n"      /* read Status */
+                     "ori    $t0, $t0, 0x4\n" /* set ERL (bit 2) */
+                     "mtc0   $t0, $12\n"      /* Status.ERL = 1 */
+                     "sync.p\n"
+                     "eret\n"
+                     "nop\n"
+                     ".set pop\n" ::"r"((uint32_t)DEST_KSEG0)
+                     : "$t0", "memory");
 
     /* Unreachable. */
-    for (;;) {}
+    for(;;) {
+    }
 }

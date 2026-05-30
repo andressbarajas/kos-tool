@@ -11,7 +11,7 @@
 #include "maple.h"
 #include "memfuncs.h"
 
-#define MAPLE(x) (*((volatile unsigned long *)(0xa05f6c00+(x))))
+#define MAPLE(x) (*((volatile unsigned long *)(0xa05f6c00 + (x))))
 
 void maple_init(void) {
     MAPLE(0x8c) = 0x6155404f;
@@ -23,7 +23,7 @@ void maple_init(void) {
 }
 
 void maple_wait_dma(void) {
-    while (MAPLE(0x18) & 1)
+    while(MAPLE(0x18) & 1)
         ;
 }
 
@@ -38,9 +38,9 @@ void *maple_docmd(int port, int unit, int cmd, int datalen, void *data) {
     from = port << 6;
     to = (port << 6) | (unit > 0 ? ((1 << (unit - 1)) & 0x1f) : 0x20);
 
-    if (datalen > 255)
+    if(datalen > 255)
         datalen = 255;
-    else if (datalen < 0)
+    else if(datalen < 0)
         datalen = 0;
 
     /* Allocate receive buffer at start of dmabuffer, uncached */
@@ -59,12 +59,10 @@ void *maple_docmd(int port, int unit, int cmd, int datalen, void *data) {
     /* Frame header (big-endian Maple format) */
     *sendbuf++ = (cmd & 0xff) | (to << 8) | (from << 16) | (datalen << 24);
 
-    if (datalen > 0) {
+    if(datalen > 0) {
         memcpy_32bit(sendbuf, data, 4 / 4);
-        SH4_aligned_memcpy(to_p1((void *)sendbuf + 4),
-                           to_p1((void *)data + 4), (datalen - 1) * 4);
-        CacheBlockWriteBack(to_p1((void *)((unsigned int)sendbuf & ~0x1f)),
-                            ((datalen * 4) + 31) / 32);
+        SH4_aligned_memcpy(to_p1((void *)sendbuf + 4), to_p1((void *)data + 4), (datalen - 1) * 4);
+        CacheBlockWriteBack(to_p1((void *)((unsigned int)sendbuf & ~0x1f)), ((datalen * 4) + 31) / 32);
     }
 
     MAPLE(0x18) = 1;

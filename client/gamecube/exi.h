@@ -41,21 +41,21 @@
 #define EXI_DATA            0x10    /* Immediate Data Register */
 
 /* EXI_STATUS bits */
-#define EXI_STATUS_EXIINTMASK   (1 << 0)
-#define EXI_STATUS_EXIINT       (1 << 1)    /* W1C */
-#define EXI_STATUS_TCINTMASK    (1 << 2)
-#define EXI_STATUS_TCINT        (1 << 3)    /* W1C */
-#define EXI_STATUS_CLK_MASK     (7 << 4)
-#define EXI_STATUS_CS0B         (1 << 7)
-#define EXI_STATUS_CS1B         (1 << 8)
-#define EXI_STATUS_CS2B         (1 << 9)
-#define EXI_STATUS_EXTINTMASK   (1 << 10)   /* ch0/ch1 only */
-#define EXI_STATUS_EXTINT       (1 << 11)   /* W1C, ch0/ch1 only */
-#define EXI_STATUS_EXT          (1 << 12)   /* read-only, ch0/ch1 only */
-#define EXI_STATUS_ROMDIS       (1 << 13)   /* channel 0 only */
+#define EXI_STATUS_EXIINTMASK (1 << 0)
+#define EXI_STATUS_EXIINT     (1 << 1) /* W1C */
+#define EXI_STATUS_TCINTMASK  (1 << 2)
+#define EXI_STATUS_TCINT      (1 << 3) /* W1C */
+#define EXI_STATUS_CLK_MASK   (7 << 4)
+#define EXI_STATUS_CS0B       (1 << 7)
+#define EXI_STATUS_CS1B       (1 << 8)
+#define EXI_STATUS_CS2B       (1 << 9)
+#define EXI_STATUS_EXTINTMASK (1 << 10) /* ch0/ch1 only */
+#define EXI_STATUS_EXTINT     (1 << 11) /* W1C, ch0/ch1 only */
+#define EXI_STATUS_EXT        (1 << 12) /* read-only, ch0/ch1 only */
+#define EXI_STATUS_ROMDIS     (1 << 13) /* channel 0 only */
 
 /* Mask of all W1C bits (write-1-to-clear) */
-#define EXI_STATUS_W1C_MASK     (EXI_STATUS_EXIINT | EXI_STATUS_TCINT | EXI_STATUS_EXTINT)
+#define EXI_STATUS_W1C_MASK (EXI_STATUS_EXIINT | EXI_STATUS_TCINT | EXI_STATUS_EXTINT)
 
 /* Clock speeds (value for CLK field, pre-shifted to bits 4-6) */
 #define EXI_CLK_1MHZ        (0 << 4)

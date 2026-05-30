@@ -51,8 +51,7 @@ volatile uint64_t loop_deadline_ticks = 0;
  * bytes (including the original seq id, so the host can recognize the
  * duplicate). */
 #define KOS_SYSCALL_SAVE_MAX 2048
-static unsigned char kos_syscall_save_pkt[KOS_SYSCALL_SAVE_MAX]
-    __attribute__((aligned(4)));
+static unsigned char kos_syscall_save_pkt[KOS_SYSCALL_SAVE_MAX] __attribute__((aligned(4)));
 static unsigned int  kos_syscall_save_len = 0;
 
 /* Bounded-wait interval (ticks).  Stored so the RX path can push the
@@ -95,10 +94,9 @@ static dc_dirent_t our_dir;
 
 /* ===== strlen (no libc available) ===== */
 
-static unsigned int my_strlen(const char *s)
-{
+static unsigned int my_strlen(const char *s) {
     unsigned int c = 0;
-    while (s[c] != 0)
+    while(s[c] != 0)
         c++;
     return c;
 }
@@ -106,15 +104,13 @@ static unsigned int my_strlen(const char *s)
 /* True iff the host advertised dedup support in its VERS reply (kosload
  * 3.0.0 or newer).  Talking to legacy dc-tool 2.0.x the trailer still goes
  * out (harmless) but bb->loop(0) reverts to wait-forever. */
-static inline int host_supports_dedup(void)
-{
+static inline int host_supports_dedup(void) {
     return tool_version >= 0x00030000;
 }
 
 /* ===== KIR0 inline-return helpers (small fixed-size out-buffer syscalls) ===== */
 
-static inline void append_inline_ret_magic(unsigned char *dst)
-{
+static inline void append_inline_ret_magic(unsigned char *dst) {
     memcpy(dst, NET_INLINE_RET_MAGIC, NET_INLINE_RET_MAGIC_LEN);
 }
 
@@ -123,11 +119,10 @@ static inline void append_inline_ret_magic(unsigned char *dst)
  * syscall.  On match, copies the inline bytes into the guest's buffer.
  * Returns 1 on hit, 0 on miss (legacy host that did the separate
  * SENDBINQ + DONEBIN bulk-transfer leg). */
-static inline int copy_inline_ret(void *dst, unsigned int count)
-{
-    if (syscall_data_len != NET_INLINE_RET_MAGIC_LEN + count)
+static inline int copy_inline_ret(void *dst, unsigned int count) {
+    if(syscall_data_len != NET_INLINE_RET_MAGIC_LEN + count)
         return 0;
-    if (memcmp(syscall_data, NET_INLINE_RET_MAGIC, NET_INLINE_RET_MAGIC_LEN) != 0)
+    if(memcmp(syscall_data, NET_INLINE_RET_MAGIC, NET_INLINE_RET_MAGIC_LEN) != 0)
         return 0;
     memcpy(dst, syscall_data + NET_INLINE_RET_MAGIC_LEN, count);
     return 1;
@@ -135,8 +130,7 @@ static inline int copy_inline_ret(void *dst, unsigned int count)
 
 /* ===== Packet construction helper ===== */
 
-void build_send_packet(int command_len)
-{
+void build_send_packet(int command_len) {
     ether_header_t *ether = (ether_header_t *)pkt_buf;
     ip_header_t *ip = (ip_header_t *)(pkt_buf + ETHER_H_LEN);
     udp_header_t *udp = (udp_header_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN);
@@ -148,11 +142,11 @@ void build_send_packet(int command_len)
      * include/kosload/protocol.h for the wire format.  Increment BEFORE
      * sending so kos_syscall_seq names the request we just put on the
      * wire — cmd_retval() will compare against this on the way back. */
-    unsigned char *trailer =
-        pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN + command_len;
+    unsigned char *trailer = pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN + command_len;
 
     kos_syscall_seq = kos_syscall_next_seq++;
-    if (kos_syscall_next_seq == 0) kos_syscall_next_seq = 1;
+    if(kos_syscall_next_seq == 0)
+        kos_syscall_next_seq = 1;
 
     memcpy(trailer, NET_SEQ_MAGIC, NET_SEQ_MAGIC_LEN);
     trailer[NET_SEQ_MAGIC_LEN + 0] = (unsigned char)(kos_syscall_seq >> 24);
@@ -160,7 +154,6 @@ void build_send_packet(int command_len)
     trailer[NET_SEQ_MAGIC_LEN + 2] = (unsigned char)(kos_syscall_seq >> 8);
     trailer[NET_SEQ_MAGIC_LEN + 3] = (unsigned char)kos_syscall_seq;
     command_len += (int)NET_SEQ_TRAILER_LEN;
-    
 
     make_ether(tool_mac, bb->mac, ether);
     make_ip(tool_ip, our_ip, UDP_H_LEN + command_len, IP_UDP_PROTOCOL, ip, 0);
@@ -173,7 +166,7 @@ void build_send_packet(int command_len)
      * syscall built a packet bigger than KOS_SYSCALL_SAVE_MAX (currently
      * impossible: max command < 1500); leave len 0 so the retransmit loop
      * just gives up rather than re-tx'ing garbage. */
-    if (total_len <= KOS_SYSCALL_SAVE_MAX) {
+    if(total_len <= KOS_SYSCALL_SAVE_MAX) {
         memcpy(kos_syscall_save_pkt, pkt_buf, total_len);
         kos_syscall_save_len = total_len;
     } else {
@@ -187,14 +180,13 @@ void build_send_packet(int command_len)
  * read()/write() that keeps making progress never trips the timeout.
  * No-op outside a bounded wait (loop_deadline_ticks == 0): the idle main
  * loop and program-upload path are unaffected. */
-void net_bump_syscall_deadline(void)
-{
+void net_bump_syscall_deadline(void) {
     const target_ops_t *t;
 
-    if (!loop_deadline_ticks)
+    if(!loop_deadline_ticks)
         return;
     t = target_get_ops();
-    if (t && t->get_ticks)
+    if(t && t->get_ticks)
         loop_deadline_ticks = t->get_ticks() + kos_syscall_timeout_ticks;
 }
 
@@ -215,26 +207,25 @@ void net_bump_syscall_deadline(void)
  * re-execute a non-idempotent syscall (read, lseek, readdir).  On timeout
  * exhaustion the syscall returns -1 by leaving syscall_retval = -1; we clear
  * loop_deadline_ticks before returning so the next syscall starts clean. */
-static void kos_syscall_wait_for_retval(void)
-{
+static void kos_syscall_wait_for_retval(void) {
     const target_ops_t *t;
     uint64_t timeout_ticks;
     int retry;
 
     /* Reliable transport: wait forever for the RETVAL (see above). */
-    if (!bb->lossy) {
+    if(!bb->lossy) {
         bb->loop(0);
         return;
     }
 
-    if (!host_supports_dedup()) {
+    if(!host_supports_dedup()) {
         /* Legacy host — old wait-forever semantics. */
         bb->loop(0);
         return;
     }
 
     t = target_get_ops();
-    if (!t || !t->get_ticks || !t->ticks_per_second) {
+    if(!t || !t->get_ticks || !t->ticks_per_second) {
         /* No timer — falling back to wait-forever is safer than spinning
          * tight without a deadline mechanism. */
         bb->loop(0);
@@ -242,10 +233,11 @@ static void kos_syscall_wait_for_retval(void)
     }
 
     timeout_ticks = ((uint64_t)t->ticks_per_second * KOS_SYSCALL_RETRY_MS) / 1000;
-    if (timeout_ticks == 0) timeout_ticks = 1;
+    if(timeout_ticks == 0)
+        timeout_ticks = 1;
     kos_syscall_timeout_ticks = timeout_ticks;
 
-    for (retry = 0; retry <= KOS_SYSCALL_MAX_RETRIES; retry++) {
+    for(retry = 0; retry <= KOS_SYSCALL_MAX_RETRIES; retry++) {
         uint64_t deadline;
 
         escape_loop = 0;
@@ -265,7 +257,7 @@ static void kos_syscall_wait_for_retval(void)
          * forward on every chunk via net_bump_syscall_deadline, so this
          * only trips on a genuine stall — a lost request or reply — not
          * on a long-but-progressing transfer). */
-        if (t->get_ticks() < deadline) {
+        if(t->get_ticks() < deadline) {
             /* RETVAL (or other in-band terminator) fired. */
             return;
         }
@@ -277,7 +269,7 @@ static void kos_syscall_wait_for_retval(void)
          * from there — pkt_buf is the buffer every send uses but gets
          * clobbered by response-building during the wait, hence the
          * separate save buffer. */
-        if (kos_syscall_save_len == 0 || retry == KOS_SYSCALL_MAX_RETRIES)
+        if(kos_syscall_save_len == 0 || retry == KOS_SYSCALL_MAX_RETRIES)
             break;
         memcpy(pkt_buf, kos_syscall_save_pkt, kos_syscall_save_len);
         bb->tx(pkt_buf, kos_syscall_save_len);
@@ -293,8 +285,7 @@ static void kos_syscall_wait_for_retval(void)
 
 /* Syscall 14: assign_wrkmem — not needed for network transport
  * (compression is handled differently), but must exist for crt0.S linkage. */
-void assign_wrkmem(unsigned char *user_buffer)
-{
+void assign_wrkmem(unsigned char *user_buffer) {
     (void)user_buffer;
 }
 
@@ -314,8 +305,7 @@ void assign_wrkmem(unsigned char *user_buffer)
  * loop, so the duplicates are discarded. */
 #define PROGEXIT_RETRANSMIT_COUNT 5
 
-void progexit(int ret_code)
-{
+void progexit(int ret_code) {
     int i;
 
     bb->stop();
@@ -326,12 +316,11 @@ void progexit(int ret_code)
     command->address = htonl((unsigned int)ret_code);
     command->size = 0;
 
-    for (i = 0; i < PROGEXIT_RETRANSMIT_COUNT; i++)
+    for(i = 0; i < PROGEXIT_RETRANSMIT_COUNT; i++)
         build_send_packet(COMMAND_LEN);
 }
 
-int read(int fd, void *buf, unsigned int count)
-{
+int read(int fd, void *buf, unsigned int count) {
     net_command_3int_t *command = (net_command_3int_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
 
     memcpy(command->id, NET_SYSCALL_READ, 4);
@@ -344,12 +333,11 @@ int read(int fd, void *buf, unsigned int count)
     return syscall_retval;
 }
 
-int write(int fd, const void *buf, unsigned int count)
-{
+int write(int fd, const void *buf, unsigned int count) {
     net_command_3int_t *command = (net_command_3int_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
     unsigned int inline_count = 0;
 
-    if (DCTOOL_MAJOR < 2)
+    if(DCTOOL_MAJOR < 2)
         memcpy(command->id, NET_SYSCALL_WRITE_OLD, 4);
     else
         memcpy(command->id, NET_SYSCALL_WRITE, 4);
@@ -366,13 +354,10 @@ int write(int fd, const void *buf, unsigned int count)
      * Gated on host_supports_dedup() because pre-3.0 hosts didn't
      * special-case write inlining either way; the saving is only realized
      * with a new host. */
-    if (host_supports_dedup() &&
-        count > 0 &&
-        count <= NET_WRITE_INLINE_MAX &&
-        count <= NET_PAYLOAD_SIZE - sizeof(net_command_3int_t)) {
+    if(host_supports_dedup() && count > 0 && count <= NET_WRITE_INLINE_MAX &&
+       count <= NET_PAYLOAD_SIZE - sizeof(net_command_3int_t)) {
         inline_count = count;
-        memcpy((unsigned char *)command + sizeof(net_command_3int_t),
-               buf, inline_count);
+        memcpy((unsigned char *)command + sizeof(net_command_3int_t), buf, inline_count);
     }
 
     build_send_packet(sizeof(net_command_3int_t) + inline_count);
@@ -381,9 +366,9 @@ int write(int fd, const void *buf, unsigned int count)
     return syscall_retval;
 }
 
-int open(const char *pathname, int flags, int mode)
-{
-    net_command_2int_string_t *command = (net_command_2int_string_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
+int open(const char *pathname, int flags, int mode) {
+    net_command_2int_string_t *command =
+        (net_command_2int_string_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
     int namelen = my_strlen(pathname);
 
     memcpy(command->id, NET_SYSCALL_OPEN, 4);
@@ -397,8 +382,7 @@ int open(const char *pathname, int flags, int mode)
     return syscall_retval;
 }
 
-int close(int fd)
-{
+int close(int fd) {
     net_command_int_t *command = (net_command_int_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
 
     memcpy(command->id, NET_SYSCALL_CLOSE, 4);
@@ -410,9 +394,9 @@ int close(int fd)
     return syscall_retval;
 }
 
-int creat(const char *pathname, int mode)
-{
-    net_command_int_string_t *command = (net_command_int_string_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
+int creat(const char *pathname, int mode) {
+    net_command_int_string_t *command =
+        (net_command_int_string_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
     int namelen = my_strlen(pathname);
 
     memcpy(command->id, NET_SYSCALL_CREAT, 4);
@@ -425,8 +409,7 @@ int creat(const char *pathname, int mode)
     return syscall_retval;
 }
 
-int link(const char *oldpath, const char *newpath)
-{
+int link(const char *oldpath, const char *newpath) {
     net_command_string_t *command = (net_command_string_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
     int namelen1 = my_strlen(oldpath);
     int namelen2 = my_strlen(newpath);
@@ -441,8 +424,7 @@ int link(const char *oldpath, const char *newpath)
     return syscall_retval;
 }
 
-int unlink(const char *pathname)
-{
+int unlink(const char *pathname) {
     net_command_string_t *command = (net_command_string_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
     int namelen = my_strlen(pathname);
 
@@ -455,8 +437,7 @@ int unlink(const char *pathname)
     return syscall_retval;
 }
 
-int chdir(const char *path)
-{
+int chdir(const char *path) {
     net_command_string_t *command = (net_command_string_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
     int namelen = my_strlen(path);
 
@@ -469,9 +450,9 @@ int chdir(const char *path)
     return syscall_retval;
 }
 
-int chmod(const char *path, int mode)
-{
-    net_command_int_string_t *command = (net_command_int_string_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
+int chmod(const char *path, int mode) {
+    net_command_int_string_t *command =
+        (net_command_int_string_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
     int namelen = my_strlen(path);
 
     memcpy(command->id, NET_SYSCALL_CHMOD, 4);
@@ -484,9 +465,9 @@ int chmod(const char *path, int mode)
     return syscall_retval;
 }
 
-int mkdir(const char *path, int mode)
-{
-    net_command_int_string_t *command = (net_command_int_string_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
+int mkdir(const char *path, int mode) {
+    net_command_int_string_t *command =
+        (net_command_int_string_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
     int namelen = my_strlen(path);
 
     memcpy(command->id, NET_SYSCALL_MKDIR, 4);
@@ -499,8 +480,7 @@ int mkdir(const char *path, int mode)
     return syscall_retval;
 }
 
-int lseek(int fd, int offset, int whence)
-{
+int lseek(int fd, int offset, int whence) {
     net_command_3int_t *command = (net_command_3int_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
 
     memcpy(command->id, NET_SYSCALL_LSEEK, 4);
@@ -514,8 +494,7 @@ int lseek(int fd, int offset, int whence)
     return syscall_retval;
 }
 
-int fstat(int fd, void *buf)
-{
+int fstat(int fd, void *buf) {
     net_command_3int_t *command = (net_command_3int_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
     int command_len = sizeof(net_command_3int_t);
 
@@ -529,7 +508,7 @@ int fstat(int fd, void *buf)
      * DONEBIN round-trip to the guest's buf address.  Legacy hosts ignore
      * the magic and still do the 2-trip path — wire-safe.  Halves the
      * packet count for fstat, which dominates KOS's file-open path. */
-    if (host_supports_dedup()) {
+    if(host_supports_dedup()) {
         append_inline_ret_magic((unsigned char *)command + command_len);
         command_len += (int)NET_INLINE_RET_MAGIC_LEN;
     }
@@ -538,13 +517,12 @@ int fstat(int fd, void *buf)
 
     /* If the host honored the KIR0 hint, the stat result is sitting in
      * syscall_data already; pull it out before returning to the guest. */
-    if ((int)syscall_retval >= 0 && host_supports_dedup())
+    if((int)syscall_retval >= 0 && host_supports_dedup())
         copy_inline_ret(buf, sizeof(kosload_stat_t));
     return syscall_retval;
 }
 
-int time(unsigned int *t)
-{
+int time(unsigned int *t) {
     net_command_int_t *command = (net_command_int_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
 
     memcpy(command->id, NET_SYSCALL_TIME, 4);
@@ -553,15 +531,15 @@ int time(unsigned int *t)
     build_send_packet(sizeof(net_command_int_t));
     kos_syscall_wait_for_retval();
 
-    if (t != 0)
+    if(t != 0)
         *t = syscall_retval;
 
     return syscall_retval;
 }
 
-int stat(const char *pathname, void *buf)
-{
-    net_command_2int_string_t *command = (net_command_2int_string_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
+int stat(const char *pathname, void *buf) {
+    net_command_2int_string_t *command =
+        (net_command_2int_string_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
     int namelen = my_strlen(pathname);
     int command_len = sizeof(net_command_2int_string_t) + namelen + 1;
 
@@ -571,21 +549,21 @@ int stat(const char *pathname, void *buf)
     command->value1 = htonl(sizeof(kosload_stat_t));
 
     /* See fstat() for the KIR0 inline-return rationale. */
-    if (host_supports_dedup()) {
+    if(host_supports_dedup()) {
         append_inline_ret_magic((unsigned char *)command + command_len);
         command_len += (int)NET_INLINE_RET_MAGIC_LEN;
     }
     build_send_packet(command_len);
     kos_syscall_wait_for_retval();
 
-    if ((int)syscall_retval >= 0 && host_supports_dedup())
+    if((int)syscall_retval >= 0 && host_supports_dedup())
         copy_inline_ret(buf, sizeof(kosload_stat_t));
     return syscall_retval;
 }
 
-int utime(const char *filename, void *buf)
-{
-    net_command_3int_string_t *command = (net_command_3int_string_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
+int utime(const char *filename, void *buf) {
+    net_command_3int_string_t *command =
+        (net_command_3int_string_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
     int namelen = my_strlen(filename);
     unsigned int *times = (unsigned int *)buf;
 
@@ -593,7 +571,7 @@ int utime(const char *filename, void *buf)
     memcpy(command->string, filename, namelen + 1);
     command->value0 = htonl((unsigned int)buf);
 
-    if (buf) {
+    if(buf) {
         command->value1 = htonl(times[0]); /* actime */
         command->value2 = htonl(times[1]); /* modtime */
     }
@@ -604,8 +582,7 @@ int utime(const char *filename, void *buf)
     return syscall_retval;
 }
 
-unsigned int opendir(const char *name)
-{
+unsigned int opendir(const char *name) {
     net_command_string_t *command = (net_command_string_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
     int namelen = my_strlen(name);
 
@@ -618,8 +595,7 @@ unsigned int opendir(const char *name)
     return syscall_retval;
 }
 
-int closedir(unsigned int dir)
-{
+int closedir(unsigned int dir) {
     net_command_int_t *command = (net_command_int_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
 
     memcpy(command->id, NET_SYSCALL_CLOSEDIR, 4);
@@ -631,8 +607,7 @@ int closedir(unsigned int dir)
     return syscall_retval;
 }
 
-void *readdir(unsigned int dir)
-{
+void *readdir(unsigned int dir) {
     net_command_3int_t *command = (net_command_3int_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
     int command_len = sizeof(net_command_3int_t);
 
@@ -642,23 +617,22 @@ void *readdir(unsigned int dir)
     command->value2 = htonl(sizeof(dc_dirent_t));
 
     /* See fstat() for the KIR0 inline-return rationale. */
-    if (host_supports_dedup()) {
+    if(host_supports_dedup()) {
         append_inline_ret_magic((unsigned char *)command + command_len);
         command_len += (int)NET_INLINE_RET_MAGIC_LEN;
     }
     build_send_packet(command_len);
     kos_syscall_wait_for_retval();
 
-    if (syscall_retval) {
-        if (host_supports_dedup())
+    if(syscall_retval) {
+        if(host_supports_dedup())
             copy_inline_ret(&our_dir, sizeof(our_dir));
         return &our_dir;
     }
     return 0;
 }
 
-unsigned int gdbpacket(const char *in_buf, unsigned int size_pack, char *out_buf)
-{
+unsigned int gdbpacket(const char *in_buf, unsigned int size_pack, char *out_buf) {
     unsigned int in_size = size_pack >> 16;
     unsigned int out_size = size_pack & 0xffff;
     net_command_2int_string_t *command = (net_command_2int_string_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
@@ -670,14 +644,13 @@ unsigned int gdbpacket(const char *in_buf, unsigned int size_pack, char *out_buf
     build_send_packet(sizeof(net_command_2int_string_t) + in_size);
     kos_syscall_wait_for_retval();
 
-    if (syscall_retval <= out_size)
+    if(syscall_retval <= out_size)
         memcpy(out_buf, syscall_data, syscall_retval);
 
     return syscall_retval;
 }
 
-int rewinddir(unsigned int dir)
-{
+int rewinddir(unsigned int dir) {
     net_command_int_t *command = (net_command_int_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
 
     memcpy(command->id, NET_SYSCALL_REWINDDIR, 4);
@@ -689,8 +662,7 @@ int rewinddir(unsigned int dir)
     return syscall_retval;
 }
 
-int gethostinfo(unsigned int *ip, unsigned int *port)
-{
+int gethostinfo(unsigned int *ip, unsigned int *port) {
     *ip = tool_ip;
     *port = tool_port;
     return our_ip;

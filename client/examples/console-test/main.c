@@ -67,57 +67,52 @@
 
 typedef int (*kosload_syscall_fn)(int syscall, int arg1, int arg2, int arg3);
 
-static kosload_syscall_fn get_syscall(void)
-{
-    if (KOSLOAD_MAGIC_ADDR != KOSLOAD_MAGIC)
+static kosload_syscall_fn get_syscall(void) {
+    if(KOSLOAD_MAGIC_ADDR != KOSLOAD_MAGIC)
         return (kosload_syscall_fn)0;
     return (kosload_syscall_fn)KOSLOAD_SYSCALL_ADDR;
 }
 
-static int kl_write(int fd, const void *buf, int count)
-{
+static int kl_write(int fd, const void *buf, int count) {
     kosload_syscall_fn syscall = get_syscall();
-    if (!syscall) return -1;
+    if(!syscall)
+        return -1;
     return syscall(SYSCALL_WRITE, fd, (int)buf, count);
 }
 
-static void kl_exit(void)
-{
+static void kl_exit(void) {
     kosload_syscall_fn syscall = get_syscall();
-    if (syscall)
+    if(syscall)
         syscall(SYSCALL_EXIT, 0, 0, 0);
 }
 
 /* Simple strlen */
-static int slen(const char *s)
-{
+static int slen(const char *s) {
     int n = 0;
-    while (*s++) n++;
+    while(*s++)
+        n++;
     return n;
 }
 
 /* Print a string to the console */
-static void print(const char *msg)
-{
+static void print(const char *msg) {
     kl_write(1, msg, slen(msg));
 }
 
 /* Convert an unsigned int to hex string */
-static void uint_to_hex(unsigned int val, char *buf)
-{
+static void uint_to_hex(unsigned int val, char *buf) {
     static const char hex[] = "0123456789abcdef";
     int i;
     buf[0] = '0';
     buf[1] = 'x';
-    for (i = 0; i < 8; i++)
+    for(i = 0; i < 8; i++)
         buf[2 + i] = hex[(val >> (28 - i * 4)) & 0xf];
     buf[10] = '\0';
 }
 
 /* Entry point */
 void start(void) __attribute__((section(".text.start")));
-void start(void)
-{
+void start(void) {
     char hexbuf[12];
 
     print("\n");
@@ -131,7 +126,7 @@ void start(void)
     print("Test 2: Kosload magic value: ");
     uint_to_hex(KOSLOAD_MAGIC_ADDR, hexbuf);
     print(hexbuf);
-    if (KOSLOAD_MAGIC_ADDR == KOSLOAD_MAGIC)
+    if(KOSLOAD_MAGIC_ADDR == KOSLOAD_MAGIC)
         print(" ... OK\n");
     else
         print(" ... FAIL (expected 0xdeadbeef)\n");

@@ -59,7 +59,7 @@ KOSLOAD_IMPORT_TABLE_END(loadcore);
 
 KOSLOAD_IMPORT_TABLE(intrman, 1, 2);
 KOSLOAD_IMPORT(intrman, 17, CpuSuspendIntr, int, (int *state));
-KOSLOAD_IMPORT(intrman, 18, CpuResumeIntr,  int, (int state));
+KOSLOAD_IMPORT(intrman, 18, CpuResumeIntr, int, (int state));
 KOSLOAD_IMPORT_TABLE_END(intrman);
 
 /* ================================================================== *
@@ -83,16 +83,16 @@ KOSLOAD_IMPORT_TABLE_END(intrman);
  * checksum).
  * ================================================================== */
 
-#define SMAP_PIOPORT_DIR        (*(volatile unsigned char *)0xb000002cu)
-#define SMAP_PIOPORT_OUT        (*(volatile unsigned char *)0xb000002eu)
-#define SMAP_PIOPORT_IN         (*(volatile unsigned char *)0xb000002eu)
+#define SMAP_PIOPORT_DIR     (*(volatile unsigned char *)0xb000002c)
+#define SMAP_PIOPORT_OUT     (*(volatile unsigned char *)0xb000002e)
+#define SMAP_PIOPORT_IN      (*(volatile unsigned char *)0xb000002e)
 
-#define EEPROM_PP_DOUT          (1u << 4)   /* read-only — Q from EEPROM */
-#define EEPROM_PP_DIN           (1u << 5)   /* write — D to EEPROM */
-#define EEPROM_PP_SCLK          (1u << 6)   /* write — clock */
-#define EEPROM_PP_CSEL          (1u << 7)   /* write — chip select */
+#define EEPROM_PP_DOUT      (1 << 4) /* read-only — Q from EEPROM */
+#define EEPROM_PP_DIN       (1 << 5) /* write — D to EEPROM */
+#define EEPROM_PP_SCLK      (1 << 6) /* write — clock */
+#define EEPROM_PP_CSEL      (1 << 7) /* write — chip select */
 
-#define EEPROM_OP_READ          0x2u        /* 2'b10 */
+#define EEPROM_OP_READ 0x2 /* 2'b10 */
 
 /* ---------------------------------------------------------------- *
  * Stage 3.5d / 3.6 BIT-BANG VARIANT MATRIX
@@ -123,11 +123,9 @@ KOSLOAD_IMPORT_TABLE_END(intrman);
 #endif
 
 #if KOSDEV9_VARIANT >= 1
-#define KOSDEV9_DIR_BITS  (EEPROM_PP_SCLK | EEPROM_PP_CSEL | \
-                           EEPROM_PP_DIN | 0x01u)
+#define KOSDEV9_DIR_BITS (EEPROM_PP_SCLK | EEPROM_PP_CSEL | EEPROM_PP_DIN | 0x01)
 #else
-#define KOSDEV9_DIR_BITS  (EEPROM_PP_SCLK | EEPROM_PP_CSEL | \
-                           EEPROM_PP_DIN)
+#define KOSDEV9_DIR_BITS (EEPROM_PP_SCLK | EEPROM_PP_CSEL | EEPROM_PP_DIN)
 #endif
 
 #if KOSDEV9_VARIANT >= 2
@@ -137,9 +135,9 @@ KOSLOAD_IMPORT_TABLE_END(intrman);
 #endif
 
 #if KOSDEV9_VARIANT >= 3
-#define KOSDEV9_UDELAY_ITERS_PER_USEC  48u
+#define KOSDEV9_UDELAY_ITERS_PER_USEC     48
 #else
-#define KOSDEV9_UDELAY_ITERS_PER_USEC  12u
+#define KOSDEV9_UDELAY_ITERS_PER_USEC     12
 #endif
 
 /* Shared write-byte state.  Updated incrementally by helpers below
@@ -152,41 +150,36 @@ static unsigned char eeprom_pp_state;
  * volatile counter loop is ~3-4 cycles per iter ≈ 100 ns.  Default
  * 12 iter/µs ≈ 1.2 µs.  Variant 3 uses 48 iter/µs ≈ 5 µs/µs —
  * intentionally generous to test whether timing is the issue. */
-static void eeprom_udelay(unsigned int usec)
-{
+static void eeprom_udelay(unsigned int usec) {
     volatile unsigned int i;
     unsigned int iters = usec * KOSDEV9_UDELAY_ITERS_PER_USEC;
-    for (i = 0; i < iters; i++)
+    for(i = 0; i < iters; i++)
         ;
 }
 
-static void eeprom_clk_out(int clk)
-{
-    if (clk)
+static void eeprom_clk_out(int clk) {
+    if(clk)
         eeprom_pp_state |= EEPROM_PP_SCLK;
     else
         eeprom_pp_state &= (unsigned char)~EEPROM_PP_SCLK;
     SMAP_PIOPORT_OUT = eeprom_pp_state;
 }
 
-static void eeprom_set_d(int d)
-{
-    if (d)
+static void eeprom_set_d(int d) {
+    if(d)
         eeprom_pp_state |= EEPROM_PP_DIN;
     else
         eeprom_pp_state &= (unsigned char)~EEPROM_PP_DIN;
 }
 
-static void eeprom_set_s(int s)
-{
-    if (s)
+static void eeprom_set_s(int s) {
+    if(s)
         eeprom_pp_state |= EEPROM_PP_CSEL;
     else
         eeprom_pp_state &= (unsigned char)~EEPROM_PP_CSEL;
 }
 
-static int eeprom_get_q(void)
-{
+static int eeprom_get_q(void) {
     return (SMAP_PIOPORT_IN >> 4) & 1;
 }
 
@@ -194,45 +187,47 @@ static int eeprom_get_q(void)
  * edge).  ~4 µs per bit at our delay budget — slow but well within
  * the EEPROM's max clock period (no upper bound for asynchronous
  * Microwire). */
-static void eeprom_clock_dataout(int val)
-{
+static void eeprom_clock_dataout(int val) {
     eeprom_set_d(val);
-    eeprom_clk_out(0); eeprom_udelay(1);
-    eeprom_clk_out(1); eeprom_udelay(1);
-    eeprom_clk_out(0); eeprom_udelay(1);
+    eeprom_clk_out(0);
+    eeprom_udelay(1);
+    eeprom_clk_out(1);
+    eeprom_udelay(1);
+    eeprom_clk_out(0);
+    eeprom_udelay(1);
 }
 
-static int eeprom_clock_datain(void)
-{
+static int eeprom_clock_datain(void) {
     int q;
 
     eeprom_set_d(0);
-    eeprom_clk_out(0); eeprom_udelay(1);
-    eeprom_clk_out(1); eeprom_udelay(1);
+    eeprom_clk_out(0);
+    eeprom_udelay(1);
+    eeprom_clk_out(1);
+    eeprom_udelay(1);
     q = eeprom_get_q();
-    eeprom_clk_out(0); eeprom_udelay(1);
+    eeprom_clk_out(0);
+    eeprom_udelay(1);
     return q;
 }
 
 /* MSB-first 6-bit address shift-out. */
-static void eeprom_put_addr(unsigned char addr)
-{
+static void eeprom_put_addr(unsigned char addr) {
     int i;
 
-    addr &= 0x3fu;
-    for (i = 0; i < 6; i++) {
-        eeprom_clock_dataout((addr & 0x20u) ? 1 : 0);
+    addr &= 0x3f;
+    for(i = 0; i < 6; i++) {
+        eeprom_clock_dataout((addr & 0x20) ? 1 : 0);
         addr = (unsigned char)(addr << 1);
     }
 }
 
 /* MSB-first 16-bit data shift-in. */
-static unsigned short eeprom_get_data(void)
-{
+static unsigned short eeprom_get_data(void) {
     int i;
     unsigned short data = 0;
 
-    for (i = 0; i < 16; i++) {
+    for(i = 0; i < 16; i++) {
         data = (unsigned short)(data << 1);
         data |= (unsigned short)eeprom_clock_datain();
     }
@@ -244,8 +239,7 @@ static unsigned short eeprom_get_data(void)
  * controlled (KOSDEV9_DIR_BITS) — variants 0 use 0xe0 (EE-side
  * ps2-load-ip pattern), variants 1+ use 0xe1 (Sony's pattern with
  * mystery bit 0 set). */
-static void eeprom_start_op(int op)
-{
+static void eeprom_start_op(int op) {
     SMAP_PIOPORT_DIR = KOSDEV9_DIR_BITS;
 
     /* Idle-state pulse: CS=0, SCLK=0, DIN=0 settles for one µs. */
@@ -279,8 +273,7 @@ static void eeprom_start_op(int op)
  * focus on making it RELIABLE via interrupt suspension (below). */
 
 /* End op: drop CS, settle. */
-static void eeprom_cs_low(void)
-{
+static void eeprom_cs_low(void) {
     eeprom_set_s(0);
     eeprom_set_d(0);
     eeprom_clk_out(0);
@@ -320,8 +313,7 @@ static unsigned short eeprom_cache[4];
  * library to other IRXs.  Bracketed in CpuSuspendIntr/CpuResumeIntr
  * so IRQ preemption can't stretch SCLK / sampling DOUT at the wrong
  * time relative to chip state. */
-static void eeprom_populate_cache(void)
-{
+static void eeprom_populate_cache(void) {
     int i;
     int int_state;
 #if KOSDEV9_CONSUME_DUMMY
@@ -356,14 +348,17 @@ static void eeprom_populate_cache(void)
 #if KOSDEV9_CONSUME_DUMMY
     /* Variant >= 2: consume dummy zero between addr-out and data-in. */
     eeprom_set_d(0);
-    eeprom_clk_out(0); eeprom_udelay(1);
-    eeprom_clk_out(1); eeprom_udelay(1);
+    eeprom_clk_out(0);
+    eeprom_udelay(1);
+    eeprom_clk_out(1);
+    eeprom_udelay(1);
     q = eeprom_get_q();
-    eeprom_clk_out(0); eeprom_udelay(1);
+    eeprom_clk_out(0);
+    eeprom_udelay(1);
     (void)q;
 #endif
 
-    for (i = 0; i < 3; i++)
+    for(i = 0; i < 3; i++)
         eeprom_cache[i] = eeprom_get_data();
     eeprom_cs_low();
 
@@ -373,10 +368,13 @@ static void eeprom_populate_cache(void)
 
 #if KOSDEV9_CONSUME_DUMMY
     eeprom_set_d(0);
-    eeprom_clk_out(0); eeprom_udelay(1);
-    eeprom_clk_out(1); eeprom_udelay(1);
+    eeprom_clk_out(0);
+    eeprom_udelay(1);
+    eeprom_clk_out(1);
+    eeprom_udelay(1);
     q = eeprom_get_q();
-    eeprom_clk_out(0); eeprom_udelay(1);
+    eeprom_clk_out(0);
+    eeprom_udelay(1);
     (void)q;
 #endif
 
@@ -405,14 +403,13 @@ static void eeprom_populate_cache(void)
  * references it by name from the export-table .data section.
  * ================================================================== */
 
-int dev9_read_eeprom(unsigned short *out)
-{
+int dev9_read_eeprom(unsigned short *out) {
     int i;
 
-    if (eeprom_cache_state != 1)
+    if(eeprom_cache_state != 1)
         return -1;
 
-    for (i = 0; i < 4; i++)
+    for(i = 0; i < 4; i++)
         out[i] = eeprom_cache[i];
 
     return 0;
@@ -422,8 +419,7 @@ int dev9_read_eeprom(unsigned short *out)
  * library does the same thing for its 4 exposed slots — they're
  * registered for the netdev framework's library-walk but don't
  * implement anything callable. */
-int dev9_unused(void)
-{
+int dev9_unused(void) {
     return 0;
 }
 
@@ -482,45 +478,43 @@ KOSLOAD_EXPORT_TABLE_END(dev9);
  * configuration (the mailbox is always the same place).
  * ================================================================== */
 
-int _start(int argc, char **argv)
-{
+int _start(int argc, char **argv) {
     struct iop_mailbox *mbox;
     volatile struct iop_mailbox *probe =
-        (volatile struct iop_mailbox *)0xA01F8000u;
+        (volatile struct iop_mailbox *)0xA01F8000;
     unsigned int runtime_pc;
 
     (void)argc;
     (void)argv;
 
-    __asm__ volatile(
-        ".set push\n"
-        ".set noreorder\n"
-        "bgezal $zero, 1f\n"
-        "nop\n"
-        "1:\n"
-        "addiu %0, $ra, 0\n"
-        ".set pop\n"
-        : "=r"(runtime_pc)
-        :
-        : "$ra");
+    __asm__ volatile(".set push\n"
+                     ".set noreorder\n"
+                     "bgezal $zero, 1f\n"
+                     "nop\n"
+                     "1:\n"
+                     "addiu %0, $ra, 0\n"
+                     ".set pop\n"
+                     : "=r"(runtime_pc)
+                     :
+                     : "$ra");
 
     /* Pre-touch the mailbox via the IOP uncached alias.  Empirically
      * this 4-field settling write is what makes dev9_init_run's later
      * writes reach IOP RAM in time for the EE to poll them.  Diagnostic
      * values; the EE doesn't depend on the specific bits. */
-    probe->cmd      = 0xDEAD0001u;
-    probe->rev      = (unsigned int)argc;
+    probe->cmd = 0xDEAD0001;
+    probe->rev = (unsigned int)argc;
     probe->presence = (unsigned int)((unsigned int)argv >> 16);
-    probe->map      = (unsigned int)argv;
-    probe->power    = 0xE0E1E0E1u;
+    probe->map = (unsigned int)argv;
+    probe->power = 0xE0E1E0E1;
 
-    probe->power    = 0xE0E10013u;
-    probe->rev      = runtime_pc;
-    probe->map      = (unsigned int)(void *)dev9_init_run;
+    probe->power = 0xE0E10013;
+    probe->rev = runtime_pc;
+    probe->map = (unsigned int)(void *)dev9_init_run;
     probe->presence = (unsigned int)(void *)_start;
 
     /* DEV9 register init — same path as Stage 1 / 2 / 3.4. */
-    mbox = (struct iop_mailbox *)0xA01F8000u;
+    mbox = (struct iop_mailbox *)0xA01F8000;
     (void)dev9_init_run(mbox);
 
     /* Bit-bang the EEPROM and cache the result NOW — before any
@@ -540,7 +534,7 @@ int _start(int argc, char **argv)
      * If registration fails we return NO_RESIDENT_END — keeping the
      * module loaded with an unregistered library would just waste
      * IOP RAM. */
-    if (RegisterLibraryEntries(KOSLOAD_EXPORT_TABLE_PTR(dev9)) != 0)
+    if(RegisterLibraryEntries(KOSLOAD_EXPORT_TABLE_PTR(dev9)) != 0)
         return KOSLOAD_MODULE_NO_RESIDENT_END;
 
     /* Stay resident — our export table must remain alive for

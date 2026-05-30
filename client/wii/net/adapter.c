@@ -53,17 +53,16 @@ static void wii_adapter_stop(void);
 static void wii_adapter_loop(bool is_main_loop);
 static int wii_adapter_tx(unsigned char *pkt, int len);
 
-static void set_adapter_name_for_interface(int interface_type)
-{
-    const char *name = "LAN Adapter (RVL-015)";
+static void set_adapter_name_for_interface(int interface_type) {
+    const char  *name = "LAN Adapter (RVL-015)";
     unsigned int i;
 
-    if (interface_type == WII_NET_INTERFACE_WIRED)
+    if(interface_type == WII_NET_INTERFACE_WIRED)
         name = "LAN Adapter (RVL-015)";
-    else if (interface_type == WII_NET_INTERFACE_WIFI)
+    else if(interface_type == WII_NET_INTERFACE_WIFI)
         name = "Internal Wi-Fi";
 
-    for (i = 0; i + 1 < sizeof(adapter_name) && name[i] != '\0'; i++)
+    for(i = 0; i + 1 < sizeof(adapter_name) && name[i] != '\0'; i++)
         adapter_name[i] = name[i];
     adapter_name[i] = '\0';
 }
@@ -80,14 +79,13 @@ adapter_t adapter_wii_ios = {
     .tx = wii_adapter_tx,
 };
 
-static void synthesize_udp_frame(const uint8_t *payload, uint32_t payload_len,
-                                 uint32_t src_ip, uint16_t src_port)
-{
+static void synthesize_udp_frame(const uint8_t *payload, uint32_t payload_len, uint32_t src_ip,
+                                 uint16_t src_port) {
     ether_header_t *ether = (ether_header_t *)current_pkt;
     ip_header_t *ip = (ip_header_t *)(current_pkt + ETHER_H_LEN);
     udp_header_t *udp = (udp_header_t *)(current_pkt + ETHER_H_LEN + IP_H_LEN);
 
-    if (payload_len > WII_NET_MAX_UDP_PAYLOAD)
+    if(payload_len > WII_NET_MAX_UDP_PAYLOAD)
         return;
 
     make_ether((unsigned char *)bb->mac, (unsigned char *)synthetic_host_mac, ether);
@@ -98,11 +96,10 @@ static void synthesize_udp_frame(const uint8_t *payload, uint32_t payload_len,
     process_pkt(current_pkt);
 }
 
-static int wii_adapter_init(void)
-{
+static int wii_adapter_init(void) {
     wii_net_config_t config;
 
-    if (wii_ios_net_init(&config) < 0) {
+    if(wii_ios_net_init(&config) < 0) {
         last_error = wii_ios_net_last_error();
         return -1;
     }
@@ -127,58 +124,54 @@ static int wii_adapter_init(void)
      * handshake cache, so it re-handshakes (and reprints the version
      * banner) on every round-trip. */
     installed_adapter = ADAPTER_WII_LAN_WIFI;
-    if (config.ip_source_dhcp)
+    if(config.ip_source_dhcp)
         kosload_info.capabilities |= KOSLOAD_CAP_DHCP;
     escape_loop = 0;
     last_error = "Wii IOS socket service unavailable";
     return 0;
 }
 
-static void wii_adapter_start(void)
-{
+static void wii_adapter_start(void) {
 }
 
-static void wii_adapter_stop(void)
-{
+static void wii_adapter_stop(void) {
 }
 
-static uint64_t wii_ms_to_ticks(const target_ops_t *t, unsigned int ms)
-{
+static uint64_t wii_ms_to_ticks(const target_ops_t *t, unsigned int ms) {
     return ((uint64_t)t->ticks_per_second * ms) / 1000;
 }
 
-static void wii_poll_link_change(void)
-{
+static void wii_poll_link_change(void) {
     const target_ops_t *t = target_get_ops();
     uint64_t now;
     int link_up;
 
     /* WiFi has no meaningful "cable plugged" signal */
-    if (wii_interface_type != WII_NET_INTERFACE_WIRED)
+    if(wii_interface_type != WII_NET_INTERFACE_WIRED)
         return;
 
     now = t->get_ticks();
 
-    if (wii_next_link_poll && now < wii_next_link_poll)
+    if(wii_next_link_poll && now < wii_next_link_poll)
         return;
 
     wii_next_link_poll = now + wii_ms_to_ticks(t, 100);
     link_up = wii_ios_net_poll_link_state();
 
-    if (wii_last_link < 0 || link_up != wii_last_link) {
+    if(wii_last_link < 0 || link_up != wii_last_link) {
         int was_down = (wii_last_link == 0);
         wii_last_link = link_up;
 
         screensaver_wake();
 
-        if (link_up) {
+        if(link_up) {
             disp_status("idle...");
             wii_ios_net_shutdown();
             wii_adapter_init();
             /* Arm the post-replug settle only on a real down→up edge.  The
              * initial wii_last_link = -1 → 1 path is the cold-boot init, not
              * a recovery, so no settle needed there. */
-            if (was_down)
+            if(was_down)
                 wii_link_up_settle_until = now + wii_ms_to_ticks(t, WII_LINK_UP_SETTLE_MS);
         } else {
             disp_status("link lost...");
@@ -207,30 +200,26 @@ static void wii_poll_link_change(void)
  *   - After a cable replug, IOS is internally busy re-running DHCP for
  *     several seconds; the wii_link_up_settle_until gate keeps hot-path IOS
  *     calls out of that window. */
-static void wii_adapter_loop(bool is_main_loop)
-{
-    static uint64_t last_sec_tick = 0;
+static void wii_adapter_loop(bool is_main_loop) {
+    static uint64_t     last_sec_tick = 0;
     const target_ops_t *t = target_get_ops();
     uint8_t payload[WII_NET_MAX_UDP_PAYLOAD];
     uint32_t src_ip = 0;
     uint16_t src_port = 0;
     int received;
 
-    while (!escape_loop) {
+    while(!escape_loop) {
         uint64_t now = t->get_ticks();
         int got_rx = 0;
         /* The post-replug settle only applies to the idle main loop.
          * During a nested syscall wait, RETVAL recovery takes priority
          * over the settle. */
-        int settling = is_main_loop &&
-                          (wii_link_up_settle_until && now < wii_link_up_settle_until);
+        int settling = is_main_loop && (wii_link_up_settle_until && now < wii_link_up_settle_until);
 
-        if (!settling && wii_ios_net_poll_recv(0) > 0) {
-            received = wii_ios_net_recvfrom(payload, sizeof(payload),
-                                            &src_ip, &src_port);
-            if (received > 0) {
-                synthesize_udp_frame(payload, (uint32_t)received,
-                                     src_ip, src_port);
+        if(!settling && wii_ios_net_poll_recv(0) > 0) {
+            received = wii_ios_net_recvfrom(payload, sizeof(payload), &src_ip, &src_port);
+            if(received > 0) {
+                synthesize_udp_frame(payload, (uint32_t)received, src_ip, src_port);
                 got_rx = 1;
             }
         }
@@ -243,22 +232,20 @@ static void wii_adapter_loop(bool is_main_loop)
          * is a no-op.  Gated on no RX this pass (matches the wired
          * adapters) so an in-progress download isn't abandoned with a
          * packet still waiting to be drained. */
-        if (!got_rx && loop_deadline_ticks && now >= loop_deadline_ticks)
+        if(!got_rx && loop_deadline_ticks && now >= loop_deadline_ticks)
             break;
 
-        if (is_main_loop) {
-            if (!settling)
+        if(is_main_loop) {
+            if(!settling)
                 wii_poll_link_change();
 
             /* ~1 Hz: repaint the DHCP-lease line from IOS's current
              * remaining-seconds (also gated by the post-replug settle). */
-            if (!settling &&
-                now - last_sec_tick >= t->ticks_per_second) {
+            if(!settling && now - last_sec_tick >= t->ticks_per_second) {
                 last_sec_tick = now;
-                if ((kosload_info.capabilities & KOSLOAD_CAP_DHCP) &&
-                    !screensaver_is_active()) {
+                if((kosload_info.capabilities & KOSLOAD_CAP_DHCP) && !screensaver_is_active()) {
                     int lease = wii_ios_net_lease_secs();
-                    if (lease > 0)
+                    if(lease > 0)
                         update_lease_time_display((unsigned int)lease);
                 }
             }
@@ -269,38 +256,34 @@ static void wii_adapter_loop(bool is_main_loop)
     escape_loop = 0;
 }
 
-static int wii_adapter_tx(unsigned char *pkt, int len)
-{
+static int wii_adapter_tx(unsigned char *pkt, int len) {
     ip_header_t *ip;
     udp_header_t *udp;
     uint32_t udp_len;
     uint32_t payload_len;
 
-    if (len < ETHER_H_LEN + IP_H_LEN + UDP_H_LEN)
+    if(len < ETHER_H_LEN + IP_H_LEN + UDP_H_LEN)
         return -1;
 
     ip = (ip_header_t *)(pkt + ETHER_H_LEN);
-    if (ip->protocol != IP_UDP_PROTOCOL)
+    if(ip->protocol != IP_UDP_PROTOCOL)
         return -1;
 
     udp = (udp_header_t *)(pkt + ETHER_H_LEN + IP_H_LEN);
     udp_len = ntohs(udp->length);
-    if (udp_len < UDP_H_LEN)
+    if(udp_len < UDP_H_LEN)
         return -1;
 
     payload_len = udp_len - UDP_H_LEN;
-    return wii_ios_net_sendto(udp->data, payload_len, ntohl(ip->dest),
-                              ntohs(udp->dest));
+    return wii_ios_net_sendto(udp->data, payload_len, ntohl(ip->dest), ntohs(udp->dest));
 }
 
-int adapter_detect(void)
-{
+int adapter_detect(void) {
     bb = &adapter_wii_ios;
     return adapter_wii_ios.detect();
 }
 
-const char *adapter_get_last_error(void)
-{
+const char *adapter_get_last_error(void) {
     return last_error;
 }
 
@@ -308,13 +291,11 @@ const char *adapter_get_last_error(void)
  * phase (DHCP DISCOVER, REQUEST, ...) to surface like the other consoles.
  * Return an empty string so the shared entry.c phase-display logic stays
  * uniform without platform ifdefs. */
-const char *adapter_get_phase_status(void)
-{
+const char *adapter_get_phase_status(void) {
     return "";
 }
 
-void adapter_start_static_ip(void)
-{
-    if (bb)
+void adapter_start_static_ip(void) {
+    if(bb)
         bb->start();
 }

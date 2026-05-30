@@ -95,41 +95,35 @@ static inline void arch_dcache_pref_line(const void *src) {
 
 /* Write back a dirty D-cache line to RAM, leaving it valid in cache (DHWOIN). */
 static inline void arch_dcache_wback_line(void *src) {
-    __asm__ volatile(
-        ".set push\n"
-        ".set noreorder\n"
-        "sync.l\n"
-        "cache 0x1c, 0(%0)\n"
-        "sync.l\n"
-        ".set pop\n"
-        :: "r"(src) : "memory"
-    );
+    __asm__ volatile(".set push\n"
+                     ".set noreorder\n"
+                     "sync.l\n"
+                     "cache 0x1c, 0(%0)\n"
+                     "sync.l\n"
+                     ".set pop\n" ::"r"(src)
+                     : "memory");
 }
 
 /* Write back a dirty D-cache line to RAM and invalidate it (DHWBIN). */
 static inline void arch_dcache_purge_line(void *src) {
-    __asm__ volatile(
-        ".set push\n"
-        ".set noreorder\n"
-        "sync.l\n"
-        "cache 0x18, 0(%0)\n"
-        "sync.l\n"
-        ".set pop\n"
-        :: "r"(src) : "memory"
-    );
+    __asm__ volatile(".set push\n"
+                     ".set noreorder\n"
+                     "sync.l\n"
+                     "cache 0x18, 0(%0)\n"
+                     "sync.l\n"
+                     ".set pop\n" ::"r"(src)
+                     : "memory");
 }
 
 /* Invalidate a D-cache line, discarding any dirty data without writeback (DHIN). */
 static inline void arch_dcache_inval_line(void *src) {
-    __asm__ volatile(
-        ".set push\n"
-        ".set noreorder\n"
-        "sync.l\n"
-        "cache 0x1a, 0(%0)\n"
-        "sync.l\n"
-        ".set pop\n"
-        :: "r"(src) : "memory"
-    );
+    __asm__ volatile(".set push\n"
+                     ".set noreorder\n"
+                     "sync.l\n"
+                     "cache 0x1a, 0(%0)\n"
+                     "sync.l\n"
+                     ".set pop\n" ::"r"(src)
+                     : "memory");
 }
 
 /* =========================================================================
@@ -143,7 +137,6 @@ static inline void arch_dcache_inval_line(void *src) {
 
 /* Write back all dirty D-cache lines covering [start, start+count) (DHWOIN). */
 static inline void arch_dcache_wback_range(uintptr_t start, size_t count) {
-
     if(count >= ARCH_CACHE_L1_DCACHE_SIZE * 2) { /* 16 KB */
         arch_dcache_wback_all();
         return;
@@ -157,14 +150,12 @@ static inline void arch_dcache_wback_range(uintptr_t start, size_t count) {
     __asm__ volatile("sync.l" ::: "memory");
 
     for(; start < end; start += ARCH_CACHE_L1_DCACHE_LINESIZE) {
-        __asm__ volatile(
-            ".set push\n"
-            ".set noreorder\n"
-            "cache 0x1c, 0(%0)\n"
-            "sync.l\n"
-            ".set pop\n"
-            :: "r"(start) : "memory"
-        );
+        __asm__ volatile(".set push\n"
+                         ".set noreorder\n"
+                         "cache 0x1c, 0(%0)\n"
+                         "sync.l\n"
+                         ".set pop\n" ::"r"(start)
+                         : "memory");
     }
 }
 
@@ -179,20 +170,17 @@ static inline void arch_dcache_inval_range(uintptr_t start, size_t count) {
     __asm__ volatile("sync.l" ::: "memory");
 
     for(; start < end; start += ARCH_CACHE_L1_DCACHE_LINESIZE) {
-        __asm__ volatile(
-            ".set push\n"
-            ".set noreorder\n"
-            "cache 0x1a, 0(%0)\n"
-            "sync.l\n"
-            ".set pop\n"
-            :: "r"(start) : "memory"
-        );
+        __asm__ volatile(".set push\n"
+                         ".set noreorder\n"
+                         "cache 0x1a, 0(%0)\n"
+                         "sync.l\n"
+                         ".set pop\n" ::"r"(start)
+                         : "memory");
     }
 }
 
 /* Write back and invalidate all D-cache lines covering [start, start+count) (DHWBIN). */
 static inline void arch_dcache_purge_range(uintptr_t start, size_t count) {
-
     if(count >= ARCH_CACHE_L1_DCACHE_SIZE) { /* 8 KB */
         arch_dcache_purge_all();
         return;
@@ -206,14 +194,12 @@ static inline void arch_dcache_purge_range(uintptr_t start, size_t count) {
     __asm__ volatile("sync.l" ::: "memory");
 
     for(; start < end; start += ARCH_CACHE_L1_DCACHE_LINESIZE) {
-        __asm__ volatile(
-            ".set push\n"
-            ".set noreorder\n"
-            "cache 0x18, 0(%0)\n"
-            "sync.l\n"
-            ".set pop\n"
-            :: "r"(start) : "memory"
-        );
+        __asm__ volatile(".set push\n"
+                         ".set noreorder\n"
+                         "cache 0x18, 0(%0)\n"
+                         "sync.l\n"
+                         ".set pop\n" ::"r"(start)
+                         : "memory");
     }
 }
 

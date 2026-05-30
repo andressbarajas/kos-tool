@@ -39,15 +39,14 @@ adapter_t adapter_enc28j60 = {
     enc28j60_stop,
     enc28j60_loop,
     enc28j60_tx,
-    false       /* not lossy: reliable raw NIC, wait forever for RETVAL */
+    false /* not lossy: reliable raw NIC, wait forever for RETVAL */
 };
 
 /* Runtime EXI location (set by detection) */
 static int enc_channel;
 static int enc_device;
 
-void enc28j60_get_exi_location(int *channel, int *device)
-{
+void enc28j60_get_exi_location(int *channel, int *device) {
     *channel = enc_channel;
     *device = enc_device;
 }
@@ -72,8 +71,7 @@ static int enc_loader_settled = 0;
 
 /* ===== Low-level EXI/SPI access ===== */
 
-static int enc_exi_speed(void)
-{
+static int enc_exi_speed(void) {
     /*
      * The GameCube EXI bus can run memory-card slots at 32MHz, but the
      * ENC28J60 SPI interface is rated for 20MHz max. Stay at 16MHz for
@@ -82,13 +80,11 @@ static int enc_exi_speed(void)
     return EXI_CLK_16MHZ;
 }
 
-static void enc_select(void)
-{
+static void enc_select(void) {
     exi_select(enc_channel, enc_device, enc_exi_speed());
 }
 
-static void enc_deselect(void)
-{
+static void enc_deselect(void) {
     exi_deselect(enc_channel);
 }
 
@@ -96,16 +92,15 @@ static void enc_deselect(void)
  * Select the register bank for the given software register address.
  * Common registers (0x1B-0x1F) don't need bank switching.
  */
-static void enc_set_bank(unsigned char reg)
-{
+static void enc_set_bank(unsigned char reg) {
     unsigned char addr = ENC_ADDR(reg);
 
     /* Common registers are accessible from any bank */
-    if (addr >= 0x1B)
+    if(addr >= 0x1B)
         return;
 
     unsigned char bank = ENC_BANK(reg);
-    if (bank == current_bank)
+    if(bank == current_bank)
         return;
 
     /* Clear bank bits, then set new bank */
@@ -113,7 +108,7 @@ static void enc_set_bank(unsigned char reg)
     exi_imm(enc_channel, ENC28J60_CMD_BFC(ECON1) | ((ECON1_BSEL0 | ECON1_BSEL1) << 16), 2, EXI_IMM_WRITE);
     enc_deselect();
 
-    if (bank) {
+    if(bank) {
         enc_select();
         exi_imm(enc_channel, ENC28J60_CMD_BFS(ECON1) | ((unsigned int)bank << 16), 2, EXI_IMM_WRITE);
         enc_deselect();
@@ -126,8 +121,7 @@ static void enc_set_bank(unsigned char reg)
  * Read an 8-bit control register.
  * MAC/MII registers (bit 7 set in addr) require a dummy byte.
  */
-static unsigned char enc_read_reg(unsigned char reg)
-{
+static unsigned char enc_read_reg(unsigned char reg) {
     unsigned int val;
     int read_len;
 
@@ -144,7 +138,7 @@ static unsigned char enc_read_reg(unsigned char reg)
     /* EXI left-aligns received data in the 32-bit IMM register:
      *   2-byte: [garbage][data][0][0] → data at bits [23:16]
      *   3-byte: [garbage][dummy][data][0] → data at bits [15:8] */
-    if (read_len == 3)
+    if(read_len == 3)
         return (val >> 8) & 0xFF;
     else
         return (val >> 16) & 0xFF;
@@ -153,8 +147,7 @@ static unsigned char enc_read_reg(unsigned char reg)
 /*
  * Write an 8-bit control register.
  */
-static void enc_write_reg(unsigned char reg, unsigned char val)
-{
+static void enc_write_reg(unsigned char reg, unsigned char val) {
     enc_set_bank(reg);
 
     enc_select();
@@ -166,8 +159,7 @@ static void enc_write_reg(unsigned char reg, unsigned char val)
  * Set bits in an ETH register (BFS command).
  * Only valid for ETH registers, not MAC/MII.
  */
-static void enc_set_bits(unsigned char reg, unsigned char mask)
-{
+static void enc_set_bits(unsigned char reg, unsigned char mask) {
     enc_set_bank(reg);
 
     enc_select();
@@ -179,8 +171,7 @@ static void enc_set_bits(unsigned char reg, unsigned char mask)
  * Clear bits in an ETH register (BFC command).
  * Only valid for ETH registers, not MAC/MII.
  */
-static void enc_clear_bits(unsigned char reg, unsigned char mask)
-{
+static void enc_clear_bits(unsigned char reg, unsigned char mask) {
     enc_set_bank(reg);
 
     enc_select();
@@ -191,8 +182,7 @@ static void enc_clear_bits(unsigned char reg, unsigned char mask)
 /*
  * Write a 16-bit value to a register pair (low, high).
  */
-static void enc_write_reg16(unsigned char reg_l, unsigned short val)
-{
+static void enc_write_reg16(unsigned char reg_l, unsigned short val) {
     enc_write_reg(reg_l, val & 0xFF);
     enc_write_reg(reg_l + 1, val >> 8);
 }
@@ -202,8 +192,7 @@ static void enc_delay_us(unsigned int us);
 
 /* ===== PHY register access (indirect via MII interface) ===== */
 
-static unsigned short enc_phy_read(unsigned char reg)
-{
+static unsigned short enc_phy_read(unsigned char reg) {
     unsigned short val;
     int timeout;
 
@@ -213,8 +202,8 @@ static unsigned short enc_phy_read(unsigned char reg)
 
     /* Wait for MII read to complete (~10.24 us) */
     timeout = 10000;
-    while (enc_read_reg(MISTAT) & MISTAT_BUSY) {
-        if (--timeout == 0) {
+    while(enc_read_reg(MISTAT) & MISTAT_BUSY) {
+        if(--timeout == 0) {
             enc_write_reg(MICMD, 0x00);
             return 0xFFFF;
         }
@@ -230,35 +219,32 @@ static unsigned short enc_phy_read(unsigned char reg)
     return val;
 }
 
-static void enc_phy_write(unsigned char reg, unsigned short val)
-{
+static void enc_phy_write(unsigned char reg, unsigned short val) {
     int timeout;
 
     enc_write_reg(MIREGADR, reg);
     enc_write_reg(MIWRL, val & 0xFF);
-    enc_write_reg(MIWRH, val >> 8);  /* Writing high byte triggers MII write */
+    enc_write_reg(MIWRH, val >> 8); /* Writing high byte triggers MII write */
     enc_delay_us(15);
 
     /* Wait for MII write to complete */
     timeout = 10000;
-    while (enc_read_reg(MISTAT) & MISTAT_BUSY) {
-        if (--timeout == 0)
+    while(enc_read_reg(MISTAT) & MISTAT_BUSY) {
+        if(--timeout == 0)
             break;
         enc_delay_us(1);
         ;
     }
 }
 
-static bool enc_phy_id_matches(unsigned short *phid1, unsigned short *phid2)
-{
+static bool enc_phy_id_matches(unsigned short *phid1, unsigned short *phid2) {
     int i;
 
-    for (i = 0; i < 8; i++) {
+    for(i = 0; i < 8; i++) {
         *phid1 = enc_phy_read(PHID1);
         *phid2 = enc_phy_read(PHID2);
 
-        if (*phid1 == ENC28J60_PHID1_EXPECTED &&
-            (*phid2 & 0xFC00) == (ENC28J60_PHID2_EXPECTED & 0xFC00))
+        if(*phid1 == ENC28J60_PHID1_EXPECTED && (*phid2 & 0xFC00) == (ENC28J60_PHID2_EXPECTED & 0xFC00))
             return true;
 
         enc_delay_ms(1);
@@ -275,8 +261,7 @@ static bool enc_phy_id_matches(unsigned short *phid1, unsigned short *phid2)
  * Uses byte-by-byte immediate transfers for simplicity and
  * to avoid 32-byte alignment requirements of DMA.
  */
-static void enc_read_buffer(unsigned char *buf, int len)
-{
+static void enc_read_buffer(unsigned char *buf, int len) {
     int i;
 
     enc_select();
@@ -284,7 +269,7 @@ static void enc_read_buffer(unsigned char *buf, int len)
     exi_imm(enc_channel, ENC28J60_CMD_RBM, 1, EXI_IMM_WRITE);
 
     /* Read data bytes */
-    for (i = 0; i < len; i++) {
+    for(i = 0; i < len; i++) {
         unsigned int val = exi_imm(enc_channel, 0, 1, EXI_IMM_READ);
         buf[i] = (val >> 24) & 0xFF;
     }
@@ -295,8 +280,7 @@ static void enc_read_buffer(unsigned char *buf, int len)
  * Write to the TX buffer memory via WBM command.
  * Writes to the current EWRPT position (auto-increments).
  */
-static void enc_write_buffer(const unsigned char *buf, int len)
-{
+static void enc_write_buffer(const unsigned char *buf, int len) {
     int i;
 
     enc_select();
@@ -304,7 +288,7 @@ static void enc_write_buffer(const unsigned char *buf, int len)
     exi_imm(enc_channel, ENC28J60_CMD_WBM, 1, EXI_IMM_WRITE);
 
     /* Write data bytes */
-    for (i = 0; i < len; i++) {
+    for(i = 0; i < len; i++) {
         exi_imm(enc_channel, (unsigned int)buf[i] << 24, 1, EXI_IMM_WRITE);
     }
     enc_deselect();
@@ -312,50 +296,47 @@ static void enc_write_buffer(const unsigned char *buf, int len)
 
 /* ===== Soft delay ===== */
 
-static void delay_loop(volatile int count)
-{
-    while (count-- > 0)
+static void delay_loop(volatile int count) {
+    while(count-- > 0)
         ;
 }
 
-static void enc_delay_ms(unsigned int ms)
-{
+static void enc_delay_ms(unsigned int ms) {
     const target_ops_t *t = target_get_ops();
     uint64_t start;
     uint64_t ticks;
 
-    if (!t || !t->get_ticks || !t->ticks_per_second) {
-        while (ms-- > 0)
+    if(!t || !t->get_ticks || !t->ticks_per_second) {
+        while(ms-- > 0)
             delay_loop(100000);
         return;
     }
 
     ticks = (uint64_t)(t->ticks_per_second / 1000) * ms;
-    if (ticks == 0)
+    if(ticks == 0)
         ticks = 1;
 
     start = t->get_ticks();
-    while ((t->get_ticks() - start) < ticks)
+    while((t->get_ticks() - start) < ticks)
         ;
 }
 
-static void enc_delay_us(unsigned int us)
-{
+static void enc_delay_us(unsigned int us) {
     const target_ops_t *t = target_get_ops();
     uint64_t start;
     uint64_t ticks;
 
-    if (!t || !t->get_ticks || !t->ticks_per_second) {
+    if(!t || !t->get_ticks || !t->ticks_per_second) {
         delay_loop((int)us * 100);
         return;
     }
 
     ticks = (uint64_t)(t->ticks_per_second / 1000000) * us;
-    if (ticks == 0)
+    if(ticks == 0)
         ticks = 1;
 
     start = t->get_ticks();
-    while ((t->get_ticks() - start) < ticks)
+    while((t->get_ticks() - start) < ticks)
         ;
 }
 
@@ -367,12 +348,9 @@ static void enc_delay_us(unsigned int us)
  * program returns after using the adapter and leaves the controller in a
  * non-default low-power state.
  */
-static void enc_wake_and_reset(int channel, int device)
-{
+static void enc_wake_and_reset(int channel, int device) {
     exi_select(channel, device, EXI_CLK_1MHZ);
-    exi_imm(channel,
-            ENC28J60_CMD_BFC(ECON2) | ((unsigned int)ECON2_PWRSV << 16),
-            2, EXI_IMM_WRITE);
+    exi_imm(channel, ENC28J60_CMD_BFC(ECON2) | ((unsigned int)ECON2_PWRSV << 16), 2, EXI_IMM_WRITE);
     exi_deselect(channel);
 
     /* Allow the regulator to stabilize before reset (errata #19). */
@@ -387,33 +365,30 @@ static void enc_wake_and_reset(int channel, int device)
     enc_delay_ms(5);
 }
 
-static bool enc_wait_for_link_up(void)
-{
+static bool enc_wait_for_link_up(void) {
     const target_ops_t *t = target_get_ops();
     uint64_t start = t->get_ticks();
     uint64_t timeout = t->ticks_per_second;
 
     do {
-        if (enc_phy_read(PHSTAT2) & PHSTAT2_LSTAT)
+        if(enc_phy_read(PHSTAT2) & PHSTAT2_LSTAT)
             return true;
 
         enc_delay_ms(1);
-    } while ((t->get_ticks() - start) < timeout);
+    } while((t->get_ticks() - start) < timeout);
 
     return false;
 }
 
-static void enc_reset_tx_logic(void)
-{
+static void enc_reset_tx_logic(void) {
     enc_clear_bits(ECON1, ECON1_TXRTS);
     enc_set_bits(ECON1, ECON1_TXRST);
     enc_clear_bits(ECON1, ECON1_TXRST);
     enc_clear_bits(EIR, EIR_TXIF | EIR_TXERIF);
 }
 
-static void enc_restore_runtime_config(void)
-{
-    if (enc_read_reg(ECON2) & ECON2_PWRSV) {
+static void enc_restore_runtime_config(void) {
+    if(enc_read_reg(ECON2) & ECON2_PWRSV) {
         enc_clear_bits(ECON2, ECON2_PWRSV);
         enc_delay_ms(2);
     }
@@ -425,14 +400,11 @@ static void enc_restore_runtime_config(void)
     enc_write_reg(MACON3, MACON3_PADCFG0 | MACON3_TXCRCEN | MACON3_FRMLNEN);
     enc_write_reg(MACON4, MACON4_DEFER);
     enc_write_reg16(MAMXFLL, ENC_MAX_FRAME);
-    enc_clear_bits(EIR,
-                   EIR_RXERIF | EIR_TXERIF | EIR_TXIF |
-                   EIR_LINKIF | EIR_DMAIF | EIR_PKTIF);
+    enc_clear_bits(EIR, EIR_RXERIF | EIR_TXERIF | EIR_TXIF | EIR_LINKIF | EIR_DMAIF | EIR_PKTIF);
     enc_set_bank(ERDPTL);
 }
 
-static void enc_rearm_rx_ring(void)
-{
+static void enc_rearm_rx_ring(void) {
     int packets;
 
     /* Reprogramming ERXST/ERXND while RX is disabled resets the internal
@@ -445,25 +417,23 @@ static void enc_rearm_rx_ring(void)
     next_pkt_ptr = ENC_RX_START;
 
     packets = 255;
-    while ((enc_read_reg(EPKTCNT) != 0) && packets-- > 0)
+    while((enc_read_reg(EPKTCNT) != 0) && packets-- > 0)
         enc_set_bits(ECON2, ECON2_PKTDEC);
 
     enc_clear_bits(EIR, EIR_RXERIF | EIR_PKTIF);
 }
 
-static int enc_rx_next_valid(unsigned short ptr)
-{
+static int enc_rx_next_valid(unsigned short ptr) {
     return ptr <= ENC_RX_END && ((ptr & 1) == 0);
 }
 
-static void enc_rearm_runtime(void)
-{
+static void enc_rearm_runtime(void) {
     int timeout;
 
     enc_clear_bits(ECON1, ECON1_RXEN | ECON1_TXRTS);
 
     timeout = 10000;
-    while ((enc_read_reg(ESTAT) & ESTAT_RXBUSY) && timeout-- > 0)
+    while((enc_read_reg(ESTAT) & ESTAT_RXBUSY) && timeout-- > 0)
         enc_delay_us(1);
 
     enc_restore_runtime_config();
@@ -481,40 +451,35 @@ static void enc_rearm_runtime(void)
  * OUI = 00:09:BF (Nintendo).
  */
 
-static inline unsigned int mfspr_ecid0(void)
-{
+static inline unsigned int mfspr_ecid0(void) {
     unsigned int val;
     __asm__ volatile("mfspr %0, 0x39C" : "=r"(val));
     return val;
 }
 
-static inline unsigned int mfspr_ecid1(void)
-{
+static inline unsigned int mfspr_ecid1(void) {
     unsigned int val;
     __asm__ volatile("mfspr %0, 0x39D" : "=r"(val));
     return val;
 }
 
-static inline unsigned int mfspr_ecid2(void)
-{
+static inline unsigned int mfspr_ecid2(void) {
     unsigned int val;
     __asm__ volatile("mfspr %0, 0x39E" : "=r"(val));
     return val;
 }
 
-static inline unsigned int mfspr_ecid3(void)
-{
+static inline unsigned int mfspr_ecid3(void) {
     unsigned int val;
     __asm__ volatile("mfspr %0, 0x39F" : "=r"(val));
     return val;
 }
 
-static void enc_generate_mac(unsigned char *mac)
-{
+static void enc_generate_mac(unsigned char *mac) {
     union {
-        unsigned int cid[4];
+        unsigned int  cid[4];
         unsigned char data[19];
-    } ecid = { { 0 } };
+    } ecid = {{0}};
     unsigned int sum;
     int i;
 
@@ -530,9 +495,9 @@ static void enc_generate_mac(unsigned char *mac)
 
     /* Hash ECID with channel number as seed for uniqueness per slot */
     sum = (unsigned int)enc_channel;
-    for (i = 0; i < 18; i += 3) {
+    for(i = 0; i < 18; i += 3) {
         unsigned int word;
-        word  = (unsigned int)ecid.data[i]     << 16;
+        word = (unsigned int)ecid.data[i] << 16;
         word |= (unsigned int)ecid.data[i + 1] << 8;
         word |= (unsigned int)ecid.data[i + 2];
         sum += word;
@@ -560,20 +525,19 @@ static void enc_generate_mac(unsigned char *mac)
  *
  * Strategy: try the standard ID first (fast), then soft-reset and retry.
  */
-static int enc_probe(int channel, int device)
-{
+static int enc_probe(int channel, int device) {
     unsigned int id;
 
-    /* EXT bit guard: Skip empty memory card slots to avoid sending 
+    /* EXT bit guard: Skip empty memory card slots to avoid sending
      * enc28j60 reset/read commands to unrelated devices. */
-    if (device == 0 && channel < 2) {
-        if (!(exi_get_status(channel) & EXI_STATUS_EXT))
+    if(device == 0 && channel < 2) {
+        if(!(exi_get_status(channel) & EXI_STATUS_EXT))
             return 0;
     }
 
     /* Fast path: works on fresh power-on */
     id = exi_get_id(channel, device);
-    if (id == ENC28J60_EXI_ID)
+    if(id == ENC28J60_EXI_ID)
         goto found;
 
     /* Soft-reset potential ENC28J60 and retry. If a previous loader used
@@ -585,7 +549,7 @@ static int enc_probe(int channel, int device)
 
     /* Retry — registers should now be at power-on defaults */
     id = exi_get_id(channel, device);
-    if (id == ENC28J60_EXI_ID)
+    if(id == ENC28J60_EXI_ID)
         goto found;
 
     return 0;
@@ -596,19 +560,14 @@ found:
     return 1;
 }
 
-int enc28j60_detect(void)
-{
+int enc28j60_detect(void) {
     /* Probe all possible EXI locations where GCNet/ETH2GC can sit:
      *   Memory Card Slot A: Channel 0, Device 0
      *   Memory Card Slot B: Channel 1, Device 0
      *   Serial Port 1 (BBA slot): Channel 0, Device 2
      *   Serial Port 2: Channel 2, Device 0
      */
-    if (enc_probe(0, 0) ||
-        enc_probe(1, 0) ||
-        enc_probe(0, 2) ||
-        enc_probe(2, 0))
-    {
+    if(enc_probe(0, 0) || enc_probe(1, 0) || enc_probe(0, 2) || enc_probe(2, 0)) {
         global_bg_color = ENC_BG_COLOR;
         installed_adapter = ENC_MODEL;
         return 0;
@@ -619,8 +578,7 @@ int enc28j60_detect(void)
 
 /* ===== Initialization ===== */
 
-int enc28j60_init(void)
-{
+int enc28j60_init(void) {
     unsigned short phid1;
     unsigned short phid2;
 
@@ -628,7 +586,7 @@ int enc28j60_init(void)
     enc_wake_and_reset(enc_channel, enc_device);
 
     /* Validate PHY ID */
-    if (!enc_phy_id_matches(&phid1, &phid2))
+    if(!enc_phy_id_matches(&phid1, &phid2))
         return -1;
 
     /* --- RX buffer setup ---
@@ -700,16 +658,14 @@ int enc28j60_init(void)
     enc_phy_write(PHIE, PHIE_PLNKIE | PHIE_PGEIE);
 
     /* Clear any sticky status before going live again. */
-    enc_clear_bits(EIR,
-                   EIR_RXERIF | EIR_TXERIF | EIR_TXIF |
-                   EIR_LINKIF | EIR_DMAIF | EIR_PKTIF);
+    enc_clear_bits(EIR, EIR_RXERIF | EIR_TXERIF | EIR_TXIF | EIR_LINKIF | EIR_DMAIF | EIR_PKTIF);
 
     /* Disable CLKOUT pin (not needed) */
     enc_write_reg(ECOCON, 0x00);
 
     /* Give the PHY up to ~1s to relink so the next host upload doesn't
      * race a just-reset adapter. */
-    if (enc_wait_for_link_up())
+    if(enc_wait_for_link_up())
         enc_delay_ms(50);
 
     /* Return to bank 0 for runtime operation */
@@ -718,37 +674,34 @@ int enc28j60_init(void)
     return 0;
 }
 
-void enc28j60_start(void)
-{
+void enc28j60_start(void) {
     enc_set_bits(ECON1, ECON1_RXEN);
 }
 
-void enc28j60_stop(void)
-{
+void enc28j60_stop(void) {
     int timeout;
 
     /* Disable receive and cancel any in-flight transmit request. */
     enc_clear_bits(ECON1, ECON1_RXEN | ECON1_TXRTS);
 
     timeout = 10000;
-    while ((enc_read_reg(ESTAT) & ESTAT_RXBUSY) && timeout-- > 0)
+    while((enc_read_reg(ESTAT) & ESTAT_RXBUSY) && timeout-- > 0)
         enc_delay_us(1);
 }
 
 /* ===== TX ===== */
 
-int enc28j60_tx(unsigned char *pkt, int len)
-{
+int enc28j60_tx(unsigned char *pkt, int len) {
     int attempt;
 
     /* Pad to minimum Ethernet frame size (60 bytes without CRC).
      * Zero-pad to prevent leaking prior packet data (EtherLeak). */
-    if (len < 60) {
+    if(len < 60) {
         memset(pkt + len, 0, 60 - len);
         len = 60;
     }
 
-    for (attempt = 0; attempt < 4; attempt++) {
+    for(attempt = 0; attempt < 4; attempt++) {
         unsigned char eir = 0;
         unsigned char estat;
         int timeout;
@@ -777,9 +730,9 @@ int enc28j60_tx(unsigned char *pkt, int len)
 
         /* Wait for transmit complete */
         timeout = 20000;
-        while (timeout > 0) {
+        while(timeout > 0) {
             eir = enc_read_reg(EIR);
-            if (eir & (EIR_TXIF | EIR_TXERIF))
+            if(eir & (EIR_TXIF | EIR_TXERIF))
                 break;
             enc_delay_us(1);
             timeout--;
@@ -787,7 +740,7 @@ int enc28j60_tx(unsigned char *pkt, int len)
 
         estat = enc_read_reg(ESTAT);
 
-        if (timeout != 0 && !(eir & EIR_TXERIF) && !(estat & ESTAT_TXABRT)) {
+        if(timeout != 0 && !(eir & EIR_TXERIF) && !(estat & ESTAT_TXABRT)) {
             enc_clear_bits(ECON1, ECON1_TXRTS);
             enc_clear_bits(EIR, EIR_TXIF | EIR_TXERIF);
             return 1;
@@ -802,32 +755,31 @@ int enc28j60_tx(unsigned char *pkt, int len)
 
 /* ===== RX ===== */
 
-static int enc28j60_rx(void)
-{
+static int enc28j60_rx(void) {
     int processed = 0;
     unsigned char rsv[6];
     unsigned short pkt_next, pkt_len, pkt_status;
     unsigned short erxrdpt;
 
     /* Errata #6: use EPKTCNT instead of EIR.PKTIF */
-    while (enc_read_reg(EPKTCNT) > 0) {
+    while(enc_read_reg(EPKTCNT) > 0) {
         /* Set read pointer to next packet position */
         enc_write_reg16(ERDPTL, next_pkt_ptr);
 
         /* Read 6-byte Receive Status Vector via RBM */
         enc_read_buffer(rsv, 6);
 
-        pkt_next   = (unsigned short)rsv[0] | ((unsigned short)rsv[1] << 8);
-        pkt_len    = (unsigned short)rsv[2] | ((unsigned short)rsv[3] << 8);
+        pkt_next = (unsigned short)rsv[0] | ((unsigned short)rsv[1] << 8);
+        pkt_len = (unsigned short)rsv[2] | ((unsigned short)rsv[3] << 8);
         pkt_status = (unsigned short)rsv[4] | ((unsigned short)rsv[5] << 8);
 
-        if (!enc_rx_next_valid(pkt_next) || pkt_len > (RX_PKT_BUF_SIZE + 4)) {
+        if(!enc_rx_next_valid(pkt_next) || pkt_len > (RX_PKT_BUF_SIZE + 4)) {
             enc_rearm_runtime();
             break;
         }
 
         /* Validate: check "Received OK" bit and reasonable length */
-        if ((pkt_status & 0x0080) && pkt_len >= 18 && pkt_len <= (RX_PKT_BUF_SIZE + 4)) {
+        if((pkt_status & 0x0080) && pkt_len >= 18 && pkt_len <= (RX_PKT_BUF_SIZE + 4)) {
             /* Subtract 4-byte CRC for actual payload */
             unsigned short payload_len = pkt_len - 4;
 
@@ -846,7 +798,7 @@ static int enc28j60_rx(void)
          * Errata #14: ERXRDPT must be odd.
          * next_pkt_ptr is always even, so next_pkt_ptr - 1 is odd.
          * Handle wraparound at buffer start. */
-        if (pkt_next == ENC_RX_START)
+        if(pkt_next == ENC_RX_START)
             erxrdpt = ENC_RX_END;
         else
             erxrdpt = pkt_next - 1;
@@ -862,21 +814,20 @@ static int enc28j60_rx(void)
 
 /* ===== Main loop ===== */
 
-void enc28j60_loop(bool is_main_loop)
-{
+void enc28j60_loop(bool is_main_loop) {
     const target_ops_t *t = target_get_ops();
     uint64_t last_sec_tick = 0;
     uint64_t last_link_poll = 0;
     unsigned int loop_secs_elapsed = 0;
 
-    if (is_main_loop) {
-        if (!(booted || running))
+    if(is_main_loop) {
+        if(!(booted || running))
             disp_info();
         /* Loader-entry reset */
         enc_link_seen_up = 0;
     }
 
-    if (timeout_loop > 0) {
+    if(timeout_loop > 0) {
         last_sec_tick = t->get_ticks();
     }
 
@@ -887,52 +838,52 @@ void enc28j60_loop(bool is_main_loop)
 
     /* One-shot link-change → settle → idle sequence for fresh loader
      * instances (cold boot / FW update). */
-    if (is_main_loop && !enc_loader_settled) {
-        if (booted && !running)
+    if(is_main_loop && !enc_loader_settled) {
+        if(booted && !running)
             disp_status("link change...");
 
-        while (!(enc_phy_read(PHSTAT2) & PHSTAT2_LSTAT))
+        while(!(enc_phy_read(PHSTAT2) & PHSTAT2_LSTAT))
             ;
 
         enc_link_up = 1;
         last_link_poll = t->get_ticks();
         enc_loader_settled = 1;
         enc_link_seen_up = 1;
-        if (booted && !running)
+        if(booted && !running)
             disp_status("idle...");
     }
 
-    while (!escape_loop) {
+    while(!escape_loop) {
         /* Poll for received packets */
         enc28j60_rx();
 
         uint64_t now = t->get_ticks();
 
         /* Once-per-second PHY link poll. */
-        if ((now - last_link_poll) >= t->ticks_per_second) {
+        if((now - last_link_poll) >= t->ticks_per_second) {
             int new_link = (enc_phy_read(PHSTAT2) & PHSTAT2_LSTAT) != 0;
             last_link_poll = now;
-            if (new_link != enc_link_up) {
+            if(new_link != enc_link_up) {
                 screensaver_wake();
-                if (new_link) {
+                if(new_link) {
                     /* Switch port settling delay; see BBA loop. */
 
-                    if (booted && !running)
+                    if(booted && !running)
                         disp_status("idle...");
 
                     enc_link_seen_up = 1;
 
                     /* Drop any in-flight DHCP retry timeout so we
                        try immediately from a clean attempt count. */
-                    if (timeout_loop > 0) {
+                    if(timeout_loop > 0) {
                         dhcp_attempts = 0;
                         timeout_loop = -1;
                         escape_loop = 1;
                     }
-                } else if (booted && !running) {
+                } else if(booted && !running) {
                     /* Mid-session DOWN → "link lost..." once we've seen
                        UP, otherwise still in the entry-time wait. */
-                    if (enc_link_seen_up)
+                    if(enc_link_seen_up)
                         disp_status("link lost...");
                     else
                         disp_status("link change...");
@@ -943,25 +894,25 @@ void enc28j60_loop(bool is_main_loop)
 
         /* Lease countdown ticks regardless of link state — keeps the
          * displayed lease decrementing when the cable is unplugged. */
-        if (is_main_loop)
+        if(is_main_loop)
             dhcp_tick();
 
-        if (is_main_loop && enc_link_up) {
+        if(is_main_loop && enc_link_up) {
             dhcp_poll();
             screensaver_poll();
         }
 
         /* Timeout handling for DHCP */
-        if (timeout_loop > 0) {
+        if(timeout_loop > 0) {
             uint64_t now = t->get_ticks();
-            if ((now - last_sec_tick) >= t->ticks_per_second) {
+            if((now - last_sec_tick) >= t->ticks_per_second) {
                 last_sec_tick = now;
                 loop_secs_elapsed++;
-                if (dhcp_attempts > 1) {
+                if(dhcp_attempts > 1) {
                     disp_dhcp_attempts_count();
                     disp_dhcp_next_attempt(timeout_loop - loop_secs_elapsed + 1);
                 }
-                if (loop_secs_elapsed > (unsigned int)timeout_loop) {
+                if(loop_secs_elapsed > (unsigned int)timeout_loop) {
                     timeout_loop = -1;
                     escape_loop = 1;
                 }

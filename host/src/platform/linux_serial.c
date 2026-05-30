@@ -27,10 +27,11 @@ typedef struct {
 
 static void *linux_serial_open(const char *device, uint32_t initial_baud) {
     linux_serial_t *s = calloc(1, sizeof(*s));
-    if (!s) return NULL;
+    if(!s)
+        return NULL;
 
     s->fd = open(device, O_RDWR | O_NOCTTY);
-    if (s->fd < 0) {
+    if(s->fd < 0) {
         perror(device);
         free(s);
         return NULL;
@@ -51,7 +52,7 @@ static void *linux_serial_open(const char *device, uint32_t initial_baud) {
     newtio.c_cflag |= BOTHER << IBSHIFT;
     newtio.c_ispeed = initial_baud;
 
-    if (ioctl(s->fd, TCSETS2, &newtio) < 0) {
+    if(ioctl(s->fd, TCSETS2, &newtio) < 0) {
         perror("TCSETS2");
     }
 #else
@@ -63,7 +64,8 @@ static void *linux_serial_open(const char *device, uint32_t initial_baud) {
 
 static void linux_serial_close(void *handle) {
     linux_serial_t *s = handle;
-    if (!s) return;
+    if(!s)
+        return;
 #ifdef __linux__
     ioctl(s->fd, TCSETS2, &s->old_tio);
 #endif
@@ -85,7 +87,7 @@ static int linux_serial_bytes_available(void *handle) {
     linux_serial_t *s = handle;
     int bytes = 0;
 
-    if (ioctl(s->fd, FIONREAD, &bytes) < 0)
+    if(ioctl(s->fd, FIONREAD, &bytes) < 0)
         return -1;
 
     return bytes;
@@ -104,7 +106,8 @@ static int linux_serial_set_speed(void *handle, uint32_t baud) {
     tio.c_ispeed = baud;
     return ioctl(s->fd, TCSETS2, &tio);
 #else
-    (void)handle; (void)baud;
+    (void)handle;
+    (void)baud;
     return -1;
 #endif
 }

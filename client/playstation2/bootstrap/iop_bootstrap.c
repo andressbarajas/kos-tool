@@ -41,7 +41,7 @@
 #include "iop_smap.h"
 
 /* LOADFILE RPC function ID used after ee_sif_apply_lmb_patch(). */
-#define LOADFILE_LOAD_BUF_CID  6
+#define LOADFILE_LOAD_BUF_CID 6
 
 /* KSEG1 is the EE's uncached direct view of RAM.  Using it for these
  * handoff buffers avoids cache surprises and avoids the TLB entirely. */
@@ -83,8 +83,7 @@ static int g_smap_bootstrap_result = -1;
 
 static void ee_delay(unsigned long loops);
 
-static void set_phase1_status(const char *s)
-{
+static void set_phase1_status(const char *s) {
     /* Surface the latest bootstrap phase so adapter_get_phase_status
      * can prefix it onto network_init_error_msg.  When DEV9 init
      * fails the user sees e.g. "PHASE1: IOP RESET FAIL | DEV9 INIT
@@ -93,20 +92,17 @@ static void set_phase1_status(const char *s)
     phase1_status = (s != 0) ? s : "PHASE1: UNKNOWN";
 }
 
-static void reset_ee_sif_session(void)
-{
+static void reset_ee_sif_session(void) {
     ee_sif_set_status_callback(set_phase1_status);
     ee_sif_reset_state();
     memset((void *)&ee_loadfile_client, 0, sizeof(ee_loadfile_client));
 }
 
-static void ee_delay(unsigned long loops)
-{
+static void ee_delay(unsigned long loops) {
     volatile unsigned long i;
-    for (i = 0; i < loops; i++)
+    for(i = 0; i < loops; i++)
         ;
 }
-
 
 /* EE exception/interrupt handler — the C half of the vector in exception.S,
  * which reaches it via `.extern interrupt_handler_c` + `jal`. The assembler
@@ -114,8 +110,7 @@ static void ee_delay(unsigned long loops)
  * The forward declaration exists solely to satisfy -Wmissing-prototypes: it's
  * a global with no C callers, so it has no header to be declared in. */
 void interrupt_handler_c(void);
-void interrupt_handler_c(void)
-{
+void interrupt_handler_c(void) {
     uint32_t cause = ee_cop0_read_cause();
     int handled = 0;
 
@@ -123,44 +118,37 @@ void interrupt_handler_c(void)
      * rearms the rx channel; it does NOT touch Status.IE so the guest's
      * interrupt state is preserved. NOTE: under KOS-PS2 the EE
      * interrupt vector is owned by KOS, which dispatches to the broker
-     * via ops->on_sif0_irq directly . This handler still runs for 
+     * via ops->on_sif0_irq directly . This handler still runs for
      * loader-internal contexts (boot, firmware update, non-KOS guests). */
-    if ((cause & EE_COP0_CAUSE_INT1_DMAC) != 0 &&
-        (D_STAT & D_STAT_SIF0) != 0) {
+    if((cause & EE_COP0_CAUSE_INT1_DMAC) != 0 && (D_STAT & D_STAT_SIF0) != 0) {
         ps2_sif_broker_isr();
         handled = 1;
     }
 
     /* COP0 timer (INT5) — ack via Compare write. */
-    if ((cause & EE_COP0_CAUSE_INT5_TIMER) != 0) {
+    if((cause & EE_COP0_CAUSE_INT5_TIMER) != 0) {
         ee_cop0_write_compare(0xffffffff);
         handled = 1;
     }
 
     /* Anything else (stray VBlank, unknown source) falls back to the
      * old leak-protection: clear IE so we don't spin in the vector. */
-    if (!handled) {
+    if(!handled) {
         uint32_t status = ee_cop0_read_status();
-        ee_cop0_write_status(status & ~(EE_COP0_STATUS_IE |
-                                        EE_COP0_STATUS_INT5_TIMER));
+        ee_cop0_write_status(status & ~(EE_COP0_STATUS_IE | EE_COP0_STATUS_INT5_TIMER));
     }
 }
 
-int ps2_bootstrap_iop_dma_write(uint32_t iop_dest, const void *src,
-                                uint32_t size)
-{
-    if (iop_dest >= IOP_RAM_SIZE)
+int ps2_bootstrap_iop_dma_write(uint32_t iop_dest, const void *src, uint32_t size) {
+    if(iop_dest >= IOP_RAM_SIZE)
         return -1;
-    if (size != 0 && iop_dest + size > IOP_RAM_SIZE)
+    if(size != 0 && iop_dest + size > IOP_RAM_SIZE)
         return -1;
 
     return ee_sif_iop_write((void *)iop_dest, src, size);
 }
 
-
-static void capture_diag(iop_dev9_diag_t *diag,
-                         volatile const struct iop_mailbox *mbox)
-{
+static void capture_diag(iop_dev9_diag_t *diag, volatile const struct iop_mailbox *mbox) {
     diag->result = mbox->result;
     diag->rev = mbox->rev;
     diag->power = mbox->power;
@@ -213,20 +201,17 @@ static void capture_diag(iop_dev9_diag_t *diag,
 #define LF_DISPATCH_SIG_3    0xafbf0010   /* sw ra,16(sp) */
 #define LIBLIST_EXPORT_MARK  0x41C00000   /* loadcore export-table marker */
 #define MODLOAD_NAME_W0      0x646F6D     /* "modl" — first 3 chars + 'l' high byte */
-                                           /* will be checked as 32-bit "modl" */
+                                       /* will be checked as 32-bit "modl" */
 
 /* Read a 32-bit word from IOP RAM via the EE uncached alias. */
-static inline uint32_t iop_read_word(uint32_t iop_addr)
-{
+static inline uint32_t iop_read_word(uint32_t iop_addr) {
     return *(volatile uint32_t *)(IOP_RAM_BASE_EE + (iop_addr & 0x1FFFFFF));
 }
 
 /* Direct-write a 32-bit word to IOP RAM via the EE uncached alias. */
-static inline void iop_write_word(uint32_t iop_addr, uint32_t value)
-{
+static inline void iop_write_word(uint32_t iop_addr, uint32_t value) {
     *(volatile uint32_t *)(IOP_RAM_BASE_EE + (iop_addr & 0x1FFFFFF)) = value;
 }
-
 
 /* ============================================================
  * IOP module-list dump probe
@@ -257,15 +242,14 @@ static inline void iop_write_word(uint32_t iop_addr, uint32_t value)
 #define DUMP_LINE_HOLD       30000000    /* ~1 s per line */
 
 typedef struct {
-    char     name[9];      /* 8 ASCII + NUL */
-    uint32_t addr;         /* IOP address of the export-table magic */
+    char name[9]; /* 8 ASCII + NUL */
+    uint32_t addr;    /* IOP address of the export-table magic */
 } dump_mod_t;
 
 static dump_mod_t dump_mods[DUMP_MODS_MAX];
 static unsigned int dump_mods_count;
 
-static void dump_extract_name(uint32_t addr, char *out)
-{
+static void dump_extract_name(uint32_t addr, char *out) {
     uint32_t words[2];
     int i;
     int saw_zero = 0;
@@ -273,20 +257,21 @@ static void dump_extract_name(uint32_t addr, char *out)
     words[0] = iop_read_word(addr + 0x0C);
     words[1] = iop_read_word(addr + 0x10);
 
-    for (i = 0; i < 8; i++) {
+    for(i = 0; i < 8; i++) {
         unsigned char c;
 
-        if (saw_zero) {
+        if(saw_zero) {
             out[i] = '\0';
             continue;
         }
         c = (unsigned char)(words[i / 4] >> ((i & 3) * 8));
-        if (c == 0) {
+        if(c == 0) {
             saw_zero = 1;
             out[i] = '\0';
             continue;
         }
-        if (c < 0x20 || c >= 0x7F) c = '?';
+        if(c < 0x20 || c >= 0x7F)
+            c = '?';
         out[i] = (char)c;
     }
     out[8] = '\0';
@@ -295,36 +280,39 @@ static void dump_extract_name(uint32_t addr, char *out)
 /* Validate a candidate SLIB header.  Filters out occurrences of the
  * magic value 0x41C00000 that aren't real export tables (random data,
  * the constant baked into LOADCORE itself, etc.). */
-static int dump_is_valid_slib(uint32_t addr)
-{
+static int dump_is_valid_slib(uint32_t addr) {
     uint32_t version_mode;
     uint32_t first_fn;
     uint32_t low, hi;
 
-    if (addr + 0x18 >= IOP_RAM_SIZE)
+    if(addr + 0x18 >= IOP_RAM_SIZE)
         return 0;
 
     /* version|mode word: low 16 bits version (non-zero for real),
      * high 16 bits mode (small value, almost always 0). */
     version_mode = iop_read_word(addr + 0x08);
-    if ((version_mode & 0xFFFF) == 0) return 0;
-    if ((version_mode >> 16) > 0xFF)   return 0;
+    if((version_mode & 0xFFFF) == 0)
+        return 0;
+    if((version_mode >> 16) > 0xFF)
+        return 0;
 
     /* First exported function pointer should be a non-zero IOP RAM
      * address.  Accept either physical (0x00xxxxxx), KSEG0
      * (0x80xxxxxx), or KSEG1 (0xA0xxxxxx) form. */
     first_fn = iop_read_word(addr + 0x14);
-    if (first_fn == 0) return 0;
+    if(first_fn == 0)
+        return 0;
     low = first_fn & 0x1FFFFFF;
-    hi  = first_fn & 0xE0000000;
-    if (low >= IOP_RAM_SIZE) return 0;
-    if (hi != 0 && hi != 0x80000000 && hi != 0xA0000000) return 0;
+    hi = first_fn & 0xE0000000;
+    if(low >= IOP_RAM_SIZE)
+        return 0;
+    if(hi != 0 && hi != 0x80000000 && hi != 0xA0000000)
+        return 0;
 
     return 1;
 }
 
-void ps2_bootstrap_dump_iop_modules(void)
-{
+void ps2_bootstrap_dump_iop_modules(void) {
     uint32_t addr;
     unsigned int i, j;
     uint32_t total_kb = 0;
@@ -342,11 +330,11 @@ void ps2_bootstrap_dump_iop_modules(void)
      * BIOS-internal LOADCORE / kernel area where false-positive magic
      * matches are likely.  Real exported libraries live in the
      * module-load region above that. */
-    for (addr = 0x00010000;
-         addr + 0x18 < IOP_RAM_SIZE && dump_mods_count < DUMP_MODS_MAX;
-         addr += 4) {
-        if (iop_read_word(addr) != IRX_EXPORT_MAGIC) continue;
-        if (!dump_is_valid_slib(addr)) continue;
+    for(addr = 0x00010000; addr + 0x18 < IOP_RAM_SIZE && dump_mods_count < DUMP_MODS_MAX; addr += 4) {
+        if(iop_read_word(addr) != IRX_EXPORT_MAGIC)
+            continue;
+        if(!dump_is_valid_slib(addr))
+            continue;
 
         dump_extract_name(addr, dump_mods[dump_mods_count].name);
         dump_mods[dump_mods_count].addr = addr;
@@ -354,15 +342,15 @@ void ps2_bootstrap_dump_iop_modules(void)
     }
 
     /* Sort by addr (insertion sort, n < 80). */
-    for (i = 1; i < dump_mods_count; i++) {
+    for(i = 1; i < dump_mods_count; i++) {
         dump_mod_t key = dump_mods[i];
-        for (j = i; j > 0 && dump_mods[j - 1].addr > key.addr; j--)
+        for(j = i; j > 0 && dump_mods[j - 1].addr > key.addr; j--)
             dump_mods[j] = dump_mods[j - 1];
         dump_mods[j] = key;
     }
 
     /* Emit one line per library with approximate size. */
-    for (i = 0; i < dump_mods_count; i++) {
+    for(i = 0; i < dump_mods_count; i++) {
         static char line[40];
         uint32_t this_addr = dump_mods[i].addr;
         uint32_t next_addr;
@@ -371,24 +359,25 @@ void ps2_bootstrap_dump_iop_modules(void)
         const char *n;
         unsigned int cnt;
 
-        next_addr = (i + 1 < dump_mods_count)
-            ? dump_mods[i + 1].addr
-            : IOP_RAM_SIZE;
+        next_addr = (i + 1 < dump_mods_count) ? dump_mods[i + 1].addr : IOP_RAM_SIZE;
         kb = (next_addr - this_addr) / 1024;
         total_kb += kb;
 
         /* "M <name8>     <kbb>K" — pad name field to 8 wide, kb to 4 wide */
-        *p++ = 'M'; *p++ = ' ';
+        *p++ = 'M';
+        *p++ = ' ';
         n = dump_mods[i].name;
-        for (cnt = 0; cnt < 8 && n[cnt] != '\0'; cnt++) *p++ = n[cnt];
-        for (; cnt < 8; cnt++) *p++ = ' ';
+        for(cnt = 0; cnt < 8 && n[cnt] != '\0'; cnt++)
+            *p++ = n[cnt];
+        for(; cnt < 8; cnt++)
+            *p++ = ' ';
         *p++ = ' ';
         *p++ = (kb >= 1000) ? (char)('0' + (kb / 1000) % 10) : ' ';
-        *p++ = (kb >=  100) ? (char)('0' + (kb /  100) % 10) : ' ';
-        *p++ = (kb >=   10) ? (char)('0' + (kb /   10) % 10) : ' ';
+        *p++ = (kb >= 100) ? (char)('0' + (kb / 100) % 10) : ' ';
+        *p++ = (kb >= 10) ? (char)('0' + (kb / 10) % 10) : ' ';
         *p++ = (char)('0' + kb % 10);
         *p++ = 'K';
-        *p   = '\0';
+        *p = '\0';
 
         set_phase1_status(line);
         ee_delay(DUMP_LINE_HOLD);
@@ -399,31 +388,38 @@ void ps2_bootstrap_dump_iop_modules(void)
     summary_n = dump_mods_count;
     summary_kb = total_kb;
 
-    *summary_p++ = 'T'; *summary_p++ = 'O'; *summary_p++ = 'T';
-    *summary_p++ = ':'; *summary_p++ = ' ';
-    if (summary_n >= 100)
+    *summary_p++ = 'T';
+    *summary_p++ = 'O';
+    *summary_p++ = 'T';
+    *summary_p++ = ':';
+    *summary_p++ = ' ';
+    if(summary_n >= 100)
         *summary_p++ = (char)('0' + (summary_n / 100) % 10);
-    if (summary_n >=  10)
-        *summary_p++ = (char)('0' + (summary_n /  10) % 10);
+    if(summary_n >= 10)
+        *summary_p++ = (char)('0' + (summary_n / 10) % 10);
     *summary_p++ = (char)('0' + summary_n % 10);
-    *summary_p++ = ' '; *summary_p++ = 'l'; *summary_p++ = 'i';
-    *summary_p++ = 'b'; *summary_p++ = 's'; *summary_p++ = ' ';
-    if (summary_kb >= 1000)
+    *summary_p++ = ' ';
+    *summary_p++ = 'l';
+    *summary_p++ = 'i';
+    *summary_p++ = 'b';
+    *summary_p++ = 's';
+    *summary_p++ = ' ';
+    if(summary_kb >= 1000)
         *summary_p++ = (char)('0' + (summary_kb / 1000) % 10);
-    if (summary_kb >=  100)
-        *summary_p++ = (char)('0' + (summary_kb /  100) % 10);
-    if (summary_kb >=   10)
-        *summary_p++ = (char)('0' + (summary_kb /   10) % 10);
+    if(summary_kb >= 100)
+        *summary_p++ = (char)('0' + (summary_kb / 100) % 10);
+    if(summary_kb >= 10)
+        *summary_p++ = (char)('0' + (summary_kb / 10) % 10);
     *summary_p++ = (char)('0' + summary_kb % 10);
-    *summary_p++ = 'K'; *summary_p++ = 'B';
-    *summary_p   = '\0';
+    *summary_p++ = 'K';
+    *summary_p++ = 'B';
+    *summary_p = '\0';
 
     set_phase1_status(summary_line);
-    ee_delay(120000000);   /* ~3.5 s for the summary */
+    ee_delay(120000000); /* ~3.5 s for the summary */
 }
 
-static int load_dev9_irx(void)
-{
+static int load_dev9_irx(void) {
     volatile struct iop_mailbox *mbox;
     volatile load_module_buffer_result_t *result_view;
     void *irx_iop_addr;
@@ -447,27 +443,24 @@ static int load_dev9_irx(void)
     irx_qw_size = (kosdev9_irx_bin_len + 15) & ~15;
 
     irx_iop_addr = ee_sif_alloc_iop_heap(irx_qw_size);
-    if (irx_iop_addr == 0) {
-        //set_phase1_status("PHASE1: HEAP ALLOC FAIL");
+    if(irx_iop_addr == 0) {
+        // set_phase1_status("PHASE1: HEAP ALLOC FAIL");
         return -1;
     }
 
-    if (ee_sif_iop_write(irx_iop_addr, kosdev9_irx_bin,
-                         irx_qw_size) < 0) {
-        //set_phase1_status("PHASE1: IRX DMA FAIL");
+    if(ee_sif_iop_write(irx_iop_addr, kosdev9_irx_bin, irx_qw_size) < 0) {
+        // set_phase1_status("PHASE1: IRX DMA FAIL");
         return -1;
     }
 
-    load_args.module_ptr =
-        IOP_KSEG1_BASE | (((uint32_t)irx_iop_addr) & 0x1fffff);
+    load_args.module_ptr = IOP_KSEG1_BASE | (((uint32_t)irx_iop_addr) & 0x1fffff);
     load_args.arg_len = 0;
 
     cache_flush_dc((const void *)&load_args, sizeof(load_args));
     cache_flush_dc((const void *)&load_result, sizeof(load_result));
 
-    if (ee_sif_rpc_call(&ee_loadfile_client, LOADFILE_LOAD_BUF_CID,
-                        (const void *)&load_args, sizeof(load_args),
-                        (void *)&load_result, sizeof(load_result)) < 0) {
+    if(ee_sif_rpc_call(&ee_loadfile_client, LOADFILE_LOAD_BUF_CID, (const void *)&load_args,
+                       sizeof(load_args), (void *)&load_result, sizeof(load_result)) < 0) {
         /* sifrpc_call sets a more specific status before returning
          * negative — "RPC CALL" or "CALL NO REPLY".  Don't clobber
          * it with the generic "LOAD RPC FAIL", which hides whether
@@ -481,16 +474,15 @@ static int load_dev9_irx(void)
      * caller's generic "LOAD FAIL" overwrite (see below) hides which
      * sub-step actually failed. */
     result_view = (volatile load_module_buffer_result_t *)EE_UNCACHED(&load_result);
-    if ((int)result_view->result < 0) {
-        //set_phase1_status("PHASE1: LMB REJECTED");
+    if((int)result_view->result < 0) {
+        // set_phase1_status("PHASE1: LMB REJECTED");
         return (int)result_view->result;
     }
 
     return (int)result_view->result;
 }
 
-int ps2_bootstrap_iop_dev9_init(iop_dev9_diag_t *diag)
-{
+int ps2_bootstrap_iop_dev9_init(iop_dev9_diag_t *diag) {
     volatile const struct iop_mailbox *mbox;
     unsigned int i;
     int result;
@@ -499,7 +491,7 @@ int ps2_bootstrap_iop_dev9_init(iop_dev9_diag_t *diag)
     void *smap_irx_iop_addr;
     uint32_t smap_irx_qw_size;
 
-    if (diag == 0)
+    if(diag == 0)
         return -1;
 
     memset(diag, 0, sizeof(*diag));
@@ -516,7 +508,7 @@ int ps2_bootstrap_iop_dev9_init(iop_dev9_diag_t *diag)
      * talking. */
     //(void)ee_sif_wait_iop_bootend();
 
-    if (ee_sif_cmd_init() < 0) {
+    if(ee_sif_cmd_init() < 0) {
         set_phase1_status("PHASE1: SIFCMD FAIL (no SUBADDR)");
         diag->result = -21;
         return -21;
@@ -534,7 +526,7 @@ int ps2_bootstrap_iop_dev9_init(iop_dev9_diag_t *diag)
      * waits out the IOP re-IPL — then we re-init against the fresh IOP. */
     set_phase1_status("PHASE1: IOP RESET");
     reset_rc = ee_sif_iop_reset(0);
-    if (reset_rc < 0) {
+    if(reset_rc < 0) {
         set_phase1_status("PHASE1: IOP RESET FAIL");
         diag->result = -26;
         return -26;
@@ -544,22 +536,21 @@ int ps2_bootstrap_iop_dev9_init(iop_dev9_diag_t *diag)
     /* Re-init SIFCMD/SIFRPC against the post-reset IOP.  All previous
      * client bindings, packet pools, and IOP-side service IDs are
      * gone so this is a fresh handshake. */
-    if (ee_sif_cmd_init() < 0) {
+    if(ee_sif_cmd_init() < 0) {
         set_phase1_status("PHASE1: SIFCMD2 FAIL");
         diag->result = -27;
         return -27;
     }
     set_phase1_status("PHASE1: SIFCMD2 OK");
 
-    if (ee_sif_rpc_init() < 0) {
+    if(ee_sif_rpc_init() < 0) {
         set_phase1_status("PHASE1: SIFRPC FAIL");
         diag->result = -22;
         return -22;
     }
     set_phase1_status("PHASE1: SIFRPC OK");
 
-    if (ee_sif_rpc_bind_retry(&ee_loadfile_client,
-                              EE_SIF_LOADFILE_RPC_ID, 64) < 0) {
+    if(ee_sif_rpc_bind_retry(&ee_loadfile_client, EE_SIF_LOADFILE_RPC_ID, 64) < 0) {
         set_phase1_status("PHASE1: LOADFILE BIND FAIL");
         diag->result = -23;
         return -23;
@@ -576,9 +567,9 @@ int ps2_bootstrap_iop_dev9_init(iop_dev9_diag_t *diag)
      * channels in flight elsewhere.  The bootstrap's SIF receive is
      * polling-based, so IRQs aren't required for forward progress.
      * Re-enable once we have a properly scoped DMAC ISR. */
-    //set_phase1_status("PHASE1: IRQ SKIPPED");
+    // set_phase1_status("PHASE1: IRQ SKIPPED");
 
-    //set_phase1_status("PHASE1: POST-IRQ");
+    // set_phase1_status("PHASE1: POST-IRQ");
 
 #ifdef KOSLOAD_DUMP_IOP_MODULES
     /* Diagnostic dump of every IRX-exported library currently in IOP
@@ -595,7 +586,7 @@ int ps2_bootstrap_iop_dev9_init(iop_dev9_diag_t *diag)
      * stay at zero, and `jal 0` halts the IOP. */
     set_phase1_status("PHASE1: LMB patch");
     lmb_rc = ee_sif_apply_lmb_patch();
-    if (lmb_rc < 0) {
+    if(lmb_rc < 0) {
         set_phase1_status("PHASE1: LMB patch FAIL");
         diag->result = -25;
         return -25;
@@ -604,7 +595,7 @@ int ps2_bootstrap_iop_dev9_init(iop_dev9_diag_t *diag)
 
     set_phase1_status("PHASE1: kosdev9.irx LMB load");
     result = load_dev9_irx();
-    if (result < 0) {
+    if(result < 0) {
         /* load_dev9_irx() always set a more-specific status before
          * returning negative — HEAP ALLOC FAIL / IRX DMA FAIL / LOAD
          * RPC FAIL / LMB REJECTED.  Don't clobber it with a generic
@@ -620,14 +611,14 @@ int ps2_bootstrap_iop_dev9_init(iop_dev9_diag_t *diag)
 
     set_phase1_status("PHASE1: POLL MBOX");
     mbox = (volatile const struct iop_mailbox *)(IOP_UNCACHED_BASE + IOP_DEV9_MBOX_ADDR);
-    for (i = 0; i < POLL_TIMEOUT; i++) {
+    for(i = 0; i < POLL_TIMEOUT; i++) {
         result = mbox->result;
-        if (result != MBOX_SENTINEL)
+        if(result != MBOX_SENTINEL)
             break;
     }
 
     capture_diag(diag, mbox);
-    if (result == MBOX_SENTINEL) {
+    if(result == MBOX_SENTINEL) {
         set_phase1_status("PHASE1: MBOX TIMEOUT");
         diag->result = -11;
         return -11;
@@ -639,18 +630,15 @@ int ps2_bootstrap_iop_dev9_init(iop_dev9_diag_t *diag)
      * to it later and fetch the shared-memory layout. */
     smap_irx_qw_size = (smap_irx_bin_len + 15) & ~15;
     smap_irx_iop_addr = ee_sif_alloc_iop_heap(smap_irx_qw_size);
-    if (smap_irx_iop_addr == 0) {
+    if(smap_irx_iop_addr == 0) {
         set_phase1_status("PHASE1: SMAP HEAP FAIL");
-    } else if (ee_sif_iop_write(smap_irx_iop_addr, smap_irx_bin,
-                                smap_irx_qw_size) < 0) {
+    } else if(ee_sif_iop_write(smap_irx_iop_addr, smap_irx_bin, smap_irx_qw_size) < 0) {
         set_phase1_status("PHASE1: SMAP DMA FAIL");
     } else {
         memset((void *)&load_args, 0, sizeof(load_args));
         memset((void *)&load_result, 0, sizeof(load_result));
 
-        load_args.module_ptr =
-            IOP_KSEG1_BASE |
-            (((uint32_t)smap_irx_iop_addr) & 0x1fffff);
+        load_args.module_ptr = IOP_KSEG1_BASE | (((uint32_t)smap_irx_iop_addr) & 0x1fffff);
         load_args.arg_len = 0;
 
         cache_flush_dc((const void *)&load_args, sizeof(load_args));
@@ -663,23 +651,17 @@ int ps2_bootstrap_iop_dev9_init(iop_dev9_diag_t *diag)
          * session's READY could otherwise survive and let ps2_smap_init
          * bind before the new server is registered — the exact race this
          * fixes.  SBUS-bridge uncached alias, same as the dev9 mailbox. */
-        *(volatile uint32_t *)(IOP_UNCACHED_BASE | PS2_SMAP_READY_IOP_PHYS) =
-            PS2_SMAP_NOTREADY_MAGIC;
+        *(volatile uint32_t *)(IOP_UNCACHED_BASE | PS2_SMAP_READY_IOP_PHYS) = PS2_SMAP_NOTREADY_MAGIC;
 
         set_phase1_status("PHASE1: smap.irx LMB load");
-        if (ee_sif_rpc_call(&ee_loadfile_client,
-                            LOADFILE_LOAD_BUF_CID,
-                            (const void *)&load_args,
-                            sizeof(load_args),
-                            (void *)&load_result,
-                            sizeof(load_result)) < 0) {
+        if(ee_sif_rpc_call(&ee_loadfile_client, LOADFILE_LOAD_BUF_CID, (const void *)&load_args,
+                           sizeof(load_args), (void *)&load_result, sizeof(load_result)) < 0) {
             set_phase1_status("PHASE1: SMAP NO REPLY");
             g_smap_bootstrap_result = -1;
         } else {
             volatile load_module_buffer_result_t *result_view =
-                (volatile load_module_buffer_result_t *)
-                EE_UNCACHED(&load_result);
-            if ((int)result_view->result < 0) {
+                (volatile load_module_buffer_result_t *)EE_UNCACHED(&load_result);
+            if((int)result_view->result < 0) {
                 set_phase1_status("PHASE1: SMAP LMB REJECTED");
                 g_smap_bootstrap_result = -1;
             } else {
@@ -693,13 +675,11 @@ int ps2_bootstrap_iop_dev9_init(iop_dev9_diag_t *diag)
     return result;
 }
 
-const char *ps2_bootstrap_phase1_status(void)
-{
+const char *ps2_bootstrap_phase1_status(void) {
     return phase1_status;
 }
 
-int ps2_bootstrap_iop_smap_init(void)
-{
+int ps2_bootstrap_iop_smap_init(void) {
     int rpc_rc;
 
     /* The SMAP IRX is LMB-loaded inline by ps2_bootstrap_iop_dev9_init
@@ -709,14 +689,14 @@ int ps2_bootstrap_iop_smap_init(void)
      * cheap. */
     static int g_rpc_bound = 0;
 
-    if (g_smap_bootstrap_result < 0)
+    if(g_smap_bootstrap_result < 0)
         return g_smap_bootstrap_result;
 
-    if (g_rpc_bound)
+    if(g_rpc_bound)
         return 0;
 
     rpc_rc = ps2_smap_init();
-    if (rpc_rc < 0) {
+    if(rpc_rc < 0) {
         g_smap_bootstrap_result = -1;
         return rpc_rc;
     }

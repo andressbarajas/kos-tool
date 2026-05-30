@@ -35,8 +35,7 @@ void ps2_video_fill_rect(int x, int y, int w, int h, uint32_t color);
 /* Draw a 1-bit bitmap at (x, y) with dimensions (w, h).
  * bits is packed MSB-first, 32 bits per word per row.
  * Foreground pixels use color, background is transparent. */
-void ps2_video_draw_bitmap(int x, int y, int w, int h,
-                           const uint32_t *bits, uint32_t color);
+void ps2_video_draw_bitmap(int x, int y, int w, int h, const uint32_t *bits, uint32_t color);
 
 /* Functions expected by crt0.S exception handler header and common code */
 void setup_video(uint32_t mode, uint32_t bg_color);

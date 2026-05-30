@@ -7,8 +7,8 @@
 #define KOSLOAD_PMCR 1
 
 /* Colors in 0x00RRGGBB format */
-#define BBA_BG_COLOR   0x001C81B3   /* PlayStation 2 blue */
-#define STR_COLOR      0x00FFFFFF   /* White */
+#define BBA_BG_COLOR   0x001C81B3 /* PlayStation 2 blue */
+#define STR_COLOR      0x00FFFFFF /* White */
 
 /* SMAP uses same BG as BBA on PS2 */
 #define SMAP_BG_COLOR  BBA_BG_COLOR

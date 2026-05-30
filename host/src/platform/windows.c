@@ -46,9 +46,9 @@ static int win_bind_listen(int64_t sock, uint16_t port) {
     addr.sin_port = htons(port);
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 
-    if (bind((SOCKET)sock, (struct sockaddr *)&addr, sizeof(addr)) == SOCKET_ERROR)
+    if(bind((SOCKET)sock, (struct sockaddr *)&addr, sizeof(addr)) == SOCKET_ERROR)
         return -1;
-    if (listen((SOCKET)sock, 1) == SOCKET_ERROR)
+    if(listen((SOCKET)sock, 1) == SOCKET_ERROR)
         return -1;
     return 0;
 }
@@ -70,7 +70,8 @@ static int win_connect(int64_t sock, const char *host, uint16_t port) {
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
     he = gethostbyname(host);
-    if (!he) return -1;
+    if(!he)
+        return -1;
     memcpy(&addr.sin_addr, he->h_addr, he->h_length);
     return connect((SOCKET)sock, (struct sockaddr *)&addr, sizeof(addr));
 }
@@ -85,8 +86,7 @@ static int win_recv(int64_t sock, void *buffer, size_t len) {
 
 static int win_setsockopt_reuse(int64_t sock) {
     const char enable = 1;
-    return setsockopt((SOCKET)sock, SOL_SOCKET, SO_REUSEADDR,
-                      &enable, sizeof(enable));
+    return setsockopt((SOCKET)sock, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable));
 }
 
 static void win_socket_close(int64_t sock) {
@@ -112,21 +112,27 @@ const platform_socket_ops_t windows_socket_ops = {
 
 static int win_translate_flags(int kos_flags) {
     int flags = _O_RDONLY;
-    if (kos_flags & KOS_O_WRONLY) flags = _O_WRONLY;
-    if (kos_flags & KOS_O_RDWR)  flags = _O_RDWR;
-    if (kos_flags & KOS_O_APPEND) flags |= _O_APPEND;
-    if (kos_flags & KOS_O_CREAT)  flags |= _O_CREAT;
-    if (kos_flags & KOS_O_TRUNC)  flags |= _O_TRUNC;
-    if (kos_flags & KOS_O_EXCL)   flags |= _O_EXCL;
+    if(kos_flags & KOS_O_WRONLY)
+        flags = _O_WRONLY;
+    if(kos_flags & KOS_O_RDWR)
+        flags = _O_RDWR;
+    if(kos_flags & KOS_O_APPEND)
+        flags |= _O_APPEND;
+    if(kos_flags & KOS_O_CREAT)
+        flags |= _O_CREAT;
+    if(kos_flags & KOS_O_TRUNC)
+        flags |= _O_TRUNC;
+    if(kos_flags & KOS_O_EXCL)
+        flags |= _O_EXCL;
     flags |= _O_BINARY;
     return flags;
 }
 
-static const char *win_resolve_path(const char *dc_path, const char *map_root,
-                                    char *out, size_t out_size) {
+static const char *win_resolve_path(const char *dc_path, const char *map_root, char *out, size_t out_size) {
     size_t len;
 
-    if (!map_root) return dc_path;
+    if(!map_root)
+        return dc_path;
     len = compat_str_copy(out, out_size, map_root);
     compat_str_append(out, out_size, len, dc_path);
     return out;
@@ -154,7 +160,7 @@ static uint64_t win_time_usec(void) {
 }
 
 static void win_sleep_usec(uint32_t usec) {
-    if (usec >= 1000) {
+    if(usec >= 1000) {
         /* Use Sleep() for >= 1ms; round to nearest ms */
         Sleep((usec + 500) / 1000);
     } else {
@@ -165,7 +171,7 @@ static void win_sleep_usec(uint32_t usec) {
         LONGLONG target = (LONGLONG)usec * freq.QuadPart / 1000000;
         do {
             QueryPerformanceCounter(&now);
-        } while ((now.QuadPart - start.QuadPart) < target);
+        } while((now.QuadPart - start.QuadPart) < target);
     }
 }
 

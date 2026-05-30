@@ -8,7 +8,11 @@
 #ifndef __BSWAP_H__
 #define __BSWAP_H__
 
-static inline unsigned short bswap16(unsigned short x) { return x; }
-static inline unsigned int bswap32(unsigned int x) { return x; }
+static inline unsigned short bswap16(unsigned short x) {
+    return x;
+}
+static inline unsigned int bswap32(unsigned int x) {
+    return x;
+}
 
 #endif /* __BSWAP_H__ */

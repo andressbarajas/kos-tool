@@ -10,10 +10,10 @@
 #define SHA1_DIGEST_LEN 20
 
 typedef struct {
-  uint32_t state[5];
-  uint64_t count;     /* total bytes processed */
-  uint8_t  buf[64];
-  size_t   buflen;
+    uint32_t state[5];
+    uint64_t count; /* total bytes processed */
+    uint8_t  buf[64];
+    size_t   buflen;
 } sha1_ctx;
 
 void sha1_init(sha1_ctx *c);

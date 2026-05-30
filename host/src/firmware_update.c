@@ -76,13 +76,13 @@ typedef enum {
 } console_type_t;
 
 static console_type_t detect_console(const char *name) {
-    if (strncmp(name, "dc-load-", 8) == 0 || strncmp(name, "dcload-", 7) == 0)
+    if(strncmp(name, "dc-load-", 8) == 0 || strncmp(name, "dcload-", 7) == 0)
         return CONSOLE_DC;
-    if (strncmp(name, "gc-load-", 8) == 0)
+    if(strncmp(name, "gc-load-", 8) == 0)
         return CONSOLE_GC;
-    if (strncmp(name, "ps2-load-", 9) == 0)
+    if(strncmp(name, "ps2-load-", 9) == 0)
         return CONSOLE_PS2;
-    if (strncmp(name, "wii-load-", 9) == 0)
+    if(strncmp(name, "wii-load-", 9) == 0)
         return CONSOLE_WII;
 
     return CONSOLE_UNKNOWN;
@@ -119,39 +119,84 @@ typedef struct {
  */
 static const uint8_t sh4_trampoline[256] = {
     /* Instructions (offset 0x00-0x2F) */
-    0x0b, 0xd0,             /* mov.l  sr_val_k, r0     */
-    0x0e, 0x40,             /* ldc    r0, sr            */
-    0x0b, 0xd4,             /* mov.l  src_k, r4         */
-    0x0c, 0xd5,             /* mov.l  dst_k, r5         */
-    0x0c, 0xd6,             /* mov.l  size_k, r6        */
+    0x0b,
+    0xd0, /* mov.l  sr_val_k, r0     */
+    0x0e,
+    0x40, /* ldc    r0, sr            */
+    0x0b,
+    0xd4, /* mov.l  src_k, r4         */
+    0x0c,
+    0xd5, /* mov.l  dst_k, r5         */
+    0x0c,
+    0xd6, /* mov.l  size_k, r6        */
     /* copy_loop: */
-    0x44, 0x60,             /* mov.b  @r4+, r0          */
-    0x00, 0x25,             /* mov.b  r0, @r5           */
-    0x01, 0x75,             /* add    #1, r5            */
-    0x10, 0x46,             /* dt     r6                */
-    0xfa, 0x8b,             /* bf     copy_loop         */
-    0x0a, 0xd0,             /* mov.l  ccr_addr_k, r0    */
-    0x0b, 0xd1,             /* mov.l  ccr_val_k, r1     */
-    0x12, 0x20,             /* mov.l  r1, @r0           */
-    0x09, 0x00,             /* nop                      */
-    0x09, 0x00,             /* nop                      */
-    0x09, 0x00,             /* nop                      */
-    0x09, 0x00,             /* nop                      */
-    0x09, 0x00,             /* nop                      */
-    0x09, 0x00,             /* nop                      */
-    0x09, 0x00,             /* nop                      */
-    0x09, 0x00,             /* nop                      */
-    0x07, 0xd0,             /* mov.l  entry_k, r0       */
-    0x2b, 0x40,             /* jmp    @r0               */
-    0x09, 0x00,             /* nop (delay slot)         */
+    0x44,
+    0x60, /* mov.b  @r4+, r0          */
+    0x00,
+    0x25, /* mov.b  r0, @r5           */
+    0x01,
+    0x75, /* add    #1, r5            */
+    0x10,
+    0x46, /* dt     r6                */
+    0xfa,
+    0x8b, /* bf     copy_loop         */
+    0x0a,
+    0xd0, /* mov.l  ccr_addr_k, r0    */
+    0x0b,
+    0xd1, /* mov.l  ccr_val_k, r1     */
+    0x12,
+    0x20, /* mov.l  r1, @r0           */
+    0x09,
+    0x00, /* nop                      */
+    0x09,
+    0x00, /* nop                      */
+    0x09,
+    0x00, /* nop                      */
+    0x09,
+    0x00, /* nop                      */
+    0x09,
+    0x00, /* nop                      */
+    0x09,
+    0x00, /* nop                      */
+    0x09,
+    0x00, /* nop                      */
+    0x09,
+    0x00, /* nop                      */
+    0x07,
+    0xd0, /* mov.l  entry_k, r0       */
+    0x2b,
+    0x40, /* jmp    @r0               */
+    0x09,
+    0x00, /* nop (delay slot)         */
     /* Constants (offset 0x30-0x4B) */
-    0xf0, 0x00, 0x00, 0x50, /* sr_val:   0x500000F0     */
-    0x00, 0x01, 0x01, 0x8c, /* src:      0x8c010100     */
-    0x00, 0x40, 0x00, 0x8c, /* dst:      0x8c004000     */
-    0x00, 0x00, 0x00, 0x00, /* size:     PATCHED        */
-    0x1c, 0x00, 0x00, 0xff, /* ccr_addr: 0xFF00001C     */
-    0x08, 0x08, 0x00, 0x00, /* ccr_val:  0x00000808     */
-    0x00, 0x40, 0x00, 0xac, /* entry:    0xAC004000     */
+    0xf0,
+    0x00,
+    0x00,
+    0x50, /* sr_val:   0x500000F0     */
+    0x00,
+    0x01,
+    0x01,
+    0x8c, /* src:      0x8c010100     */
+    0x00,
+    0x40,
+    0x00,
+    0x8c, /* dst:      0x8c004000     */
+    0x00,
+    0x00,
+    0x00,
+    0x00, /* size:     PATCHED        */
+    0x1c,
+    0x00,
+    0x00,
+    0xff, /* ccr_addr: 0xFF00001C     */
+    0x08,
+    0x08,
+    0x00,
+    0x00, /* ccr_val:  0x00000808     */
+    0x00,
+    0x40,
+    0x00,
+    0xac, /* entry:    0xAC004000     */
     /* Remaining bytes zero-padded to 256 */
 };
 
@@ -367,8 +412,8 @@ static const arch_update_params_t ppc_wii_params = {
     .trampoline = ppc_wii_trampoline,
     .trampoline_size = 256,
     .size_patch_offset = 0x98,
-    .load_addr = WII_DEFAULT_LOAD_ADDR,   /* 0x80004000 — see comment above */
-    .loader_base = 0x817C0000,             /* WII_LOADER_BASE per mk/memory.mk */
+    .load_addr = WII_DEFAULT_LOAD_ADDR, /* 0x80004000 — see comment above */
+    .loader_base = 0x817C0000,          /* WII_LOADER_BASE per mk/memory.mk */
     .big_endian = 1,
 };
 
@@ -541,26 +586,27 @@ static const arch_update_params_t mips_r5900_params = {
 
 /* Parse "name X.Y.Z" or "name X.Y" from a version string.
  * Returns 1 if parsed successfully, 0 if not. */
-static int parse_version_string(const char *str, char *name, size_t name_size,
-                                int *major, int *minor, int *patch) {
-    if (!str || !str[0])
+static int parse_version_string(const char *str, char *name, size_t name_size, int *major, int *minor,
+                                int *patch) {
+    if(!str || !str[0])
         return 0;
 
     /* Find the space before the version number */
     const char *space = strchr(str, ' ');
-    if (!space)
+    if(!space)
         return 0;
 
     /* Copy name */
     size_t nlen = (size_t)(space - str);
-    if (nlen >= name_size) nlen = name_size - 1;
+    if(nlen >= name_size)
+        nlen = name_size - 1;
     memcpy(name, str, nlen);
     name[nlen] = '\0';
 
     /* Parse X.Y.Z or X.Y (patch defaults to 0) */
     *patch = 0;
     int fields = sscanf(space + 1, "%d.%d.%d", major, minor, patch);
-    if (fields < 2)
+    if(fields < 2)
         return 0;
 
     return 1;
@@ -568,10 +614,11 @@ static int parse_version_string(const char *str, char *name, size_t name_size,
 
 /* Compare two version tuples.
  * Returns: <0 if a < b, 0 if equal, >0 if a > b */
-static int compare_versions(int a_major, int a_minor, int a_patch,
-                            int b_major, int b_minor, int b_patch) {
-    if (a_major != b_major) return a_major - b_major;
-    if (a_minor != b_minor) return a_minor - b_minor;
+static int compare_versions(int a_major, int a_minor, int a_patch, int b_major, int b_minor, int b_patch) {
+    if(a_major != b_major)
+        return a_major - b_major;
+    if(a_minor != b_minor)
+        return a_minor - b_minor;
     return a_patch - b_patch;
 }
 
@@ -593,8 +640,8 @@ static int is_ip_loader(const char *name) {
  * where magic = "KOSLD_IP" and ip is "0.0.0.0" for DHCP or a
  * dotted-quad string for static IP.
  *
- * The host scans the embedded firmware binary for this magic and 
- * patches the IP field before uploading, allowing a single DHCP 
+ * The host scans the embedded firmware binary for this magic and
+ * patches the IP field before uploading, allowing a single DHCP
  * build to serve as static-IP firmware too.
  */
 #define IP_CONFIG_MAGIC     "KOSLD_IP"
@@ -603,10 +650,9 @@ static int is_ip_loader(const char *name) {
 
 /* Find the IP config block in fw_data and overwrite the IP string.
  * Returns 0 on success, -1 if the magic was not found. */
-static int patch_firmware_ip(uint8_t *fw_data, uint32_t fw_size,
-                             const char *ip_str) {
-    for (uint32_t i = 0; i + IP_CONFIG_MAGIC_LEN + IP_CONFIG_IP_LEN <= fw_size; i++) {
-        if (memcmp(fw_data + i, IP_CONFIG_MAGIC, IP_CONFIG_MAGIC_LEN) == 0) {
+static int patch_firmware_ip(uint8_t *fw_data, uint32_t fw_size, const char *ip_str) {
+    for(uint32_t i = 0; i + IP_CONFIG_MAGIC_LEN + IP_CONFIG_IP_LEN <= fw_size; i++) {
+        if(memcmp(fw_data + i, IP_CONFIG_MAGIC, IP_CONFIG_MAGIC_LEN) == 0) {
             uint8_t *ip_field = fw_data + i + IP_CONFIG_MAGIC_LEN;
             memset(ip_field, 0, IP_CONFIG_IP_LEN);
             strncpy((char *)ip_field, ip_str, IP_CONFIG_IP_LEN - 1);
@@ -618,24 +664,25 @@ static int patch_firmware_ip(uint8_t *fw_data, uint32_t fw_size,
 
 /* ===== External firmware loading ===== */
 
-/* Load a firmware .bin file from disk.  Caller must free() the returned buffer. */
+/* Load a firmware .bin file from disk.  Caller must free() the returned buffer.
+ */
 static uint8_t *load_firmware_file(const char *path, uint32_t *out_size) {
     int fd = open(path, O_RDONLY | O_BINARY);
-    if (fd < 0) {
+    if(fd < 0) {
         fprintf(stderr, "Cannot open firmware file: %s\n", path);
         return NULL;
     }
 
     off_t fsize = lseek(fd, 0, SEEK_END);
     lseek(fd, 0, SEEK_SET);
-    if (fsize <= 0 || fsize > 512 * 1024) {
+    if(fsize <= 0 || fsize > 512 * 1024) {
         fprintf(stderr, "Invalid firmware file size: %lld\n", (long long)fsize);
         close(fd);
         return NULL;
     }
 
     uint8_t *buf = malloc((size_t)fsize);
-    if (!buf) {
+    if(!buf) {
         close(fd);
         return NULL;
     }
@@ -643,7 +690,7 @@ static uint8_t *load_firmware_file(const char *path, uint32_t *out_size) {
     ssize_t n = read(fd, buf, (size_t)fsize);
     close(fd);
 
-    if (n != fsize) {
+    if(n != fsize) {
         fprintf(stderr, "Short read on firmware file\n");
         free(buf);
         return NULL;
@@ -655,13 +702,12 @@ static uint8_t *load_firmware_file(const char *path, uint32_t *out_size) {
 
 /* ===== Core update logic ===== */
 
-static int perform_update(kostool_context_t *ctx, const uint8_t *fw_data,
-                          uint32_t fw_size, const char *patch_ip,
-                          const arch_update_params_t *arch) {
+static int perform_update(kostool_context_t *ctx, const uint8_t *fw_data, uint32_t fw_size,
+                          const char *patch_ip, const arch_update_params_t *arch) {
     /* Build combined blob: trampoline (256 bytes) + firmware .bin */
     uint32_t blob_size = arch->trampoline_size + fw_size;
     uint8_t *blob = malloc(blob_size);
-    if (!blob) {
+    if(!blob) {
         fprintf(stderr, "Failed to allocate update blob (%u bytes)\n", blob_size);
         return -1;
     }
@@ -674,19 +720,19 @@ static int perform_update(kostool_context_t *ctx, const uint8_t *fw_data,
      * we must override it to match the desired mode:
      *   DHCP:   "0.0.0.0"
      *   Static: the current console IP (ctx->hostname) */
-    if (patch_ip) {
-        if (patch_firmware_ip(blob + arch->trampoline_size, fw_size, patch_ip) != 0)
+    if(patch_ip) {
+        if(patch_firmware_ip(blob + arch->trampoline_size, fw_size, patch_ip) != 0)
             fprintf(stderr, "Warning: IP config block not found in firmware\n");
     }
 
     /* Patch the size constant in the trampoline.
      * SH4 is little-endian (host-native on x86/ARM), PPC is big-endian. */
-    if (arch->big_endian) {
+    if(arch->big_endian) {
         uint8_t be[4] = {
             (fw_size >> 24) & 0xFF,
             (fw_size >> 16) & 0xFF,
-            (fw_size >>  8) & 0xFF,
-            (fw_size      ) & 0xFF,
+            (fw_size >> 8) & 0xFF,
+            (fw_size) & 0xFF,
         };
         memcpy(blob + arch->size_patch_offset, be, 4);
     } else {
@@ -695,7 +741,7 @@ static int perform_update(kostool_context_t *ctx, const uint8_t *fw_data,
 
     /* Upload combined blob to program load area */
     int ret = ctx->transport->send_data(ctx, blob, arch->load_addr, blob_size);
-    if (ret != 0) {
+    if(ret != 0) {
         fprintf(stderr, "Firmware upload failed\n");
         free(blob);
         return -1;
@@ -707,14 +753,11 @@ static int perform_update(kostool_context_t *ctx, const uint8_t *fw_data,
      * leaves no dirty cache lines behind from go()'s register saves.
      * Network loaders may jump away before the host receives the EXEC
      * ack, so send the trampoline EXEC without waiting for a response. */
-    if (strcmp(ctx->transport->name, "network") == 0) {
-        printf("Sending execute command (0x%08x, fw_update=1)...",
-               arch->load_addr | 0xa0000000);
-        ret = ctx->transport->send_command(ctx, NET_CMD_EXECUTE,
-                                           arch->load_addr,
-                                           KOSLOAD_EXEC_FW_UPDATE,
+    if(strcmp(ctx->transport->name, "network") == 0) {
+        printf("Sending execute command (0x%08x, fw_update=1)...", arch->load_addr | 0xa0000000);
+        ret = ctx->transport->send_command(ctx, NET_CMD_EXECUTE, arch->load_addr, KOSLOAD_EXEC_FW_UPDATE,
                                            NULL, 0);
-        if (ret == 0)
+        if(ret == 0)
             printf("executing\n");
     } else {
         uint32_t saved_prog_argc = ctx->prog_argc;
@@ -722,7 +765,7 @@ static int perform_update(kostool_context_t *ctx, const uint8_t *fw_data,
         ret = ctx->transport->execute(ctx, arch->load_addr, 0, 0);
         ctx->prog_argc = saved_prog_argc;
     }
-    if (ret != 0) {
+    if(ret != 0) {
         fprintf(stderr, "Trampoline execute failed\n");
         free(blob);
         return -1;
@@ -732,16 +775,16 @@ static int perform_update(kostool_context_t *ctx, const uint8_t *fw_data,
     printf("Firmware updated\n");
     printf("Reconnecting...\n");
 
-    if (strcmp(ctx->transport->name, "serial") == 0) {
+    if(strcmp(ctx->transport->name, "serial") == 0) {
         /* Serial: console restarts at default baud rate after trampoline.
          * Must close and reinit to renegotiate speed. */
-        ctx->current_speed = SERIAL_DEFAULT_SPEED;  /* skip speed restore in shutdown */
+        ctx->current_speed = SERIAL_DEFAULT_SPEED; /* skip speed restore in shutdown */
         ctx->transport->shutdown(ctx);
 
         ctx->remote_capabilities = 0;
         memset(ctx->remote_version_string, 0, sizeof(ctx->remote_version_string));
 
-        if (ctx->transport->init(ctx) != 0) {
+        if(ctx->transport->init(ctx) != 0) {
             fprintf(stderr, "Failed to reconnect after firmware update\n");
             return -1;
         }
@@ -762,24 +805,22 @@ static int perform_update(kostool_context_t *ctx, const uint8_t *fw_data,
 /* ===== Public API ===== */
 
 int auto_update_firmware(kostool_context_t *ctx) {
-
     /* Parse remote version */
     char remote_name[64] = {0};
-    int remote_major = 0, remote_minor = 0, remote_patch = 0;
+    int  remote_major = 0, remote_minor = 0, remote_patch = 0;
 
-    if (!parse_version_string(ctx->remote_version_string, remote_name,
-                              sizeof(remote_name),
-                              &remote_major, &remote_minor, &remote_patch)) {
+    if(!parse_version_string(ctx->remote_version_string, remote_name, sizeof(remote_name), &remote_major,
+                             &remote_minor, &remote_patch)) {
         /* Can't parse version — might be garbage or empty string */
-        if (!ctx->firmware_path) {
-            if (!ctx->quiet_mode && ctx->remote_version_string[0])
-                printf("Cannot parse remote version: %s\n",
-                       ctx->remote_version_string);
+        if(!ctx->firmware_path) {
+            if(!ctx->quiet_mode && ctx->remote_version_string[0])
+                printf("Cannot parse remote version: %s\n", ctx->remote_version_string);
             return 0;
         }
     }
 
-    /* Determine which firmware to use based on transport type and remote loader */
+    /* Determine which firmware to use based on transport type and remote loader
+     */
     const uint8_t *fw_data = NULL;
     uint32_t fw_size = 0;
     int is_serial = (strcmp(ctx->transport->name, "serial") == 0);
@@ -789,20 +830,21 @@ int auto_update_firmware(kostool_context_t *ctx) {
 
     /* Select architecture-specific update parameters */
     const arch_update_params_t *arch;
-    if (console == CONSOLE_GC)
+    if(console == CONSOLE_GC)
         arch = &ppc_params;
-    else if (console == CONSOLE_WII)
+    else if(console == CONSOLE_WII)
         arch = &ppc_wii_params;
-    else if (console == CONSOLE_PS2)
+    else if(console == CONSOLE_PS2)
         arch = &mips_r5900_params;
     else
-        arch = &sh4_params;  /* DC or unknown (unknown won't reach perform_update) */
+        arch = &sh4_params; /* DC or unknown (unknown won't reach
+                               perform_update) */
 
     /* -U flag: use external firmware file, skip all safety checks */
     uint8_t *ext_fw = NULL;
-    if (ctx->firmware_path) {
+    if(ctx->firmware_path) {
         ext_fw = load_firmware_file(ctx->firmware_path, &fw_size);
-        if (!ext_fw)
+        if(!ext_fw)
             return -1;
         fw_data = ext_fw;
 
@@ -813,34 +855,35 @@ int auto_update_firmware(kostool_context_t *ctx) {
         return ret;
     }
 
-    if (console == CONSOLE_UNKNOWN) {
-        if (!ctx->quiet_mode)
+    if(console == CONSOLE_UNKNOWN) {
+        if(!ctx->quiet_mode)
             printf("Unknown console type: %s\n", remote_name);
         return 0;
     }
 
-    const char *prefix = (console == CONSOLE_DC)  ? "dc"  :
-                         (console == CONSOLE_GC)  ? "gc"  :
-                         (console == CONSOLE_WII) ? "wii" : "ps2";
+    const char *prefix = (console == CONSOLE_DC)    ? "dc"
+                         : (console == CONSOLE_GC)  ? "gc"
+                         : (console == CONSOLE_WII) ? "wii"
+                                                    : "ps2";
 
     /* Select embedded firmware based on console + transport */
-    if (console == CONSOLE_DC) {
-        if (is_serial) {
+    if(console == CONSOLE_DC) {
+        if(is_serial) {
             fw_data = firmware_dc_serial_data;
             fw_size = firmware_dc_serial_size;
         } else {
             fw_data = firmware_dc_ip_data;
             fw_size = firmware_dc_ip_size;
         }
-    } else if (console == CONSOLE_GC) {
-        if (is_serial) {
+    } else if(console == CONSOLE_GC) {
+        if(is_serial) {
             fw_data = firmware_gc_serial_data;
             fw_size = firmware_gc_serial_size;
         } else {
             fw_data = firmware_gc_ip_data;
             fw_size = firmware_gc_ip_size;
         }
-    } else if (console == CONSOLE_WII) {
+    } else if(console == CONSOLE_WII) {
         /* Wii: network only (IOS socket shim, no serial transport). */
         fw_data = firmware_wii_ip_data;
         fw_size = firmware_wii_ip_size;
@@ -851,7 +894,7 @@ int auto_update_firmware(kostool_context_t *ctx) {
     }
 
     /* No embedded firmware → skip */
-    if (fw_size == 0)
+    if(fw_size == 0)
         return 0;
 
     /* Check if update is needed:
@@ -859,39 +902,36 @@ int auto_update_firmware(kostool_context_t *ctx) {
      * - Same name but older version: update
      * - Same name and same/newer version: skip */
     char expected_name[32];
-    snprintf(expected_name, sizeof(expected_name), "%s-load-%s",
-             prefix, is_serial ? "serial" : "ip");
+    snprintf(expected_name, sizeof(expected_name), "%s-load-%s", prefix, is_serial ? "serial" : "ip");
     int need_update = 0;
 
-    if (strcmp(remote_name, expected_name) != 0) {
+    if(strcmp(remote_name, expected_name) != 0) {
         /* Different name — either dcload → dc-load upgrade,
          * or serial/ip mismatch.  Check if types match. */
-        if (is_serial && !is_serial_loader(remote_name)) {
+        if(is_serial && !is_serial_loader(remote_name)) {
             /* Serial transport but remote is IP loader?  Skip. */
             return 0;
         }
-        if (!is_serial && !is_ip_loader(remote_name)) {
+        if(!is_serial && !is_ip_loader(remote_name)) {
             /* Network transport but remote is serial loader?  Skip. */
             return 0;
         }
         need_update = 1;
     } else {
         /* Same name — compare versions */
-        int cmp = compare_versions(KOSLOAD_VERSION_MAJOR,
-                                   KOSLOAD_VERSION_MINOR,
-                                   KOSLOAD_VERSION_PATCH,
+        int cmp = compare_versions(KOSLOAD_VERSION_MAJOR, KOSLOAD_VERSION_MINOR, KOSLOAD_VERSION_PATCH,
                                    remote_major, remote_minor, remote_patch);
-        if (cmp >= 0)
-            need_update = 1;  /* Embedded is newer */
+        if(cmp >= 0)
+            need_update = 1; /* Embedded is newer */
         else {
-            if (!ctx->quiet_mode)
-                printf("Remote %s %d.%d.%d is already up to date\n",
-                       remote_name, remote_major, remote_minor, remote_patch);
+            if(!ctx->quiet_mode)
+                printf("Remote %s %d.%d.%d is already up to date\n", remote_name, remote_major, remote_minor,
+                       remote_patch);
             return 0;
         }
     }
 
-    if (!need_update)
+    if(!need_update)
         return 0;
 
     /* Determine the IP to patch into the embedded firmware.
@@ -908,7 +948,7 @@ int auto_update_firmware(kostool_context_t *ctx) {
     const char *patch_ip = NULL;
     int dhcp_reconnect = 0;
 
-    if (!is_serial) {
+    if(!is_serial) {
         /* New-style loader with capabilities.
          *
          * A firmware self-update always preserves the IP the device is
@@ -921,28 +961,27 @@ int auto_update_firmware(kostool_context_t *ctx) {
          * old one).  An in-place update must keep the same network
          * identity, so patch the new firmware to a static IP = the
          * current address and reuse the socket (dhcp_reconnect = 0). */
-        if (ctx->remote_capabilities != 0) {
+        if(ctx->remote_capabilities != 0) {
             patch_ip = ctx->hostname;
             dhcp_reconnect = 0;
         }
         /* Legacy dcload-ip: probe memory to detect DHCP vs static.
          * The patchable IP string literal lives in .rodata. */
-        else if (strstr(remote_name, "dcload") != NULL) {
-            #define PROBE_SIZE 24576
+        else if(strstr(remote_name, "dcload") != NULL) {
+#define PROBE_SIZE 24576
             uint8_t *loader_mem = malloc(PROBE_SIZE);
             int probed = 0;
-            if (loader_mem &&
-                ctx->transport->recv_data(ctx, loader_mem,
-                                          arch->loader_base, PROBE_SIZE, 1) == 0) {
+            if(loader_mem &&
+               ctx->transport->recv_data(ctx, loader_mem, arch->loader_base, PROBE_SIZE, 1) == 0) {
                 /* Search for NUL-terminated "0.0.0.0" — the DHCP sentinel */
                 static const uint8_t dhcp_sentinel[8] = "0.0.0.0";
-                for (uint32_t i = 0; i + 8 <= PROBE_SIZE; i++) {
-                    if (memcmp(loader_mem + i, dhcp_sentinel, 8) == 0) {
-                        probed = 1;  /* DHCP mode */
+                for(uint32_t i = 0; i + 8 <= PROBE_SIZE; i++) {
+                    if(memcmp(loader_mem + i, dhcp_sentinel, 8) == 0) {
+                        probed = 1; /* DHCP mode */
                         break;
                     }
                 }
-                if (!probed) {
+                if(!probed) {
                     /* No "0.0.0.0" found — static IP build */
                     patch_ip = ctx->hostname;
                     probed = 1;
@@ -952,9 +991,9 @@ int auto_update_firmware(kostool_context_t *ctx) {
                 }
             }
             free(loader_mem);
-            #undef PROBE_SIZE
+#undef PROBE_SIZE
 
-            if (!probed) {
+            if(!probed) {
                 printf("Could not read loader memory — skipping update\n");
                 printf("Use -U <file> to force update\n");
                 return 0;
@@ -966,10 +1005,10 @@ int auto_update_firmware(kostool_context_t *ctx) {
      * before the update clears remote_version_string. */
     const char *using_suffix = strstr(ctx->remote_version_string, " using ");
     char adapter_desc[128] = "";
-    if (using_suffix)
+    if(using_suffix)
         snprintf(adapter_desc, sizeof(adapter_desc), "%s", using_suffix);
 
-    if (strstr(remote_name, "dcload") != NULL)
+    if(strstr(remote_name, "dcload") != NULL)
         printf("Legacy loader found...\n");
     printf("Updating firmware...\n");
 
@@ -978,7 +1017,7 @@ int auto_update_firmware(kostool_context_t *ctx) {
     /* Network static IP: print the expected new version and pre-fill
      * remote_version_string so prepare_comms() skips its duplicate printf.
      * Serial and DHCP paths do a full reinit which prints the real version. */
-    if (result > 0 && !dhcp_reconnect && !is_serial) {
+    if(result > 0 && !dhcp_reconnect && !is_serial) {
         snprintf(ctx->remote_version_string,
                  sizeof(ctx->remote_version_string),
                  "%s-load-%s %s%s", prefix, "ip",

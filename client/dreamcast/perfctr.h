@@ -1,15 +1,18 @@
-// ---- client/dreamcast/perfctr.h - SH7750/SH7091 Performance Counter Module Header ----
+// ---- client/dreamcast/perfctr.h - SH7750/SH7091 Performance Counter Module
+// Header ----
 //
 // This file is part of the DreamHAL project, a hardware abstraction library
 // primarily intended for use on the SH7091 found in hardware such as the SEGA
 // Dreamcast game console.
 //
 // The performance counter module is hereby released into the public domain in
-// the hope that it may prove useful. Now go profile some code and hit 60 fps! :)
+// the hope that it may prove useful. Now go profile some code and hit 60 fps!
+// :)
 //
 // This file has been adapted to meet the specific needs of dcload. Namely, the
-// PMCR_Read() function uses an array to store values. This allows data to persist
-// across program loads, since the entirety of dcload is technically "volatile."
+// PMCR_Read() function uses an array to store values. This allows data to
+// persist across program loads, since the entirety of dcload is technically
+// "volatile."
 //
 // --Moopthehedgehog
 //
@@ -21,9 +24,9 @@
 // -- General SH4 Performance Counter Notes --
 //
 // There are 2 performance counters that can measure elapsed time. They are each
-// 48-bit counters. They are part of the so-called "ASE" subsystem, which you can
-// read about in chapter 13 of the "SuperH™ (SH) 32-bit RISC series SH-4, ST40
-// system architecture, volume 1: system":
+// 48-bit counters. They are part of the so-called "ASE" subsystem, which you
+// can read about in chapter 13 of the "SuperH™ (SH) 32-bit RISC series SH-4,
+// ST40 system architecture, volume 1: system":
 // https://www.st.com/content/ccc/resource/technical/document/user_manual/36/75/05/ac/e8/7e/42/2d/CD00147163.pdf/files/CD00147163.pdf/jcr:content/translations/en.CD00147163.pdf
 //
 // They can count cycles, so that's 199.5MHz (not 200MHz!!) a.k.a. roughly 5 ns
@@ -46,16 +49,18 @@
 //
 // -- Configuration Address Info --
 //
-// Addresses for these counters can be easily seen here, in lxdream's source code:
-// https://github.com/lutris/lxdream/blob/master/src/sh4/sh4mmio.h
+// Addresses for these counters can be easily seen here, in lxdream's source
+// code: https://github.com/lutris/lxdream/blob/master/src/sh4/sh4mmio.h
 //
-// They are also on display in the Linux kernel, but at the time of writing appear
-// to be set incorrectly (the clock mode at bit 0x100 is never set or cleared,
-// for example, so they're at the mercy of whatever the hardware defaults are):
+// They are also on display in the Linux kernel, but at the time of writing
+// appear to be set incorrectly (the clock mode at bit 0x100 is never set or
+// cleared, for example, so they're at the mercy of whatever the hardware
+// defaults are):
 // http://git.lpclinux.com/cgit/linux-2.6.28.2-lpc313x/plain/arch/sh/oprofile/op_model_sh7750.c
 // https://github.com/torvalds/linux/blob/master/arch/sh/kernel/cpu/sh4/perf_event.c
-// ...It also appears as though they may not be handling bus ratio mode correctly,
-// which appears to be the default mode on the Dreamcast in all my tests.
+// ...It also appears as though they may not be handling bus ratio mode
+// correctly, which appears to be the default mode on the Dreamcast in all my
+// tests.
 //
 // You can also find these addresses by ripping a copy of Virtua Fighter 3 that
 // you own for Dreamcast and looking at the raw byte code (or a raw disassembly)
@@ -65,32 +70,33 @@
 // same configuration, but what's being timed is not as clear.
 //
 // Another place you can actually find both control addresses 0xFF00008x and all
-// data addresses 0xFF10000x is in binaries of ancient, freely available versions
-// of CodeScape. Literally all you need to do is open an SH7750-related DLL in a
-// hex editor and do a search to find the control register addresses, and the
-// data addresses are equally plain to see in any relevant performance profiling
-// firmware. There's no effort or decryption required to find them whatsoever;
-// all you need is an old trial version and a hex editor.
+// data addresses 0xFF10000x is in binaries of ancient, freely available
+// versions of CodeScape. Literally all you need to do is open an SH7750-related
+// DLL in a hex editor and do a search to find the control register addresses,
+// and the data addresses are equally plain to see in any relevant performance
+// profiling firmware. There's no effort or decryption required to find them
+// whatsoever; all you need is an old trial version and a hex editor.
 //
 // However, something even better than all of that is if you search for "SH4
 // 0xFF000084" (without quotes) online you'll find an old forum where some logs
-// were posted of the terminal/command prompt output from some STMicro JTAG tool,
-// which not only has the address registers but also clearly characterizes their
-// size as 16-bit:
+// were posted of the terminal/command prompt output from some STMicro JTAG
+// tool, which not only has the address registers but also clearly characterizes
+// their size as 16-bit:
 // https://www.multimediaforum.de/threads/36260834-alice-hsn-3800tw-usb-jtag-ft4232h/page2
 //
 // -- Event Mode Info --
 //
 // Specific information on each counter mode can be found in the document titled
 // "SuperH™ Family E10A-USB Emulator: Additional Document for User’s Manual:
-// Supplementary Information on Using the SH7750R Renesas Microcomputer Development Environment System"
-// which is available on Renesas's website, in the "Documents" section of the
-// E10A-USB product page:
+// Supplementary Information on Using the SH7750R Renesas Microcomputer
+// Development Environment System" which is available on Renesas's website, in
+// the "Documents" section of the E10A-USB product page:
 // https://www.renesas.com/us/en/products/software-tools/tools/emulator/e10a-usb.html
 // At the time of writing (12/2019), the E10A-USB adapter is still available
 // for purchase, and it is priced around $1200 (USD).
 //
-// Appendix C of the "ST40 Micro Toolset Manual" also has these modes documented:
+// Appendix C of the "ST40 Micro Toolset Manual" also has these modes
+// documented:
 // https://www.st.com/content/ccc/resource/technical/document/user_manual/c5/98/11/89/50/68/41/66/CD17379953.pdf/files/CD17379953.pdf/jcr:content/translations/en.CD17379953.pdf
 //
 // See here for the hexadecimal values corresponding to each mode (pg. 370):
@@ -136,7 +142,8 @@
 // Writing 1 to all of these bits reads back as 0, so it looks like they aren't
 // config bits. It's possible they are write-only like the stop bit, though,
 // or that they're just reserved-write-0-only. It appears that they are always
-// written with zeros in software that uses them, so that's confirmed safe to do.
+// written with zeros in software that uses them, so that's confirmed safe to
+// do.
 //
 // Also, after running counter 1 to overflow, it appears there's no overflow bit
 // (maybe the designers thought 48-bits would be so much to count to that they
@@ -157,7 +164,8 @@
 // PMCR_CLOCK_TYPE sets the counters to count clock cycles or CPU/bus ratio mode
 // cycles (where T = C x B / 24 and T is time, C is count, and B is time
 // of one bus cycle). Note: B = 1/99753008 or so, but it may vary, as mine is
-// actually 1/99749010-ish; the target frequency is probably meant to be 99.75MHz.
+// actually 1/99749010-ish; the target frequency is probably meant to
+// be 99.75MHz.
 //
 // See the ST40 or Renesas SH7750R documents described in the above "Event Mode
 // Info" section for more details about that formula.
@@ -166,7 +174,7 @@
 // set it to 1 to use the above formula. Renesas documentation recommends using
 // the ratio version (set the bit to 1) when user programs alter CPU clock
 // frequencies. This header has some definitions later on to help with this.
-#define PMCR_CLOCK_TYPE 0x0100
+#define PMCR_CLOCK_TYPE       0x0100
 #define PMCR_CLOCK_TYPE_SHIFT 8
 
 // PMCR_STOP_COUNTER is write-only, as it always reads back as 0. It does what
@@ -179,7 +187,7 @@
 // this bit needs to be written to again (e.g. on next start) in order to
 // actually clear the counter data for another run. If not explicitly cleared,
 // the counter will continue from where it left off before being stopped.
-#define PMCR_STOP_COUNTER 0x2000
+#define PMCR_STOP_COUNTER        0x2000
 #define PMCR_RESET_COUNTER_SHIFT 13
 
 // Bits 0xC000 both need to be set to 1 for the counters to actually begin
@@ -188,7 +196,7 @@
 // not appear to do anything separately. Perhaps this is a two-bit mode where
 // 1-1 is run, 1-0 and 0-1 are ???, and 0-0 is off.
 #define PMCR_RUN_COUNTER 0xC000
-#define PMCR_RUN_SHIFT 14
+#define PMCR_RUN_SHIFT   14
 // Interestingly, the output here writes 0x6000 to the counter config registers,
 // which would be the "PMST" bit and the "RESET" bit:
 // https://www.multimediaforum.de/threads/36260834-alice-hsn-3800tw-usb-jtag-ft4232h/page2
@@ -207,11 +215,11 @@
 // I'm just calling it PMST here for lack of a better name, since this is what
 // the Linux kernel and lxdream call it. It could also have something to do with
 // a mode specific to STMicroelectronics.
-#define PMCR_PMST_BIT 0x4000
+#define PMCR_PMST_BIT   0x4000
 #define PMCR_PMST_SHIFT 14
 
 // Likewise PMEN may mean PMCR ENABLE
-#define PMCR_PMEN_BIT 0x8000
+#define PMCR_PMEN_BIT   0x8000
 #define PMCR_PMEN_SHIFT 15
 
 //
@@ -253,7 +261,9 @@
 // No 0x1b-0x20
 #define PMCR_INSTRUCTION_CACHE_FILL_MODE            0x21 // Cycles
 #define PMCR_OPERAND_CACHE_FILL_MODE                0x22 // Cycles
-#define PMCR_ELAPSED_TIME_MODE                      0x23 // Cycles; For 200MHz CPU: 5ns per count in 1 cycle = 1 count mode, or around 417.715ps per count (increments by 12) in CPU/bus ratio mode
+// Cycles; For 200MHz CPU: 5ns per count in 1 cycle = 1 count mode, or
+// around 417.715ps per count (increments by 12) in CPU/bus ratio mode
+#define PMCR_ELAPSED_TIME_MODE                      0x23
 #define PMCR_PIPELINE_FREEZE_BY_ICACHE_MISS_MODE    0x24 // Cycles
 #define PMCR_PIPELINE_FREEZE_BY_DCACHE_MISS_MODE    0x25 // Cycles
 // No 0x26
@@ -275,7 +285,7 @@
 // These definitions are for the enable function and specify whether to reset
 // a counter to 0 or to continue from where it left off
 #define PMCR_CONTINUE_COUNTER 0
-#define PMCR_RESET_COUNTER 1
+#define PMCR_RESET_COUNTER    1
 
 //
 // --- Performance Counter Miscellaneous Definitions ---
@@ -284,32 +294,35 @@
 // (Bus clock is the external CPU clock, not the peripheral bus clock)
 //
 
-#define PMCR_SH4_CPU_FREQUENCY 199500000
-#define PMCR_CPU_CYCLES_MAX_SECONDS 1410902
-#define PMCR_SH4_BUS_FREQUENCY 99750000
-#define PMCR_SH4_BUS_FREQUENCY_SCALED 2394000000 // 99.75MHz x 24
-#define PMCR_BUS_RATIO_MAX_SECONDS 117575
+#define PMCR_SH4_CPU_FREQUENCY        199500000
+#define PMCR_CPU_CYCLES_MAX_SECONDS   1410902
+#define PMCR_SH4_BUS_FREQUENCY        99750000
+#define PMCR_SH4_BUS_FREQUENCY_SCALED 2394000000  // 99.75MHz x 24
+#define PMCR_BUS_RATIO_MAX_SECONDS    117575
 
 //
 // --- Performance Counter Functions ---
 //
-// See perfctr.c file for more details about each function and some more usage notes.
+// See perfctr.c file for more details about each function and some more usage
+// notes.
 //
-// Note: PMCR_Init() and PMCR_Enable() will do nothing if the perf counter is already running!
+// Note: PMCR_Init() and PMCR_Enable() will do nothing if the perf counter is
+// already running!
 //
 
 // Clear counter and enable
 void PMCR_Init(unsigned char which, unsigned char mode, unsigned char count_type);
 
 // Enable one or both of these "undocumented" performance counters
-void PMCR_Enable(unsigned char which, unsigned char mode, unsigned char count_type, unsigned char reset_counter);
+void PMCR_Enable(unsigned char which, unsigned char mode, unsigned char count_type,
+                 unsigned char reset_counter);
 
 // Disable, clear, and re-enable with new mode (or same mode)
 void PMCR_Restart(unsigned char which, unsigned char mode, unsigned char count_type);
 
 // Read a counter
-// out_array is specifically uint32 out_array[2] -- 48-bit value needs a 64-bit storage unit
-// Return value of 0xffffffffffff means invalid 'which'
+// out_array is specifically uint32 out_array[2] -- 48-bit value needs a 64-bit
+// storage unit Return value of 0xffffffffffff means invalid 'which'
 void PMCR_Read(unsigned char which, volatile unsigned int *out_array);
 
 // Get a counter's current configuration

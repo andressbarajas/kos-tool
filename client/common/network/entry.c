@@ -110,11 +110,10 @@ static char dhcp_lease_time_string[11] = {0};
 static char dhcp_attempts_num[9] = {0};
 static char dhcp_next_counter[9] = {0};
 
-static int runtime_status_y(void)
-{
+static int runtime_status_y(void) {
     const char *phase_status = adapter_get_phase_status();
 
-    if (phase_status != 0 && phase_status[0] != '\0')
+    if(phase_status != 0 && phase_status[0] != '\0')
         return 174;
 
     return 150;
@@ -122,67 +121,63 @@ static int runtime_status_y(void)
 
 /* ===== Display helpers ===== */
 
-static void ip_to_string(unsigned int ip, char *buf)
-{
+static void ip_to_string(unsigned int ip, char *buf) {
     /* ip is in host byte order; extract octets via shifts (endian-safe) */
     int pos = 0;
     int i;
 
-    for (i = 3; i >= 0; i--) {
+    for(i = 3; i >= 0; i--) {
         unsigned char val = (ip >> (i * 8)) & 0xFF;
-        if (val >= 100) {
+        if(val >= 100) {
             buf[pos++] = '0' + UDIV_CONST(val, 100);
             val = UMOD_CONST(val, 100);
             buf[pos++] = '0' + UDIV_CONST(val, 10);
             buf[pos++] = '0' + UMOD_CONST(val, 10);
-        } else if (val >= 10) {
+        } else if(val >= 10) {
             buf[pos++] = '0' + UDIV_CONST(val, 10);
             buf[pos++] = '0' + UMOD_CONST(val, 10);
         } else {
             buf[pos++] = '0' + val;
         }
-        if (i > 0)
+        if(i > 0)
             buf[pos++] = '.';
     }
     buf[pos] = '\0';
 }
 
-static void mac_to_string(unsigned char *mac, char *buf)
-{
+static void mac_to_string(unsigned char *mac, char *buf) {
     static const char hex[] = "0123456789abcdef";
     int i;
-    for (i = 0; i < 6; i++) {
+    for(i = 0; i < 6; i++) {
         buf[i * 3] = hex[mac[i] >> 4];
         buf[i * 3 + 1] = hex[mac[i] & 0xf];
         buf[i * 3 + 2] = (i < 5) ? ':' : '\0';
     }
 }
 
-void uint_to_string_dec(unsigned int foo, char *bar)
-{
-    int i = 0;
+void uint_to_string_dec(unsigned int foo, char *bar) {
+    int  i = 0;
     char tmp[12];
 
-    if (foo == 0) {
+    if(foo == 0) {
         bar[0] = '0';
         bar[1] = '\0';
         return;
     }
 
-    while (foo > 0) {
+    while(foo > 0) {
         unsigned int q = UDIV_CONST(foo, 10);
         tmp[i++] = '0' + (foo - q * 10);
         foo = q;
     }
 
     int j;
-    for (j = 0; j < i; j++)
+    for(j = 0; j < i; j++)
         bar[j] = tmp[i - 1 - j];
     bar[i] = '\0';
 }
 
-static void update_ip_display(unsigned int new_ip, const char *mode_string)
-{
+static void update_ip_display(unsigned int new_ip, const char *mode_string) {
     const target_ops_t *t = common_get_target();
     clear_lines(126, 24, global_bg_color);
     ip_to_string(new_ip, ip_disp_string);
@@ -190,27 +185,25 @@ static void update_ip_display(unsigned int new_ip, const char *mode_string)
     t->draw_string(NETWORK_DISPLAY_X + 180, 126, mode_string, STR_COLOR);
 }
 
-static void dhcp_waiting_mode_display(void)
-{
+static void dhcp_waiting_mode_display(void) {
     const target_ops_t *t = common_get_target();
     clear_lines(126, 24, global_bg_color);
     t->draw_string(NETWORK_DISPLAY_X, 126, waiting_string, STR_COLOR);
     t->draw_string(NETWORK_DISPLAY_X + 204, 126, dhcp_mode_string, STR_COLOR);
 }
 
-void update_lease_time_display(unsigned int new_time)
-{
+void update_lease_time_display(unsigned int new_time) {
     const target_ops_t *t = common_get_target();
     uint_to_string_dec(new_time, dhcp_lease_time_string);
-    clear_lines(NETWORK_DHCP_ATTEMPTS_Y, 48, global_bg_color); /* Clear 48 lines to also clear attempts/retry text */
+    clear_lines(NETWORK_DHCP_ATTEMPTS_Y, 48,
+                global_bg_color); /* Clear 48 lines to also clear attempts/retry text */
     t->draw_string(NETWORK_DISPLAY_X, NETWORK_DHCP_LEASE_Y, dhcp_lease_string, STR_COLOR);
     t->draw_string(NETWORK_DISPLAY_X + 276, NETWORK_DHCP_LEASE_Y, dhcp_lease_time_string, STR_COLOR);
 }
 
 /* ===== Public display functions ===== */
 
-void disp_info(void)
-{
+void disp_info(void) {
     const target_ops_t *t = common_get_target();
     char ip_str[16];
     char mac_str[18];
@@ -218,9 +211,10 @@ void disp_info(void)
 
     t->setup_video(0, 0);
     t->clear_screen(global_bg_color);
-    t->draw_string(NETWORK_DISPLAY_X, 54, LOADER_NAME " " KOSLOAD_VERSION_STRING "  " KOSLOAD_GIT_REV, 0xffff);
+    t->draw_string(NETWORK_DISPLAY_X, 54, LOADER_NAME " " KOSLOAD_VERSION_STRING "  " KOSLOAD_GIT_REV,
+                   0xffff);
 
-    if (bb) {
+    if(bb) {
         t->draw_string(NETWORK_DISPLAY_X, 78, bb->name, 0xffff);
         mac_to_string(bb->mac, mac_str);
         t->draw_string(NETWORK_DISPLAY_X, 102, mac_str, 0xffff);
@@ -228,19 +222,19 @@ void disp_info(void)
 
     /* our_ip == 0xffffffff is the "DHCP failed / disabled" sentinel;
      * don't draw "255.255.255.255" in that case — the row stays blank. */
-    if (our_ip && our_ip != 0xffffffff) {
+    if(our_ip && our_ip != 0xffffffff) {
         ip_to_string(our_ip, ip_str);
         t->draw_string(NETWORK_DISPLAY_X, 126, ip_str, 0xffff);
         /* Re-show the "(DHCP Mode)" suffix on this redraw. */
-        if (kosload_info.capabilities & KOSLOAD_CAP_DHCP)
+        if(kosload_info.capabilities & KOSLOAD_CAP_DHCP)
             t->draw_string(NETWORK_DISPLAY_X + 180, 126, dhcp_mode_string, 0xffff);
-    } else if (our_ip == 0) {
+    } else if(our_ip == 0) {
         /* DHCP mode, no lease yet — pre-show the "Waiting For IP..." line
          * so the IP row isn't blank during link/PHY/settle bring-up. */
         dhcp_waiting_mode_display();
     }
 
-    if (phase_status != 0 && phase_status[0] != '\0')
+    if(phase_status != 0 && phase_status[0] != '\0')
         t->draw_string(NETWORK_DISPLAY_X, 150, phase_status, 0xffff);
 
     /* Update info block with current network state */
@@ -255,22 +249,20 @@ void disp_info(void)
 
     /* Resync lease countdown from RTC — accounts for time spent in
      * loaded programs or between warm reboots. */
-    if (lease_expiry_rtc)
+    if(lease_expiry_rtc)
         lease_resync_from_rtc();
 
     booted = true;
 }
 
-void disp_status(const char *status)
-{
+void disp_status(const char *status) {
     const target_ops_t *t = common_get_target();
     int y = runtime_status_y();
     clear_lines(y, 24, global_bg_color);
     t->draw_string(NETWORK_DISPLAY_X, y, status, 0xffff);
 }
 
-void disp_dhcp_attempts_count(void)
-{
+void disp_dhcp_attempts_count(void) {
     const target_ops_t *t = common_get_target();
     clear_lines(NETWORK_DHCP_ATTEMPTS_Y, 24, global_bg_color);
     t->draw_string(NETWORK_DISPLAY_X, NETWORK_DHCP_ATTEMPTS_Y, dhcp_attempts_string, STR_COLOR);
@@ -278,8 +270,7 @@ void disp_dhcp_attempts_count(void)
     t->draw_string(NETWORK_DISPLAY_X + 180, NETWORK_DHCP_ATTEMPTS_Y, dhcp_attempts_num, STR_COLOR);
 }
 
-void disp_dhcp_next_attempt(unsigned int time_left)
-{
+void disp_dhcp_next_attempt(unsigned int time_left) {
     const target_ops_t *t = common_get_target();
     clear_lines(NETWORK_DHCP_LEASE_Y, 24, global_bg_color);
     t->draw_string(NETWORK_DISPLAY_X, NETWORK_DHCP_LEASE_Y, dhcp_next_string, STR_COLOR);
@@ -289,9 +280,8 @@ void disp_dhcp_next_attempt(unsigned int time_left)
 
 /* Resync the tick-based countdown from the absolute RTC expiry.
  * Called once after warm reboot and after DHCP events — NOT in the hot path. */
-static void lease_resync_from_rtc(void)
-{
-    if (!lease_expiry_rtc) {
+static void lease_resync_from_rtc(void) {
+    if(!lease_expiry_rtc) {
         lease_display_secs = 0;
         return;
     }
@@ -308,46 +298,41 @@ static void lease_resync_from_rtc(void)
  * link state.  Keeps the displayed "DHCP Lease Time" decrementing while
  * the cable is unplugged, which dhcp_poll() can't because the bb->loop
  * caller gates the full poll on link-up. */
-void dhcp_tick(void)
-{
+void dhcp_tick(void) {
     const target_ops_t *t = common_get_target();
     uint64_t now;
     uint64_t delta;
 
-    if (lease_display_secs == 0)
+    if(lease_display_secs == 0)
         return;
 
     now = t->get_ticks();
     delta = now - last_display_tick;
-    if (delta < t->ticks_per_second)
+    if(delta < t->ticks_per_second)
         return;
 
     last_display_tick = now;
     lease_display_secs--;
-    if (!screensaver_is_active())
+    if(!screensaver_is_active())
         update_lease_time_display(lease_display_secs);
 }
 
-void dhcp_poll(void)
-{
+void dhcp_poll(void) {
     const target_ops_t *t = common_get_target();
 
-    if (__builtin_expect(!booted, 0)) {
+    if(__builtin_expect(!booted, 0)) {
         disp_info();
     }
 
     /* --- Renewal check (50% of lease elapsed) --- */
-    if (__builtin_expect(dhcp_lease_time && (!dont_renew) &&
-                         (lease_display_secs <= renew_threshold), 0))
-    {
+    if(__builtin_expect(dhcp_lease_time && (!dont_renew) && (lease_display_secs <= renew_threshold), 0)) {
         unsigned int saved_lease_time = dhcp_lease_time;
         dhcp_lease_time = 0;
 
         dhcp_waiting_mode_display();
         int renew_result = dhcp_renew((unsigned int *)&our_ip);
 
-        if (renew_result == -2)
-        {
+        if(renew_result == -2) {
             /* NAK: IP no longer valid, wait until 87.5% to do new discover.
              * Set expiry so the lease runs out at the 87.5% mark. */
             dont_renew = true;
@@ -355,9 +340,7 @@ void dhcp_poll(void)
             lease_expiry_rtc = t->get_rtc() + nak_remaining;
             lease_display_secs = nak_remaining;
             last_display_tick = t->get_ticks();
-        }
-        else if (renew_result == -1)
-        {
+        } else if(renew_result == -1) {
             /* Lost/late renew ACK.  Renewal happens at T/2, so the
              * current lease is still valid — a single missed ACK must
              * NOT disable DHCP (the old code latched our_ip=0xffffffff
@@ -367,31 +350,25 @@ void dhcp_poll(void)
              * poll loop can't storm the wire).  Only when the lease has
              * fully expired with every renew having failed do we fall
              * back to a fresh DISCOVER. */
-            if (lease_display_secs == 0)
-            {
+            if(lease_display_secs == 0) {
                 /* Lease expired, all renews failed → return to INIT;
                  * the discovery branch below re-acquires immediately. */
                 our_ip = 0;
                 dhcp_lease_time = 0;
                 lease_expiry_rtc = 0;
                 renew_threshold = 0;
-            }
-            else
-            {
+            } else {
                 unsigned int half = lease_display_secs / 2;
 
-                dhcp_lease_time = saved_lease_time;   /* keep tracking */
-                renew_threshold = (half > DHCP_RENEW_RETRY_FLOOR_SECS)
-                                  ? half : DHCP_RENEW_RETRY_FLOOR_SECS;
-                if (renew_threshold >= lease_display_secs)
+                dhcp_lease_time = saved_lease_time; /* keep tracking */
+                renew_threshold = (half > DHCP_RENEW_RETRY_FLOOR_SECS) ? half : DHCP_RENEW_RETRY_FLOOR_SECS;
+                if(renew_threshold >= lease_display_secs)
                     renew_threshold = lease_display_secs - 1;
                 last_display_tick = t->get_ticks();
                 update_ip_display(our_ip, dhcp_mode_string);
                 update_lease_time_display(lease_display_secs);
             }
-        }
-        else
-        {
+        } else {
             /* Success: set new expiry from fresh lease time */
             lease_expiry_rtc = t->get_rtc() + dhcp_lease_time;
             lease_display_secs = dhcp_lease_time;
@@ -403,15 +380,12 @@ void dhcp_poll(void)
     }
 
     /* --- Discovery check (no IP, or NAK'd and lease fully expired) --- */
-    if (__builtin_expect(((our_ip & 0xff000000) == 0) ||
-                         (dont_renew && lease_display_secs == 0), 0))
-    {
+    if(__builtin_expect(((our_ip & 0xff000000) == 0) || (dont_renew && lease_display_secs == 0), 0)) {
         dont_renew = false;
         dhcp_waiting_mode_display();
 
         int dhcp_result = dhcp_go((unsigned int *)&our_ip);
-        if (dhcp_result == -1 || dhcp_nest_counter_maxed)
-        {
+        if(dhcp_result == -1 || dhcp_nest_counter_maxed) {
             /* Transient failure (cold-start IRX RX not live yet, OFFER
              * lost, ...).  Stay in the "no IP yet" state so the next
              * dhcp_poll() re-runs the full DISCOVER sequence — never
@@ -421,9 +395,7 @@ void dhcp_poll(void)
             lease_expiry_rtc = 0;
             lease_display_secs = 0;
             dhcp_waiting_mode_display();
-        }
-        else
-        {
+        } else {
             /* Got an address from DHCP */
             lease_expiry_rtc = t->get_rtc() + dhcp_lease_time;
             lease_display_secs = dhcp_lease_time;
@@ -437,8 +409,7 @@ void dhcp_poll(void)
 
 /* ===== Entry point ===== */
 
-int main(void)
-{
+int main(void) {
     const target_ops_t *t = target_get_ops();
     common_main(t, &client_network_transport_ops);
 

@@ -88,20 +88,16 @@ typedef struct {
 } DOL_Header;
 
 /* Big-endian read helpers */
-static uint16_t read16be(const uint8_t *p)
-{
+static uint16_t read16be(const uint8_t *p) {
     return ((uint16_t)p[0] << 8) | p[1];
 }
 
-static uint32_t read32be(const uint8_t *p)
-{
-    return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
-           ((uint32_t)p[2] << 8) | p[3];
+static uint32_t read32be(const uint8_t *p) {
+    return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | p[3];
 }
 
 /* Big-endian write helper */
-static void write32be(uint8_t *p, uint32_t val)
-{
+static void write32be(uint8_t *p, uint32_t val) {
     p[0] = (val >> 24) & 0xff;
     p[1] = (val >> 16) & 0xff;
     p[2] = (val >> 8) & 0xff;
@@ -109,13 +105,11 @@ static void write32be(uint8_t *p, uint32_t val)
 }
 
 /* Align value up to DOL_ALIGN boundary */
-static uint32_t align_up(uint32_t val, uint32_t align)
-{
+static uint32_t align_up(uint32_t val, uint32_t align) {
     return (val + align - 1) & ~(align - 1);
 }
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
     FILE *fin, *fout;
     uint8_t *elf_data;
     long elf_size;
@@ -127,14 +121,14 @@ int main(int argc, char *argv[])
     int i;
     uint32_t bss_addr = 0, bss_end = 0;
 
-    if (argc != 3) {
+    if(argc != 3) {
         fprintf(stderr, "Usage: %s <input.elf> <output.dol>\n", argv[0]);
         return 1;
     }
 
     /* Read entire ELF file */
     fin = fopen(argv[1], "rb");
-    if (!fin) {
+    if(!fin) {
         fprintf(stderr, "Error: Cannot open '%s'\n", argv[1]);
         return 1;
     }
@@ -142,12 +136,12 @@ int main(int argc, char *argv[])
     elf_size = ftell(fin);
     fseek(fin, 0, SEEK_SET);
     elf_data = malloc(elf_size);
-    if (!elf_data) {
+    if(!elf_data) {
         fprintf(stderr, "Error: Out of memory\n");
         fclose(fin);
         return 1;
     }
-    if (fread(elf_data, 1, elf_size, fin) != (size_t)elf_size) {
+    if(fread(elf_data, 1, elf_size, fin) != (size_t)elf_size) {
         fprintf(stderr, "Error: Failed to read ELF file\n");
         free(elf_data);
         fclose(fin);
@@ -156,15 +150,14 @@ int main(int argc, char *argv[])
     fclose(fin);
 
     /* Validate ELF header */
-    if (elf_size < (long)sizeof(Elf32_Ehdr) ||
-        elf_data[0] != ELFMAG0 || elf_data[1] != ELFMAG1 ||
-        elf_data[2] != ELFMAG2 || elf_data[3] != ELFMAG3) {
+    if(elf_size < (long)sizeof(Elf32_Ehdr) || elf_data[0] != ELFMAG0 || elf_data[1] != ELFMAG1 ||
+       elf_data[2] != ELFMAG2 || elf_data[3] != ELFMAG3) {
         fprintf(stderr, "Error: Not a valid ELF file\n");
         free(elf_data);
         return 1;
     }
 
-    if (elf_data[4] != ELFCLASS32 || elf_data[5] != ELFDATA2MSB) {
+    if(elf_data[4] != ELFCLASS32 || elf_data[5] != ELFDATA2MSB) {
         fprintf(stderr, "Error: Not a 32-bit big-endian ELF\n");
         free(elf_data);
         return 1;
@@ -177,20 +170,19 @@ int main(int argc, char *argv[])
     ehdr.e_phentsize = read16be(elf_data + 42);
     ehdr.e_phnum = read16be(elf_data + 44);
 
-    if (ehdr.e_machine != EM_PPC) {
-        fprintf(stderr, "Warning: ELF machine type is not PowerPC (%d)\n",
-                ehdr.e_machine);
+    if(ehdr.e_machine != EM_PPC) {
+        fprintf(stderr, "Warning: ELF machine type is not PowerPC (%d)\n", ehdr.e_machine);
     }
 
     /* Parse program headers */
     phdrs = calloc(ehdr.e_phnum, sizeof(Elf32_Phdr));
-    if (!phdrs) {
+    if(!phdrs) {
         fprintf(stderr, "Error: Out of memory\n");
         free(elf_data);
         return 1;
     }
 
-    for (i = 0; i < ehdr.e_phnum; i++) {
+    for(i = 0; i < ehdr.e_phnum; i++) {
         uint8_t *p = elf_data + ehdr.e_phoff + i * ehdr.e_phentsize;
         phdrs[i].p_type = read32be(p + 0);
         phdrs[i].p_offset = read32be(p + 4);
@@ -206,24 +198,28 @@ int main(int argc, char *argv[])
     memset(dol_header, 0, DOL_HEADER_SIZE);
 
     /* First pass: classify segments and compute BSS */
-    for (i = 0; i < ehdr.e_phnum; i++) {
-        if (phdrs[i].p_type != PT_LOAD)
+    for(i = 0; i < ehdr.e_phnum; i++) {
+        if(phdrs[i].p_type != PT_LOAD)
             continue;
 
-        if (phdrs[i].p_filesz > 0) {
-            if (phdrs[i].p_flags & PF_X) {
-                if (num_text >= DOL_MAX_TEXT) {
-                    fprintf(stderr, "Error: Too many text sections "
-                                    "(max %d)\n", DOL_MAX_TEXT);
+        if(phdrs[i].p_filesz > 0) {
+            if(phdrs[i].p_flags & PF_X) {
+                if(num_text >= DOL_MAX_TEXT) {
+                    fprintf(stderr,
+                            "Error: Too many text sections "
+                            "(max %d)\n",
+                            DOL_MAX_TEXT);
                     free(phdrs);
                     free(elf_data);
                     return 1;
                 }
                 num_text++;
             } else {
-                if (num_data >= DOL_MAX_DATA) {
-                    fprintf(stderr, "Error: Too many data sections "
-                                    "(max %d)\n", DOL_MAX_DATA);
+                if(num_data >= DOL_MAX_DATA) {
+                    fprintf(stderr,
+                            "Error: Too many data sections "
+                            "(max %d)\n",
+                            DOL_MAX_DATA);
                     free(phdrs);
                     free(elf_data);
                     return 1;
@@ -233,19 +229,19 @@ int main(int argc, char *argv[])
         }
 
         /* Track BSS (memsz > filesz portion) */
-        if (phdrs[i].p_memsz > phdrs[i].p_filesz) {
+        if(phdrs[i].p_memsz > phdrs[i].p_filesz) {
             uint32_t seg_bss_addr = phdrs[i].p_vaddr + phdrs[i].p_filesz;
             uint32_t seg_bss_end = phdrs[i].p_vaddr + phdrs[i].p_memsz;
-            if (bss_addr == 0 || seg_bss_addr < bss_addr)
+            if(bss_addr == 0 || seg_bss_addr < bss_addr)
                 bss_addr = seg_bss_addr;
-            if (seg_bss_end > bss_end)
+            if(seg_bss_end > bss_end)
                 bss_end = seg_bss_end;
         }
     }
 
     /* Second pass: fill DOL header and write sections */
     fout = fopen(argv[2], "wb");
-    if (!fout) {
+    if(!fout) {
         fprintf(stderr, "Error: Cannot create '%s'\n", argv[2]);
         free(phdrs);
         free(elf_data);
@@ -261,17 +257,17 @@ int main(int argc, char *argv[])
     fwrite(dol_header, 1, DOL_HEADER_SIZE, fout);
 
     /* Write text sections first, then data sections */
-    for (i = 0; i < ehdr.e_phnum; i++) {
-        if (phdrs[i].p_type != PT_LOAD || phdrs[i].p_filesz == 0)
+    for(i = 0; i < ehdr.e_phnum; i++) {
+        if(phdrs[i].p_type != PT_LOAD || phdrs[i].p_filesz == 0)
             continue;
-        if (!(phdrs[i].p_flags & PF_X))
+        if(!(phdrs[i].p_flags & PF_X))
             continue;
 
         /* Align file offset */
         file_offset = align_up(file_offset, DOL_ALIGN);
 
         /* Pad to alignment */
-        while ((uint32_t)ftell(fout) < file_offset) {
+        while((uint32_t)ftell(fout) < file_offset) {
             uint8_t zero = 0;
             fwrite(&zero, 1, 1, fout);
         }
@@ -289,17 +285,17 @@ int main(int argc, char *argv[])
     }
 
     /* Data sections */
-    for (i = 0; i < ehdr.e_phnum; i++) {
-        if (phdrs[i].p_type != PT_LOAD || phdrs[i].p_filesz == 0)
+    for(i = 0; i < ehdr.e_phnum; i++) {
+        if(phdrs[i].p_type != PT_LOAD || phdrs[i].p_filesz == 0)
             continue;
-        if (phdrs[i].p_flags & PF_X)
+        if(phdrs[i].p_flags & PF_X)
             continue;
 
         /* Align file offset */
         file_offset = align_up(file_offset, DOL_ALIGN);
 
         /* Pad to alignment */
-        while ((uint32_t)ftell(fout) < file_offset) {
+        while((uint32_t)ftell(fout) < file_offset) {
             uint8_t zero = 0;
             fwrite(&zero, 1, 1, fout);
         }
@@ -323,17 +319,15 @@ int main(int argc, char *argv[])
      * aligned) into the empty type's first slot, with size and address zero,
      * so nothing is actually loaded -- the workaround is purely structural.
      * Reverse-engineered from binary inspection of channel-boot DOLs. */
-    if (num_text == 0) {
-        write32be(dol_header + 0x00,
-                  align_up(DOL_HEADER_SIZE, DOL_ALIGN));
+    if(num_text == 0) {
+        write32be(dol_header + 0x00, align_up(DOL_HEADER_SIZE, DOL_ALIGN));
     }
-    if (num_data == 0) {
-        write32be(dol_header + 0x1C,
-                  align_up(DOL_HEADER_SIZE, DOL_ALIGN));
+    if(num_data == 0) {
+        write32be(dol_header + 0x1C, align_up(DOL_HEADER_SIZE, DOL_ALIGN));
     }
 
     /* Fill BSS and entry point */
-    if (bss_end > bss_addr) {
+    if(bss_end > bss_addr) {
         write32be(dol_header + 0xD8, bss_addr);
         write32be(dol_header + 0xDC, bss_end - bss_addr);
     }
@@ -347,11 +341,10 @@ int main(int argc, char *argv[])
     free(phdrs);
     free(elf_data);
 
-    printf("Created %s: %d text + %d data sections, entry=0x%08x\n",
-           argv[2], num_text, num_data, ehdr.e_entry);
-    if (bss_end > bss_addr) {
-        printf("  BSS: 0x%08x - 0x%08x (%u bytes)\n",
-               bss_addr, bss_end, bss_end - bss_addr);
+    printf("Created %s: %d text + %d data sections, entry=0x%08x\n", argv[2], num_text, num_data,
+           ehdr.e_entry);
+    if(bss_end > bss_addr) {
+        printf("  BSS: 0x%08x - 0x%08x (%u bytes)\n", bss_addr, bss_end, bss_end - bss_addr);
     }
 
     return 0;

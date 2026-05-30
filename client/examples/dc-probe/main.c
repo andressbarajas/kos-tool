@@ -22,82 +22,76 @@
 #define SYSCALL_WRITE     1
 #define SYSCALL_EXIT      15
 
-#define KOSLOAD_BASE        0x8c004000
-#define KOSLOAD_MAGIC_ADDR  (*(volatile unsigned int *)(KOSLOAD_BASE + 4))
+#define KOSLOAD_BASE         0x8c004000
+#define KOSLOAD_MAGIC_ADDR   (*(volatile unsigned int *)(KOSLOAD_BASE + 4))
 #define KOSLOAD_SYSCALL_ADDR (*(volatile unsigned int *)(KOSLOAD_BASE + 8))
-#define KOSLOAD_MAGIC       0xdeadbeef
+#define KOSLOAD_MAGIC        0xdeadbeef
 
 typedef int (*kosload_syscall_fn)(int syscall, int arg1, int arg2, int arg3);
 
-static kosload_syscall_fn get_syscall(void)
-{
-    if (KOSLOAD_MAGIC_ADDR != KOSLOAD_MAGIC)
+static kosload_syscall_fn get_syscall(void) {
+    if(KOSLOAD_MAGIC_ADDR != KOSLOAD_MAGIC)
         return (kosload_syscall_fn)0;
     return (kosload_syscall_fn)KOSLOAD_SYSCALL_ADDR;
 }
 
-static int kl_write(int fd, const void *buf, int count)
-{
+static int kl_write(int fd, const void *buf, int count) {
     kosload_syscall_fn syscall = get_syscall();
-    if (!syscall) return -1;
+    if(!syscall)
+        return -1;
     return syscall(SYSCALL_WRITE, fd, (int)buf, count);
 }
 
-static void kl_exit(void)
-{
+static void kl_exit(void) {
     kosload_syscall_fn syscall = get_syscall();
-    if (syscall)
+    if(syscall)
         syscall(SYSCALL_EXIT, 0, 0, 0);
 }
 
-static int slen(const char *s)
-{
+static int slen(const char *s) {
     int n = 0;
-    while (*s++) n++;
+    while(*s++)
+        n++;
     return n;
 }
 
-static void print(const char *msg)
-{
+static void print(const char *msg) {
     kl_write(1, msg, slen(msg));
 }
 
-static void uint_to_hex(unsigned int val, char *buf)
-{
+static void uint_to_hex(unsigned int val, char *buf) {
     static const char hex[] = "0123456789ABCDEF";
     int i;
     buf[0] = '0';
     buf[1] = 'x';
-    for (i = 0; i < 8; i++)
+    for(i = 0; i < 8; i++)
         buf[2 + i] = hex[(val >> (28 - i * 4)) & 0xf];
     buf[10] = '\0';
 }
 
-static void print_dec(unsigned int val)
-{
+static void print_dec(unsigned int val) {
     char buf[12];
-    int i = 0;
-    if (val == 0) {
+    int  i = 0;
+    if(val == 0) {
         print("0");
         return;
     }
-    while (val > 0) {
+    while(val > 0) {
         buf[i++] = '0' + (val % 10);
         val /= 10;
     }
     /* reverse */
     {
         char out[12];
-        int j;
-        for (j = 0; j < i; j++)
+        int  j;
+        for(j = 0; j < i; j++)
             out[j] = buf[i - 1 - j];
         out[i] = '\0';
         print(out);
     }
 }
 
-static void print_hex_byte(unsigned char b)
-{
+static void print_hex_byte(unsigned char b) {
     static const char hex[] = "0123456789ABCDEF";
     char buf[3];
     buf[0] = hex[(b >> 4) & 0xf];
@@ -106,11 +100,11 @@ static void print_hex_byte(unsigned char b)
     print(buf);
 }
 
-static void print_mac(const unsigned char *mac)
-{
+static void print_mac(const unsigned char *mac) {
     int i;
-    for (i = 0; i < 6; i++) {
-        if (i > 0) print(":");
+    for(i = 0; i < 6; i++) {
+        if(i > 0)
+            print(":");
         print_hex_byte(mac[i]);
     }
 }
@@ -126,10 +120,9 @@ static void print_mac(const unsigned char *mac)
 #define SCFSR2   (*(volatile unsigned short *)0xffe80010)
 #define SCFDR2   (*(volatile unsigned short *)0xffe8001c)
 
-static void probe_scif(void)
-{
+static void probe_scif(void) {
     unsigned short fsr, fdr, scr;
-    unsigned char brr;
+    unsigned char  brr;
 
     print("--- SCIF Serial ---\n");
 
@@ -137,7 +130,7 @@ static void probe_scif(void)
     brr = SCBRR2;
 
     print("  Clock:     ");
-    if (scr & 0x02) {
+    if(scr & 0x02) {
         print("External");
     } else {
         /* Internal clock, Pclk=50MHz: baud = 50M / (32*(brr+1)) */
@@ -149,14 +142,14 @@ static void probe_scif(void)
             { 26, "57870 (~57600)" },
         };
         int i, found = 0;
-        for (i = 0; i < 4; i++) {
-            if (brr == bauds[i].brr) {
+        for(i = 0; i < 4; i++) {
+            if(brr == bauds[i].brr) {
                 print(bauds[i].name);
                 found = 1;
                 break;
             }
         }
-        if (!found)
+        if(!found)
             print("(unknown)");
     }
     print(" BRR=");
@@ -207,24 +200,20 @@ static void probe_scif(void)
 #define LA_REG(x)           (*(volatile unsigned char *)(LA_BASE + (x)*4 + 0x400))
 #define LA_RESET            (*(volatile unsigned char *)(LA_BASE + 0x0480))
 
-static int check_gaps_bridge(void)
-{
+static int check_gaps_bridge(void) {
     /* GAPSPCI_BRIDGE_2 as 4 x uint32 (big-endian ASCII) */
-    static const unsigned int gaps_sig[4] = {
-        0x47415053, 0x5043495f, 0x42524944, 0x47455f32
-    };
+    static const unsigned int gaps_sig[4] = { 0x47415053, 0x5043495f, 0x42524944, 0x47455f32};
     volatile unsigned int *ident = (volatile unsigned int *)GAPS_IDENT_BASE;
     int i;
 
-    for (i = 0; i < 4; i++) {
-        if (ident[i] != gaps_sig[i])
+    for(i = 0; i < 4; i++) {
+        if(ident[i] != gaps_sig[i])
             return 0;
     }
     return 1;
 }
 
-static void probe_bba(void)
-{
+static void probe_bba(void) {
     volatile unsigned char *nic = (volatile unsigned char *)NIC8139_BASE;
     unsigned char mac[6];
     int i;
@@ -232,7 +221,7 @@ static void probe_bba(void)
     print("  Type:      Broadband Adapter (RTL8139)\n");
 
     /* Read MAC address from RTL8139 ID registers */
-    for (i = 0; i < 6; i++)
+    for(i = 0; i < 6; i++)
         mac[i] = nic[RT_IDR0 + i];
 
     print("  MAC:       ");
@@ -241,23 +230,21 @@ static void probe_bba(void)
 }
 
 /* Simple busy-wait delay (~ms at 200MHz SH4) */
-static void delay_ms(unsigned int ms)
-{
+static void delay_ms(unsigned int ms) {
     volatile unsigned int i;
-    while (ms--) {
-        for (i = 0; i < 20000; i++)
+    while(ms--) {
+        for(i = 0; i < 20000; i++)
             ;
     }
 }
 
-static void probe_expansion_port(void)
-{
+static void probe_expansion_port(void) {
     unsigned char chip_type;
 
     print("--- Expansion Port ---\n");
 
     /* Check for BBA (GAPS PCI bridge) first */
-    if (check_gaps_bridge()) {
+    if(check_gaps_bridge()) {
         probe_bba();
         print("\n");
         return;
@@ -272,7 +259,7 @@ static void probe_expansion_port(void)
 
     chip_type = (LA_REG(7) >> 6) & 3;
 
-    if (chip_type == 2) {
+    if(chip_type == 2) {
         print("  Type:      LAN Adapter (HIT-0300 / MB86967)\n");
     } else {
         /* Read a few bytes from expansion area to check if anything is there */
@@ -281,7 +268,7 @@ static void probe_expansion_port(void)
         unsigned char r7 = LA_REG(7);
         char hex[12];
 
-        if (r0 == 0xff && r1 == 0xff && r7 == 0xff) {
+        if(r0 == 0xff && r1 == 0xff && r7 == 0xff) {
             print("  Type:      (empty)\n");
         } else {
             print("  Type:      Modem / Unknown\n");
@@ -307,9 +294,8 @@ static void probe_expansion_port(void)
  * Reads SH4 GPIO PORT8/PORT9 to determine A/V cable type.
  * Same technique as video.S _check_cable.
  */
-static int detect_cable(void)
-{
-    volatile unsigned int *pctra = (volatile unsigned int *)0xff80002c;
+static int detect_cable(void) {
+    volatile unsigned int   *pctra = (volatile unsigned int *)0xff80002c;
     volatile unsigned short *pdtra = (volatile unsigned short *)0xff800030;
     unsigned int old_pctra;
     unsigned short val;
@@ -334,15 +320,14 @@ static int detect_cable(void)
  * Mirror test: write different values to top of 16MB and 32MB ranges
  * using P2 (uncached) addresses. If they differ, upper 16MB is real.
  */
-static unsigned int detect_ram(void)
-{
+static unsigned int detect_ram(void) {
     volatile unsigned char *addr_16m = (volatile unsigned char *)0xACFFFFFF;
     volatile unsigned char *addr_32m = (volatile unsigned char *)0xADFFFFFF;
 
     *addr_16m = 0xBA;
     *addr_32m = 0xAB;
 
-    if (*addr_16m != *addr_32m)
+    if(*addr_16m != *addr_32m)
         return 32;
     return 16;
 }
@@ -385,8 +370,7 @@ struct maple_devinfo {
 /* DMA buffer must be 32-byte aligned */
 static unsigned char dma_buf[2048] __attribute__((aligned(32)));
 
-static void maple_hw_init(void)
-{
+static void maple_hw_init(void) {
     volatile unsigned int *enable = (volatile unsigned int *)MAPLE_ENABLE;
     volatile unsigned int *magic = (volatile unsigned int *)MAPLE_MAGIC;
     volatile unsigned int *bitrate = (volatile unsigned int *)MAPLE_BITRATE;
@@ -397,8 +381,7 @@ static void maple_hw_init(void)
     *enable = 1;
 }
 
-static int maple_query(int port, int unit)
-{
+static int maple_query(int port, int unit) {
     volatile unsigned int *dma_addr = (volatile unsigned int *)MAPLE_DMA_ADDR;
     volatile unsigned int *dma_ctrl = (volatile unsigned int *)MAPLE_DMA_CTRL;
     volatile unsigned int *dma_stat = (volatile unsigned int *)MAPLE_DMA_STAT;
@@ -412,7 +395,7 @@ static int maple_query(int port, int unit)
 
     /* Build send frame */
     send[0] = (1 << 31)                /* last frame */
-            | ((unsigned int)(dma_buf + 1024) & 0x1fffffff); /* recv addr (physical) */
+              | ((unsigned int)(dma_buf + 1024) & 0x1fffffff); /* recv addr (physical) */
     send[1] = (0 << 24)                /* data length (0 words for DEVINFO) */
             | (from << 8)              /* sender address */
             | (to << 16)               /* recipient address */
@@ -427,24 +410,22 @@ static int maple_query(int port, int unit)
 
     /* Wait for completion */
     timeout = 1000000;
-    while ((*dma_stat & 1) && --timeout > 0)
+    while((*dma_stat & 1) && --timeout > 0)
         ;
 
-    if (timeout <= 0)
+    if(timeout <= 0)
         return -1;
 
     /* Check response code (bits 7:0 of first word) */
     return (int)(recv[0] & 0xFF);
 }
 
-static struct maple_devinfo *maple_get_devinfo(void)
-{
+static struct maple_devinfo *maple_get_devinfo(void) {
     unsigned int *recv = (unsigned int *)(dma_buf + 1024);
     return (struct maple_devinfo *)&recv[1];
 }
 
-static void print_funcs(unsigned int func)
-{
+static void print_funcs(unsigned int func) {
     int first = 1;
     static const struct { unsigned int bit; const char *name; } funcs[] = {
         { FUNC_CONTROLLER, "Controller" },
@@ -459,14 +440,15 @@ static void print_funcs(unsigned int func)
     };
     int i;
 
-    for (i = 0; i < 9; i++) {
-        if (func & funcs[i].bit) {
-            if (!first) print(", ");
+    for(i = 0; i < 9; i++) {
+        if(func & funcs[i].bit) {
+            if(!first)
+                print(", ");
             print(funcs[i].name);
             first = 0;
         }
     }
-    if (first) {
+    if(first) {
         char hex[12];
         uint_to_hex(func, hex);
         print("Unknown (");
@@ -475,22 +457,20 @@ static void print_funcs(unsigned int func)
     }
 }
 
-static void print_name(const char *name, int maxlen)
-{
+static void print_name(const char *name, int maxlen) {
     int i;
     /* Trim trailing spaces */
     int len = maxlen;
-    while (len > 0 && (name[len-1] == ' ' || name[len-1] == '\0'))
+    while(len > 0 && (name[len - 1] == ' ' || name[len - 1] == '\0'))
         len--;
 
-    for (i = 0; i < len; i++) {
-        char c[2] = { name[i], '\0' };
+    for(i = 0; i < len; i++) {
+        char c[2] = {name[i], '\0'};
         print(c);
     }
 }
 
-static void probe_maple_port(int port)
-{
+static void probe_maple_port(int port) {
     int resp;
     struct maple_devinfo *info;
     int unit;
@@ -501,7 +481,7 @@ static void probe_maple_port(int port)
     print(" ---\n");
 
     resp = maple_query(port, 0);
-    if (resp != MAPLE_RESP_DEVINFO) {
+    if(resp != MAPLE_RESP_DEVINFO) {
         print("  (empty)\n\n");
         return;
     }
@@ -515,13 +495,13 @@ static void probe_maple_port(int port)
     print("\n");
 
     /* Scan sub-devices (1-5) */
-    for (unit = 1; unit <= 5; unit++) {
+    for(unit = 1; unit <= 5; unit++) {
         resp = maple_query(port, unit);
-        if (resp == MAPLE_RESP_DEVINFO) {
+        if(resp == MAPLE_RESP_DEVINFO) {
             info = maple_get_devinfo();
             print("  Sub-");
             {
-                char unitstr[2] = { '0' + unit, '\0' };
+                char unitstr[2] = {'0' + unit, '\0'};
                 print(unitstr);
             }
             print(":     ");
@@ -537,8 +517,7 @@ static void probe_maple_port(int port)
 /* ===== Entry point ===== */
 
 void start(void) __attribute__((section(".text.start")));
-void start(void)
-{
+void start(void) {
     char hex[12];
     int cable;
     unsigned int ram;
@@ -549,11 +528,19 @@ void start(void)
     /* Cable type */
     cable = detect_cable();
     print("Cable type:  ");
-    switch (cable) {
-    case 0: print("VGA (D-Sub 15)"); break;
-    case 1: print("Reserved (1)"); break;
-    case 2: print("RGB (SCART)"); break;
-    case 3: print("Composite / S-Video"); break;
+    switch(cable) {
+    case 0:
+        print("VGA (D-Sub 15)");
+        break;
+    case 1:
+        print("Reserved (1)");
+        break;
+    case 2:
+        print("RGB (SCART)");
+        break;
+    case 3:
+        print("Composite / S-Video");
+        break;
     }
     print("  [");
     uint_to_hex(cable, hex);

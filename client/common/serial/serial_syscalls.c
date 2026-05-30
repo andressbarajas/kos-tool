@@ -24,15 +24,13 @@ void assign_wrkmem(unsigned char *user_buffer) {
     wrkmem = user_buffer;
 }
 
-void progexit(int ret_code)
-{
+void progexit(int ret_code) {
     serial_io_putchar(SERIAL_SYSCALL_PROGEXIT);
     put_uint(ret_code);
     serial_io_flush();
 }
 
-int read(int fd, void *buf, unsigned int count)
-{
+int read(int fd, void *buf, unsigned int count) {
     serial_io_putchar(SERIAL_SYSCALL_READ);
     put_uint(fd);
     put_uint(count);
@@ -40,8 +38,7 @@ int read(int fd, void *buf, unsigned int count)
     return get_uint();
 }
 
-int write(int fd, const void *buf, unsigned int count)
-{
+int write(int fd, const void *buf, unsigned int count) {
     serial_io_putchar(SERIAL_SYSCALL_WRITE);
     put_uint(fd);
     put_uint(count);
@@ -49,8 +46,7 @@ int write(int fd, const void *buf, unsigned int count)
     return get_uint();
 }
 
-int open(const char *pathname, int flags, int mode)
-{
+int open(const char *pathname, int flags, int mode) {
     unsigned int namelen = strlen(pathname) + 1;
 
     serial_io_putchar(SERIAL_SYSCALL_OPEN);
@@ -61,15 +57,13 @@ int open(const char *pathname, int flags, int mode)
     return get_uint();
 }
 
-int close(int fd)
-{
+int close(int fd) {
     serial_io_putchar(SERIAL_SYSCALL_CLOSE);
     put_uint(fd);
     return get_uint();
 }
 
-int creat(const char *pathname, int mode)
-{
+int creat(const char *pathname, int mode) {
     unsigned int namelen = strlen(pathname) + 1;
 
     serial_io_putchar(SERIAL_SYSCALL_CREAT);
@@ -79,8 +73,7 @@ int creat(const char *pathname, int mode)
     return get_uint();
 }
 
-int link(const char *oldpath, const char *newpath)
-{
+int link(const char *oldpath, const char *newpath) {
     unsigned int namelen1 = strlen(oldpath) + 1;
     unsigned int namelen2 = strlen(newpath) + 1;
 
@@ -92,8 +85,7 @@ int link(const char *oldpath, const char *newpath)
     return get_uint();
 }
 
-int unlink(const char *pathname)
-{
+int unlink(const char *pathname) {
     unsigned int namelen = strlen(pathname) + 1;
 
     serial_io_putchar(SERIAL_SYSCALL_UNLINK);
@@ -102,8 +94,7 @@ int unlink(const char *pathname)
     return get_uint();
 }
 
-int chdir(const char *path)
-{
+int chdir(const char *path) {
     unsigned int namelen = strlen(path) + 1;
 
     serial_io_putchar(SERIAL_SYSCALL_CHDIR);
@@ -112,8 +103,7 @@ int chdir(const char *path)
     return get_uint();
 }
 
-int chmod(const char *path, int mode)
-{
+int chmod(const char *path, int mode) {
     unsigned int namelen = strlen(path) + 1;
 
     serial_io_putchar(SERIAL_SYSCALL_CHMOD);
@@ -123,8 +113,7 @@ int chmod(const char *path, int mode)
     return get_uint();
 }
 
-int mkdir(const char *path, int mode)
-{
+int mkdir(const char *path, int mode) {
     unsigned int namelen = strlen(path) + 1;
 
     serial_io_putchar(SERIAL_SYSCALL_MKDIR);
@@ -134,8 +123,7 @@ int mkdir(const char *path, int mode)
     return get_uint();
 }
 
-int lseek(int fd, int offset, int whence)
-{
+int lseek(int fd, int offset, int whence) {
     serial_io_putchar(SERIAL_SYSCALL_LSEEK);
     put_uint(fd);
     put_uint(offset);
@@ -143,10 +131,9 @@ int lseek(int fd, int offset, int whence)
     return get_uint();
 }
 
-int fstat(int fd, void *buf)
-{
+int fstat(int fd, void *buf) {
     kosload_stat_t *ds = (kosload_stat_t *)buf;
-    unsigned int blksize_val, blocks_val;
+    unsigned int    blksize_val, blocks_val;
 
     serial_io_putchar(SERIAL_SYSCALL_FSTAT);
     put_uint(fd);
@@ -180,21 +167,19 @@ int fstat(int fd, void *buf)
     return get_uint();
 }
 
-int time(unsigned int *t)
-{
+int time(unsigned int *t) {
     unsigned int result;
 
     serial_io_putchar(SERIAL_SYSCALL_TIME);
     result = get_uint();
 
-    if (t)
+    if(t)
         *t = result;
 
     return result;
 }
 
-int stat(const char *pathname, void *buf)
-{
+int stat(const char *pathname, void *buf) {
     unsigned int namelen = strlen(pathname) + 1;
     kosload_stat_t *ds = (kosload_stat_t *)buf;
     unsigned int blksize_val, blocks_val;
@@ -228,15 +213,14 @@ int stat(const char *pathname, void *buf)
     return get_uint();
 }
 
-int utime(const char *filename, void *buf)
-{
+int utime(const char *filename, void *buf) {
     unsigned int namelen = strlen(filename) + 1;
     unsigned int *times = (unsigned int *)buf;
 
     serial_io_putchar(SERIAL_SYSCALL_UTIME);
     put_uint(namelen);
     send_data_block_compressed((unsigned char *)filename, namelen);
-    if (buf) {
+    if(buf) {
         put_uint(1);
         put_uint(times[0]); /* actime */
         put_uint(times[1]); /* modtime */
@@ -246,8 +230,7 @@ int utime(const char *filename, void *buf)
     return get_uint();
 }
 
-unsigned int opendir(const char *name)
-{
+unsigned int opendir(const char *name) {
     unsigned int namelen = strlen(name) + 1;
 
     serial_io_putchar(SERIAL_SYSCALL_OPENDIR);
@@ -256,8 +239,7 @@ unsigned int opendir(const char *name)
     return get_uint();
 }
 
-int closedir(unsigned int dir)
-{
+int closedir(unsigned int dir) {
     serial_io_putchar(SERIAL_SYSCALL_CLOSEDIR);
     put_uint(dir);
     return get_uint();
@@ -273,15 +255,14 @@ typedef struct {
 
 static dc_dirent_t serial_our_dir;
 
-void *readdir(unsigned int dir)
-{
+void *readdir(unsigned int dir) {
     unsigned int namelen;
 
     serial_io_putchar(SERIAL_SYSCALL_READDIR);
     put_uint(dir);
 
     /* Host sends: flag (0=end, 1=entry), then fields + name data */
-    if (get_uint()) {
+    if(get_uint()) {
         serial_our_dir.d_ino = get_uint();
         serial_our_dir.d_off = get_uint();
         serial_our_dir.d_reclen = get_uint();
@@ -294,8 +275,7 @@ void *readdir(unsigned int dir)
     return 0;
 }
 
-unsigned int gdbpacket(const char *in_buf, unsigned int size_pack, char *out_buf)
-{
+unsigned int gdbpacket(const char *in_buf, unsigned int size_pack, char *out_buf) {
     unsigned int in_size = size_pack >> 16;
     unsigned int out_size = size_pack & 0xffff;
     unsigned int ret_size;
@@ -304,19 +284,18 @@ unsigned int gdbpacket(const char *in_buf, unsigned int size_pack, char *out_buf
     put_uint(in_size);
     put_uint(out_size);
 
-    if (in_size)
+    if(in_size)
         send_data_block_compressed((unsigned char *)in_buf, in_size);
 
     ret_size = get_uint();
 
-    if (ret_size && ret_size <= out_size)
+    if(ret_size && ret_size <= out_size)
         load_data_block_general((unsigned char *)out_buf, ret_size, 0);
 
     return ret_size;
 }
 
-int rewinddir(unsigned int dir)
-{
+int rewinddir(unsigned int dir) {
     serial_io_putchar(SERIAL_SYSCALL_REWINDDIR);
     put_uint(dir);
     return get_uint();
@@ -324,8 +303,7 @@ int rewinddir(unsigned int dir)
 
 /* gethostinfo stub - not meaningful for serial transport but
  * required by the crt0.S syscall table to avoid link errors */
-int gethostinfo(unsigned int *ip, unsigned int *port)
-{
+int gethostinfo(unsigned int *ip, unsigned int *port) {
     *ip = 0;
     *port = 0;
     return 0;

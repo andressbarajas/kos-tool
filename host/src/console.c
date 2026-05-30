@@ -46,10 +46,10 @@ static inline int link(const char *oldpath, const char *newpath) {
 #include <kostool/dedup.h>
 #include "minilzo.h"
 
-#define MAX_PATH_LEN 4096
-#define MAX_SYSCALL_SIZE (32 * 1024 * 1024)  /* 32MB sanity cap for remote malloc */
+#define MAX_PATH_LEN                4096
+#define MAX_SYSCALL_SIZE            (32 * 1024 * 1024) /* 32MB sanity cap for remote malloc */
 #define SERIAL_EXIT_CODE_PROBE_USEC 100000
-#define NET_INLINE_RET_MAX 512
+#define NET_INLINE_RET_MAX          512
 
 static int host_mkdir(const char *path, int mode) {
 #ifdef _WIN32
@@ -64,12 +64,11 @@ static int host_mkdir(const char *path, int mode) {
  * addr2line only works on ELF files, so skip it for .bin/.dol/etc. */
 static int is_elf_file(const char *path) {
     FILE *f = fopen(path, "rb");
-    if (!f)
+    if(!f)
         return 0;
     unsigned char magic[4];
-    int ok = fread(magic, 1, 4, f) == 4 &&
-             magic[0] == 0x7f && magic[1] == 'E' &&
-             magic[2] == 'L' && magic[3] == 'F';
+    int ok = fread(magic, 1, 4, f) == 4 && magic[0] == 0x7f && magic[1] == 'E' && magic[2] == 'L' &&
+             magic[3] == 'F';
     fclose(f);
     return ok;
 }
@@ -86,8 +85,8 @@ static int addr_cache_count = 0;
 
 /* Persistent addr2line process — avoids fork/exec per address.
  * Started lazily on first use, stays alive for the session. */
-static FILE *a2l_in = NULL;     /* parent writes addresses here */
-static FILE *a2l_out = NULL;    /* parent reads results here */
+static FILE *a2l_in = NULL;  /* parent writes addresses here */
+static FILE *a2l_out = NULL; /* parent reads results here */
 
 #ifndef _WIN32
 #include <signal.h>
@@ -95,21 +94,24 @@ static FILE *a2l_out = NULL;    /* parent reads results here */
 static void start_addr2line_process(const char *cmd, const char *elf) {
     int to_child[2], from_child[2];
 
-    if (pipe(to_child) < 0)
+    if(pipe(to_child) < 0)
         return;
-    if (pipe(from_child) < 0) {
-        close(to_child[0]); close(to_child[1]);
+    if(pipe(from_child) < 0) {
+        close(to_child[0]);
+        close(to_child[1]);
         return;
     }
 
     pid_t pid = fork();
-    if (pid < 0) {
-        close(to_child[0]); close(to_child[1]);
-        close(from_child[0]); close(from_child[1]);
+    if(pid < 0) {
+        close(to_child[0]);
+        close(to_child[1]);
+        close(from_child[0]);
+        close(from_child[1]);
         return;
     }
 
-    if (pid == 0) {
+    if(pid == 0) {
         /* Child: wire pipes and exec addr2line in interactive mode */
         close(to_child[1]);
         close(from_child[0]);
@@ -127,9 +129,11 @@ static void start_addr2line_process(const char *cmd, const char *elf) {
     a2l_in = fdopen(to_child[1], "w");
     a2l_out = fdopen(from_child[0], "r");
 
-    if (!a2l_in || !a2l_out) {
-        if (a2l_in) fclose(a2l_in);
-        if (a2l_out) fclose(a2l_out);
+    if(!a2l_in || !a2l_out) {
+        if(a2l_in)
+            fclose(a2l_in);
+        if(a2l_out)
+            fclose(a2l_out);
         a2l_in = a2l_out = NULL;
         return;
     }
@@ -142,13 +146,13 @@ static void start_addr2line_process(const char *cmd, const char *elf) {
 }
 #endif /* !_WIN32 */
 
-static void decode_address(const char *addr2line_cmd, const char *elf_path,
-                           uint32_t addr, char *out, size_t out_size) {
+static void decode_address(const char *addr2line_cmd, const char *elf_path, uint32_t addr, char *out,
+                           size_t out_size) {
     int i;
 
     /* Check cache */
-    for (i = 0; i < addr_cache_count; i++) {
-        if (addr_cache[i].addr == addr) {
+    for(i = 0; i < addr_cache_count; i++) {
+        if(addr_cache[i].addr == addr) {
             compat_str_copy(out, out_size, addr_cache[i].decoded);
             return;
         }
@@ -156,19 +160,18 @@ static void decode_address(const char *addr2line_cmd, const char *elf_path,
 
     out[0] = '\0';
 
-    if (a2l_in && a2l_out) {
+    if(a2l_in && a2l_out) {
         /* Persistent process: write address, read one line */
         fprintf(a2l_in, "0x%08x\n", addr);
-        if (fgets(out, (int)out_size, a2l_out) == NULL)
+        if(fgets(out, (int)out_size, a2l_out) == NULL)
             out[0] = '\0';
     } else {
         /* Fallback: spawn per-address */
         char cmd[512];
-        snprintf(cmd, sizeof(cmd), "%s -Cifpe %s 0x%08x",
-                 addr2line_cmd, elf_path, addr);
+        snprintf(cmd, sizeof(cmd), "%s -Cifpe %s 0x%08x", addr2line_cmd, elf_path, addr);
         FILE *fp = popen(cmd, "r");
-        if (fp) {
-            if (fgets(out, (int)out_size, fp) == NULL)
+        if(fp) {
+            if(fgets(out, (int)out_size, fp) == NULL)
                 out[0] = '\0';
             pclose(fp);
         }
@@ -176,27 +179,28 @@ static void decode_address(const char *addr2line_cmd, const char *elf_path,
 
     /* Strip trailing newline */
     size_t len = strlen(out);
-    if (len > 0 && out[len - 1] == '\n') out[len - 1] = '\0';
+    if(len > 0 && out[len - 1] == '\n')
+        out[len - 1] = '\0';
 
     /* Don't cache useless results like "?? ??:0" */
-    if (out[0] == '?' || out[0] == '\0')
+    if(out[0] == '?' || out[0] == '\0')
         return;
 
     /* Cache result */
-    if (addr_cache_count < ADDR2LINE_CACHE_SIZE) {
+    if(addr_cache_count < ADDR2LINE_CACHE_SIZE) {
         addr_cache[addr_cache_count].addr = addr;
-        compat_str_copy(addr_cache[addr_cache_count].decoded,
-                        sizeof(addr_cache[addr_cache_count].decoded), out);
+        compat_str_copy(addr_cache[addr_cache_count].decoded, sizeof(addr_cache[addr_cache_count].decoded),
+                        out);
         addr_cache_count++;
     }
 }
 
 /* ===== Stack trace annotation ===== */
 
-static int in_stack_trace = 0;
+static int  in_stack_trace = 0;
 static char stk_line_buf[256];
-static int stk_line_buf_len = 0;
-static int addr2line_available = -1; /* -1 = unchecked, 0 = no, 1 = yes */
+static int  stk_line_buf_len = 0;
+static int  addr2line_available = -1; /* -1 = unchecked, 0 = no, 1 = yes */
 
 /* Parse 8-digit hex address from "   XXXXXXXX" format.
  * Returns 1 on success, 0 on failure. */
@@ -204,35 +208,39 @@ static int parse_trace_addr(const char *line, size_t len, uint32_t *addr) {
     int i;
     uint32_t val = 0;
 
-    if (len < 12 || line[0] != ' ' || line[1] != ' ' || line[2] != ' ')
+    if(len < 12 || line[0] != ' ' || line[1] != ' ' || line[2] != ' ')
         return 0;
 
-    for (i = 3; i < 11 && i < (int)len; i++) {
+    for(i = 3; i < 11 && i < (int)len; i++) {
         char c = line[i];
-        if (c >= '0' && c <= '9')      val = (val << 4) | (uint32_t)(c - '0');
-        else if (c >= 'a' && c <= 'f') val = (val << 4) | (uint32_t)(c - 'a' + 10);
-        else if (c >= 'A' && c <= 'F') val = (val << 4) | (uint32_t)(c - 'A' + 10);
-        else return 0;
+        if(c >= '0' && c <= '9')
+            val = (val << 4) | (uint32_t)(c - '0');
+        else if(c >= 'a' && c <= 'f')
+            val = (val << 4) | (uint32_t)(c - 'a' + 10);
+        else if(c >= 'A' && c <= 'F')
+            val = (val << 4) | (uint32_t)(c - 'A' + 10);
+        else
+            return 0;
     }
 
-    if (i != 11) return 0;
+    if(i != 11)
+        return 0;
     *addr = val;
     return 1;
 }
 
-#define STK_BANNER_PREFIX "-------- "
+#define STK_BANNER_PREFIX     "-------- "
 #define STK_BANNER_PREFIX_LEN 9
 
 /* Process a single complete line, annotating stack trace addresses
  * with addr2line results when available. */
-static void console_write_line(const char *addr2line_cmd, const char *elf_path,
-                               int fd, const char *line, size_t len) {
+static void console_write_line(const char *addr2line_cmd, const char *elf_path, int fd, const char *line,
+                               size_t len) {
     /* Detect stack trace banners via fixed prefix */
-    if (len > STK_BANNER_PREFIX_LEN &&
-        memcmp(line, STK_BANNER_PREFIX, STK_BANNER_PREFIX_LEN) == 0) {
-        if (len > 20 && line[STK_BANNER_PREFIX_LEN] == 'S') {
+    if(len > STK_BANNER_PREFIX_LEN && memcmp(line, STK_BANNER_PREFIX, STK_BANNER_PREFIX_LEN) == 0) {
+        if(len > 20 && line[STK_BANNER_PREFIX_LEN] == 'S') {
             in_stack_trace = 1;
-        } else if (line[STK_BANNER_PREFIX_LEN] == 'E') {
+        } else if(line[STK_BANNER_PREFIX_LEN] == 'E') {
             in_stack_trace = 0;
         }
         write(fd, line, len);
@@ -240,33 +248,27 @@ static void console_write_line(const char *addr2line_cmd, const char *elf_path,
     }
 
     /* Inside a trace: try to parse address lines */
-    if (in_stack_trace) {
+    if(in_stack_trace) {
         uint32_t addr;
 
-        if (parse_trace_addr(line, len, &addr)) {
+        if(parse_trace_addr(line, len, &addr)) {
             char decoded[256];
 
-            decode_address(addr2line_cmd, elf_path, addr, decoded,
-                           sizeof(decoded));
+            decode_address(addr2line_cmd, elf_path, addr, decoded, sizeof(decoded));
 
-            if (decoded[0] && decoded[0] != '?') {
+            if(decoded[0] && decoded[0] != '?') {
                 /* Build annotated line in one buffer, one write */
-                char outbuf[512];
+                char   outbuf[512];
                 size_t trim = len;
                 size_t out_len;
 
-                while (trim > 0 && (line[trim - 1] == '\n' ||
-                       line[trim - 1] == '\r'))
+                while(trim > 0 && (line[trim - 1] == '\n' || line[trim - 1] == '\r'))
                     trim--;
 
-                out_len = compat_str_append_bytes(outbuf, sizeof(outbuf), 0,
-                                                  line, trim);
-                out_len = compat_str_append_bytes(outbuf, sizeof(outbuf), out_len,
-                                                  "   ", 3);
-                out_len = compat_str_append(outbuf, sizeof(outbuf), out_len,
-                                            decoded);
-                out_len = compat_str_append_bytes(outbuf, sizeof(outbuf), out_len,
-                                                  "\n", 1);
+                out_len = compat_str_append_bytes(outbuf, sizeof(outbuf), 0, line, trim);
+                out_len = compat_str_append_bytes(outbuf, sizeof(outbuf), out_len, "   ", 3);
+                out_len = compat_str_append(outbuf, sizeof(outbuf), out_len, decoded);
+                out_len = compat_str_append_bytes(outbuf, sizeof(outbuf), out_len, "\n", 1);
                 write(fd, outbuf, out_len);
                 return;
             }
@@ -286,14 +288,14 @@ static void console_write_line(const char *addr2line_cmd, const char *elf_path,
 static int write_full(int fd, const uint8_t *data, uint32_t count) {
     uint32_t off = 0;
 
-    while (off < count) {
+    while(off < count) {
         ssize_t n = write(fd, data + off, count - off);
-        if (n < 0) {
-            if (errno == EINTR)
+        if(n < 0) {
+            if(errno == EINTR)
                 continue;
             return -1;
         }
-        if (n == 0)
+        if(n == 0)
             break;
         off += (uint32_t)n;
     }
@@ -302,24 +304,20 @@ static int write_full(int fd, const uint8_t *data, uint32_t count) {
 
 /* Write console output, annotating stack trace addresses with addr2line.
  * Handles line buffering for data that doesn't end on a line boundary. */
-static int console_write(kostool_context_t *ctx, int fd,
-                         const uint8_t *data, uint32_t count) {
-    const char *addr2line_cmd = ctx->target_big_endian ?
-                                ctx->ppc_addr2line : ctx->sh4_addr2line;
+static int console_write(kostool_context_t *ctx, int fd, const uint8_t *data, uint32_t count) {
+    const char *addr2line_cmd = ctx->target_big_endian ? ctx->ppc_addr2line : ctx->sh4_addr2line;
 
     /* Check addr2line availability once, then cache the result */
-    if (addr2line_available < 0) {
-        addr2line_available = ctx->loaded_binary_path &&
-                              addr2line_cmd[0] &&
-                              access(addr2line_cmd, X_OK) == 0 &&
-                              is_elf_file(ctx->loaded_binary_path);
+    if(addr2line_available < 0) {
+        addr2line_available = ctx->loaded_binary_path && addr2line_cmd[0] &&
+                              access(addr2line_cmd, X_OK) == 0 && is_elf_file(ctx->loaded_binary_path);
 #ifndef _WIN32
-        if (addr2line_available)
+        if(addr2line_available)
             start_addr2line_process(addr2line_cmd, ctx->loaded_binary_path);
 #endif
     }
 
-    if (!addr2line_available)
+    if(!addr2line_available)
         return write(fd, data, count);
 
     /* Fast path: not in a trace, no buffered partial line, and the
@@ -327,27 +325,26 @@ static int console_write(kostool_context_t *ctx, int fd,
      * dbgio_printf() as a complete write, so the banner always appears
      * at the start of a chunk.  Checking data[0] is O(1) vs scanning
      * the whole buffer for any hyphen. */
-    if (!in_stack_trace && stk_line_buf_len == 0 &&
-        (count == 0 || data[0] != '-')) {
+    if(!in_stack_trace && stk_line_buf_len == 0 && (count == 0 || data[0] != '-')) {
         return write(fd, data, count);
     }
 
     const char *p = (const char *)data;
     const char *end = p + count;
 
-    while (p < end) {
+    while(p < end) {
         const char *nl = memchr(p, '\n', end - p);
 
-        if (!nl) {
+        if(!nl) {
             /* No newline — buffer the remainder for next call */
             size_t rem = end - p;
 
-            if (stk_line_buf_len + (int)rem < (int)sizeof(stk_line_buf)) {
+            if(stk_line_buf_len + (int)rem < (int)sizeof(stk_line_buf)) {
                 memcpy(stk_line_buf + stk_line_buf_len, p, rem);
                 stk_line_buf_len += (int)rem;
             } else {
                 /* Buffer overflow — flush raw */
-                if (stk_line_buf_len > 0) {
+                if(stk_line_buf_len > 0) {
                     write(fd, stk_line_buf, stk_line_buf_len);
                     stk_line_buf_len = 0;
                 }
@@ -359,22 +356,20 @@ static int console_write(kostool_context_t *ctx, int fd,
         /* Complete line (including the \n) */
         size_t line_len = nl - p + 1;
 
-        if (stk_line_buf_len > 0) {
+        if(stk_line_buf_len > 0) {
             /* Prepend buffered partial line */
             size_t total = stk_line_buf_len + line_len;
 
-            if (total < sizeof(stk_line_buf)) {
+            if(total < sizeof(stk_line_buf)) {
                 memcpy(stk_line_buf + stk_line_buf_len, p, line_len);
-                console_write_line(addr2line_cmd, ctx->loaded_binary_path,
-                                   fd, stk_line_buf, total);
+                console_write_line(addr2line_cmd, ctx->loaded_binary_path, fd, stk_line_buf, total);
             } else {
                 write(fd, stk_line_buf, stk_line_buf_len);
                 write(fd, p, line_len);
             }
             stk_line_buf_len = 0;
         } else {
-            console_write_line(addr2line_cmd, ctx->loaded_binary_path,
-                               fd, p, line_len);
+            console_write_line(addr2line_cmd, ctx->loaded_binary_path, fd, p, line_len);
         }
 
         p = nl + 1;
@@ -387,43 +382,73 @@ static int console_write(kostool_context_t *ctx, int fd,
 
 /* SH4 EXPEVT code to string */
 static const char *dc_exception_code_to_string(uint32_t code) {
-    switch (code) {
-    case 0x1e0: return "User break";
-    case 0x0e0: return "Address error (read)";
-    case 0x040: return "TLB miss exception (read)";
-    case 0x0a0: return "TLB protection violation (read)";
-    case 0x180: return "General illegal instruction";
-    case 0x1a0: return "Slot illegal instruction";
-    case 0x800: return "General FPU disable";
-    case 0x820: return "Slot FPU disable";
-    case 0x100: return "Address error (write)";
-    case 0x060: return "TLB miss exception (write)";
-    case 0x0c0: return "TLB protection violation (write)";
-    case 0x120: return "FPU exception";
-    case 0x080: return "Initial page write exception";
-    case 0x160: return "Unconditional trap (TRAPA)";
-    default:    return "Unknown exception";
+    switch(code) {
+    case 0x1e0:
+        return "User break";
+    case 0x0e0:
+        return "Address error (read)";
+    case 0x040:
+        return "TLB miss exception (read)";
+    case 0x0a0:
+        return "TLB protection violation (read)";
+    case 0x180:
+        return "General illegal instruction";
+    case 0x1a0:
+        return "Slot illegal instruction";
+    case 0x800:
+        return "General FPU disable";
+    case 0x820:
+        return "Slot FPU disable";
+    case 0x100:
+        return "Address error (write)";
+    case 0x060:
+        return "TLB miss exception (write)";
+    case 0x0c0:
+        return "TLB protection violation (write)";
+    case 0x120:
+        return "FPU exception";
+    case 0x080:
+        return "Initial page write exception";
+    case 0x160:
+        return "Unconditional trap (TRAPA)";
+    default:
+        return "Unknown exception";
     }
 }
 
 /* PPC 750 exception vector to string */
 static const char *gc_exception_code_to_string(uint32_t code) {
-    switch (code) {
-    case 0x0100: return "System Reset";
-    case 0x0200: return "Machine Check";
-    case 0x0300: return "DSI (Data Storage)";
-    case 0x0400: return "ISI (Instruction Storage)";
-    case 0x0500: return "External Interrupt";
-    case 0x0600: return "Alignment";
-    case 0x0700: return "Program";
-    case 0x0800: return "FP Unavailable";
-    case 0x0900: return "Decrementer";
-    case 0x0C00: return "System Call";
-    case 0x0D00: return "Trace";
-    case 0x0F00: return "Performance Monitor";
-    case 0x1300: return "IABR";
-    case 0x1700: return "Thermal";
-    default:     return "Unknown Exception";
+    switch(code) {
+    case 0x0100:
+        return "System Reset";
+    case 0x0200:
+        return "Machine Check";
+    case 0x0300:
+        return "DSI (Data Storage)";
+    case 0x0400:
+        return "ISI (Instruction Storage)";
+    case 0x0500:
+        return "External Interrupt";
+    case 0x0600:
+        return "Alignment";
+    case 0x0700:
+        return "Program";
+    case 0x0800:
+        return "FP Unavailable";
+    case 0x0900:
+        return "Decrementer";
+    case 0x0C00:
+        return "System Call";
+    case 0x0D00:
+        return "Trace";
+    case 0x0F00:
+        return "Performance Monitor";
+    case 0x1300:
+        return "IABR";
+    case 0x1700:
+        return "Thermal";
+    default:
+        return "Unknown Exception";
     }
 }
 
@@ -459,9 +484,8 @@ static const char *gc_fpr_names[32] = {
 /* Swap bytes of a uint32 from little-endian to host order */
 static uint32_t le32_to_host(uint32_t x) {
     /* If host is LE, no-op; if host is BE, swap */
-    if (htonl(1) == 1)
-        return (x << 24) | ((x << 8) & 0xff0000) |
-               ((x >> 8) & 0xff00) | ((x >> 24) & 0xff);
+    if(htonl(1) == 1)
+        return (x << 24) | ((x << 8) & 0xff0000) | ((x >> 8) & 0xff00) | ((x >> 24) & 0xff);
     return x;
 }
 
@@ -474,21 +498,18 @@ static uint32_t be32_to_host(uint32_t x) {
 static void make_dump_filename(const char *prefix, char *out, size_t out_size) {
     time_t now = time(NULL);
     struct tm *tm = localtime(&now);
-    snprintf(out, out_size, "%s_exception_%04d%02d%02d_%02d%02d%02d.txt",
-             prefix,
-             tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
-             tm->tm_hour, tm->tm_min, tm->tm_sec);
+    snprintf(out, out_size, "%s_exception_%04d%02d%02d_%02d%02d%02d.txt", prefix, tm->tm_year + 1900,
+             tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
 }
 
 /* Print all registers to a FILE (stderr or dump file) */
 static void print_dc_registers(FILE *fp, const uint32_t *regs) {
-    for (int i = 0; i < 66; i++)
+    for(int i = 0; i < 66; i++)
         fprintf(fp, "  %-6s 0x%08x\n", dc_register_names[i], regs[i]);
 }
 
-static void print_gc_registers(FILE *fp, const uint32_t *regs,
-                                const uint8_t *data) {
-    for (int i = 0; i < 40; i++)
+static void print_gc_registers(FILE *fp, const uint32_t *regs, const uint8_t *data) {
+    for(int i = 0; i < 40; i++)
         fprintf(fp, "  %-6s 0x%08x\n", gc_register_names[i], regs[i]);
 
     const int fpu_offset = 8 + 40 * sizeof(uint32_t);
@@ -498,7 +519,7 @@ static void print_gc_registers(FILE *fp, const uint32_t *regs,
     fpscr_lo = be32_to_host(fpscr_lo);
     fprintf(fp, "  FPSCR  0x%08x\n", fpscr_lo);
 
-    for (int i = 0; i < 32; i++) {
+    for(int i = 0; i < 32; i++) {
         uint32_t hi, lo;
         memcpy(&hi, data + fpu_offset + 8 + i * 8, sizeof(uint32_t));
         memcpy(&lo, data + fpu_offset + 8 + i * 8 + 4, sizeof(uint32_t));
@@ -508,9 +529,8 @@ static void print_gc_registers(FILE *fp, const uint32_t *regs,
     }
 }
 
-static void handle_dc_exception(kostool_context_t *ctx, const uint8_t *data,
-                                uint32_t count) {
-    if (count < sizeof(sh4_exception_frame_t)) {
+static void handle_dc_exception(kostool_context_t *ctx, const uint8_t *data, uint32_t count) {
+    if(count < sizeof(sh4_exception_frame_t)) {
         fprintf(stderr, "\nIncomplete DC exception frame (%u bytes)\n", count);
         return;
     }
@@ -519,7 +539,7 @@ static void handle_dc_exception(kostool_context_t *ctx, const uint8_t *data,
      * 66 registers start at offset 8 in the frame (after id + expt_code). */
     uint32_t regs[66];
     memcpy(regs, data + 8, 66 * sizeof(uint32_t));
-    for (int i = 0; i < 66; i++)
+    for(int i = 0; i < 66; i++)
         regs[i] = le32_to_host(regs[i]);
 
     uint32_t expt_code;
@@ -528,8 +548,7 @@ static void handle_dc_exception(kostool_context_t *ctx, const uint8_t *data,
 
     const char *expt_str = dc_exception_code_to_string(expt_code);
 
-    fprintf(stderr, "\n=== Dreamcast Exception: %s (0x%03x) ===\n",
-            expt_str, expt_code);
+    fprintf(stderr, "\n=== Dreamcast Exception: %s (0x%03x) ===\n", expt_str, expt_code);
 
     /* Always print key registers */
     fprintf(stderr, "  %-6s 0x%08x\n", "PC", regs[0]);
@@ -538,24 +557,24 @@ static void handle_dc_exception(kostool_context_t *ctx, const uint8_t *data,
     fprintf(stderr, "  %-6s 0x%08x\n", "R15", regs[31]);
 
     /* addr2line on valid addresses, or fall back to full register dump */
-    if (addr2line_available < 0) {
+    if(addr2line_available < 0) {
         addr2line_available = ctx->loaded_binary_path &&
                               ctx->sh4_addr2line[0] &&
                               access(ctx->sh4_addr2line, X_OK) == 0 &&
                               is_elf_file(ctx->loaded_binary_path);
 #ifndef _WIN32
-        if (addr2line_available)
+        if(addr2line_available)
             start_addr2line_process(ctx->sh4_addr2line, ctx->loaded_binary_path);
 #endif
     }
 
-    if (addr2line_available) {
-        for (int i = 0; i < 66; i++) {
-            if (regs[i] >= DC_DEFAULT_LOAD_ADDR && regs[i] < DC_RAM_TOP) {
+    if(addr2line_available) {
+        for(int i = 0; i < 66; i++) {
+            if(regs[i] >= DC_DEFAULT_LOAD_ADDR && regs[i] < DC_RAM_TOP) {
                 char decoded[256];
-                decode_address(ctx->sh4_addr2line, ctx->loaded_binary_path,
-                               regs[i], decoded, sizeof(decoded));
-                if (decoded[0] && decoded[0] != '?')
+                decode_address(ctx->sh4_addr2line, ctx->loaded_binary_path, regs[i], decoded,
+                               sizeof(decoded));
+                if(decoded[0] && decoded[0] != '?')
                     fprintf(stderr, "  %-6s -> %s\n", dc_register_names[i], decoded);
             }
         }
@@ -567,19 +586,18 @@ static void handle_dc_exception(kostool_context_t *ctx, const uint8_t *data,
     char filename[128];
     make_dump_filename("dc", filename, sizeof(filename));
     FILE *dump = fopen(filename, "w");
-    if (dump) {
-        fprintf(dump, "=== Dreamcast Exception: %s (0x%03x) ===\n\n",
-                expt_str, expt_code);
+    if(dump) {
+        fprintf(dump, "=== Dreamcast Exception: %s (0x%03x) ===\n\n", expt_str, expt_code);
         fprintf(dump, "Registers:\n");
         print_dc_registers(dump, regs);
-        if (addr2line_available) {
+        if(addr2line_available) {
             fprintf(dump, "\nSymbols:\n");
-            for (int i = 0; i < 66; i++) {
-                if (regs[i] >= DC_DEFAULT_LOAD_ADDR && regs[i] < DC_RAM_TOP) {
+            for(int i = 0; i < 66; i++) {
+                if(regs[i] >= DC_DEFAULT_LOAD_ADDR && regs[i] < DC_RAM_TOP) {
                     char decoded[256];
-                    decode_address(ctx->sh4_addr2line, ctx->loaded_binary_path,
-                                   regs[i], decoded, sizeof(decoded));
-                    if (decoded[0] && decoded[0] != '?')
+                    decode_address(ctx->sh4_addr2line, ctx->loaded_binary_path, regs[i], decoded,
+                                   sizeof(decoded));
+                    if(decoded[0] && decoded[0] != '?')
                         fprintf(dump, "  %-6s -> %s\n", dc_register_names[i], decoded);
                 }
             }
@@ -589,9 +607,8 @@ static void handle_dc_exception(kostool_context_t *ctx, const uint8_t *data,
     }
 }
 
-static void handle_gc_exception(kostool_context_t *ctx, const uint8_t *data,
-                                uint32_t count) {
-    if (count < sizeof(gc_exception_frame_t)) {
+static void handle_gc_exception(kostool_context_t *ctx, const uint8_t *data, uint32_t count) {
+    if(count < sizeof(gc_exception_frame_t)) {
         fprintf(stderr, "\nIncomplete GC exception frame (%u bytes)\n", count);
         return;
     }
@@ -601,7 +618,7 @@ static void handle_gc_exception(kostool_context_t *ctx, const uint8_t *data,
      * SRR0, SRR1, R0-R31, LR, CTR, XER, CR, DSISR, DAR. */
     uint32_t regs[40];
     memcpy(regs, data + 8, 40 * sizeof(uint32_t));
-    for (int i = 0; i < 40; i++)
+    for(int i = 0; i < 40; i++)
         regs[i] = be32_to_host(regs[i]);
 
     uint32_t expt_code;
@@ -610,8 +627,7 @@ static void handle_gc_exception(kostool_context_t *ctx, const uint8_t *data,
 
     const char *expt_str = gc_exception_code_to_string(expt_code);
 
-    fprintf(stderr, "\n=== GameCube Exception: %s (0x%04x) ===\n",
-            expt_str, expt_code);
+    fprintf(stderr, "\n=== GameCube Exception: %s (0x%04x) ===\n", expt_str, expt_code);
 
     /* Always print key registers */
     fprintf(stderr, "  %-6s 0x%08x\n", "SRR0", regs[0]);
@@ -620,30 +636,28 @@ static void handle_gc_exception(kostool_context_t *ctx, const uint8_t *data,
     fprintf(stderr, "  %-6s 0x%08x\n", "LR", regs[34]);
 
     /* For DSI/ISI exceptions, show the faulting address */
-    if (expt_code == 0x0300 || expt_code == 0x0400) {
+    if(expt_code == 0x0300 || expt_code == 0x0400) {
         fprintf(stderr, "  %-6s 0x%08x\n", "DAR", regs[39]);
         fprintf(stderr, "  %-6s 0x%08x\n", "DSISR", regs[38]);
     }
 
     /* addr2line on valid addresses, or fall back to full register dump */
-    if (addr2line_available < 0) {
-        addr2line_available = ctx->loaded_binary_path &&
-                              ctx->ppc_addr2line[0] &&
-                              access(ctx->ppc_addr2line, X_OK) == 0 &&
-                              is_elf_file(ctx->loaded_binary_path);
+    if(addr2line_available < 0) {
+        addr2line_available = ctx->loaded_binary_path && ctx->ppc_addr2line[0] &&
+                              access(ctx->ppc_addr2line, X_OK) == 0 && is_elf_file(ctx->loaded_binary_path);
 #ifndef _WIN32
-        if (addr2line_available)
+        if(addr2line_available)
             start_addr2line_process(ctx->ppc_addr2line, ctx->loaded_binary_path);
 #endif
     }
 
-    if (addr2line_available) {
-        for (int i = 0; i < 40; i++) {
-            if (regs[i] >= GC_DEFAULT_LOAD_ADDR && regs[i] < GC_RAM_TOP) {
+    if(addr2line_available) {
+        for(int i = 0; i < 40; i++) {
+            if(regs[i] >= GC_DEFAULT_LOAD_ADDR && regs[i] < GC_RAM_TOP) {
                 char decoded[256];
-                decode_address(ctx->ppc_addr2line, ctx->loaded_binary_path,
-                               regs[i], decoded, sizeof(decoded));
-                if (decoded[0] && decoded[0] != '?')
+                decode_address(ctx->ppc_addr2line, ctx->loaded_binary_path, regs[i], decoded,
+                               sizeof(decoded));
+                if(decoded[0] && decoded[0] != '?')
                     fprintf(stderr, "  %-6s -> %s\n", gc_register_names[i], decoded);
             }
         }
@@ -655,19 +669,18 @@ static void handle_gc_exception(kostool_context_t *ctx, const uint8_t *data,
     char filename[128];
     make_dump_filename("gc", filename, sizeof(filename));
     FILE *dump = fopen(filename, "w");
-    if (dump) {
-        fprintf(dump, "=== GameCube Exception: %s (0x%04x) ===\n\n",
-                expt_str, expt_code);
+    if(dump) {
+        fprintf(dump, "=== GameCube Exception: %s (0x%04x) ===\n\n", expt_str, expt_code);
         fprintf(dump, "Registers:\n");
         print_gc_registers(dump, regs, data);
-        if (addr2line_available) {
+        if(addr2line_available) {
             fprintf(dump, "\nSymbols:\n");
-            for (int i = 0; i < 40; i++) {
-                if (regs[i] >= GC_DEFAULT_LOAD_ADDR && regs[i] < GC_RAM_TOP) {
+            for(int i = 0; i < 40; i++) {
+                if(regs[i] >= GC_DEFAULT_LOAD_ADDR && regs[i] < GC_RAM_TOP) {
                     char decoded[256];
-                    decode_address(ctx->ppc_addr2line, ctx->loaded_binary_path,
-                                   regs[i], decoded, sizeof(decoded));
-                    if (decoded[0] && decoded[0] != '?')
+                    decode_address(ctx->ppc_addr2line, ctx->loaded_binary_path, regs[i], decoded,
+                                   sizeof(decoded));
+                    if(decoded[0] && decoded[0] != '?')
                         fprintf(dump, "  %-6s -> %s\n", gc_register_names[i], decoded);
                 }
             }
@@ -684,29 +697,27 @@ static DIR *opendirs[MAX_OPEN_DIRS];
 /* Convert host uint16 to target byte order.
  * DC (SH4) = little-endian, GC (PPC) = big-endian. */
 static uint16_t target_order16(const kostool_context_t *ctx, uint16_t x) {
-    if (ctx->target_big_endian)
+    if(ctx->target_big_endian)
         return htons(x);
     /* Target is LE: if host is also LE, no-op; if host is BE, swap */
-    if (htonl(1) == 1)
+    if(htonl(1) == 1)
         return (uint16_t)((x << 8) | (x >> 8));
     return x;
 }
 
 /* Convert host uint32 to target byte order. */
 static uint32_t target_order32(const kostool_context_t *ctx, uint32_t x) {
-    if (ctx->target_big_endian)
+    if(ctx->target_big_endian)
         return htonl(x);
     /* Target is LE: if host is also LE, no-op; if host is BE, swap */
-    if (htonl(1) == 1)
-        return (x << 24) | ((x << 8) & 0xff0000) |
-               ((x >> 8) & 0xff00) | ((x >> 24) & 0xff);
+    if(htonl(1) == 1)
+        return (x << 24) | ((x << 8) & 0xff0000) | ((x >> 8) & 0xff00) | ((x >> 24) & 0xff);
     return x;
 }
 
 /* ===== Path resolution ===== */
 
-static const char *resolve_path(kostool_context_t *ctx, const char *path,
-                                char *buf, size_t buf_size) {
+static const char *resolve_path(kostool_context_t *ctx, const char *path, char *buf, size_t buf_size) {
     return ctx->fs_ops->resolve_path(path, ctx->map_path, buf, buf_size);
 }
 
@@ -714,9 +725,12 @@ static const char *resolve_path(kostool_context_t *ctx, const char *path,
 
 static void ser_blread(kostool_context_t *ctx, void *buf, int count) {
     uint8_t *tmp = buf;
-    while (count > 0) {
+    while(count > 0) {
         int ret = ctx->serial_ops->read(ctx->serial_handle, tmp, count);
-        if (ret <= 0) { fprintf(stderr, "blread: read error (%d)\n", ret); return; }
+        if(ret <= 0) {
+            fprintf(stderr, "blread: read error (%d)\n", ret);
+            return;
+        }
         tmp += ret;
         count -= ret;
     }
@@ -724,15 +738,19 @@ static void ser_blread(kostool_context_t *ctx, void *buf, int count) {
 
 static void ser_send_uint(kostool_context_t *ctx, uint32_t value) {
     uint8_t b;
-    b = value & 0xFF;         ctx->serial_ops->write(ctx->serial_handle, &b, 1);
-    b = (value >> 8) & 0xFF;  ctx->serial_ops->write(ctx->serial_handle, &b, 1);
-    b = (value >> 16) & 0xFF; ctx->serial_ops->write(ctx->serial_handle, &b, 1);
-    b = (value >> 24) & 0xFF; ctx->serial_ops->write(ctx->serial_handle, &b, 1);
+    b = value & 0xFF;
+    ctx->serial_ops->write(ctx->serial_handle, &b, 1);
+    b = (value >> 8) & 0xFF;
+    ctx->serial_ops->write(ctx->serial_handle, &b, 1);
+    b = (value >> 16) & 0xFF;
+    ctx->serial_ops->write(ctx->serial_handle, &b, 1);
+    b = (value >> 24) & 0xFF;
+    ctx->serial_ops->write(ctx->serial_handle, &b, 1);
 
     uint8_t e[4];
     ser_blread(ctx, e, 4);
     uint32_t echo = e[0] | ((uint32_t)e[1] << 8) | ((uint32_t)e[2] << 16) | ((uint32_t)e[3] << 24);
-    if (echo != value)
+    if(echo != value)
         fprintf(stderr, "send_uint: echo mismatch (sent 0x%08x, got 0x%08x)\n", value, echo);
 }
 
@@ -745,23 +763,25 @@ static uint32_t ser_recv_uint(kostool_context_t *ctx) {
 /* Raw LZO send for serial syscalls (no command prefix) */
 static void ser_send_data(kostool_context_t *ctx, const uint8_t *addr, uint32_t size) {
     static long __LZO_MMODEL wrkmem[((LZO1X_1_MEM_COMPRESS) + (sizeof(long) - 1)) / sizeof(long)];
-    uint8_t *buffer = malloc(SERIAL_BUFFER_SIZE + SERIAL_BUFFER_SIZE / 64 + 16 + 3);
-    if (!buffer) return;
+    uint8_t                 *buffer = malloc(SERIAL_BUFFER_SIZE + SERIAL_BUFFER_SIZE / 64 + 16 + 3);
+    if(!buffer)
+        return;
 
-    while (size > 0) {
+    while(size > 0) {
         uint32_t sendsize = (size > SERIAL_BUFFER_SIZE) ? SERIAL_BUFFER_SIZE : size;
         lzo_uint csize;
         lzo1x_1_compress(addr, sendsize, buffer, &csize, wrkmem);
 
-        if (csize < sendsize) {
+        if(csize < sendsize) {
             uint8_t c = SERIAL_DATA_COMPRESSED;
             ctx->serial_ops->write(ctx->serial_handle, &c, 1);
             ser_send_uint(ctx, csize);
             uint8_t ack = SERIAL_DATA_BAD;
-            while (ack != SERIAL_DATA_GOOD) {
+            while(ack != SERIAL_DATA_GOOD) {
                 ctx->serial_ops->write(ctx->serial_handle, buffer, csize);
                 uint8_t sum = 0;
-                for (lzo_uint i = 0; i < csize; i++) sum ^= buffer[i];
+                for(lzo_uint i = 0; i < csize; i++)
+                    sum ^= buffer[i];
                 ctx->serial_ops->write(ctx->serial_handle, &sum, 1);
                 ser_blread(ctx, &ack, 1);
             }
@@ -771,7 +791,8 @@ static void ser_send_data(kostool_context_t *ctx, const uint8_t *addr, uint32_t 
             ser_send_uint(ctx, sendsize);
             ctx->serial_ops->write(ctx->serial_handle, addr, sendsize);
             uint8_t sum = 0;
-            for (uint32_t i = 0; i < sendsize; i++) sum ^= addr[i];
+            for(uint32_t i = 0; i < sendsize; i++)
+                sum ^= addr[i];
             ctx->serial_ops->write(ctx->serial_handle, &sum, 1);
             uint8_t ack;
             ser_blread(ctx, &ack, 1);
@@ -785,12 +806,12 @@ static void ser_send_data(kostool_context_t *ctx, const uint8_t *addr, uint32_t 
 /* Raw LZO recv for serial syscalls (no command prefix) */
 static void ser_recv_data(kostool_context_t *ctx, void *data, uint32_t total) {
     uint8_t *out = data;
-    while (total > 0) {
+    while(total > 0) {
         uint8_t type;
         ser_blread(ctx, &type, 1);
         uint32_t size = ser_recv_uint(ctx);
 
-        if (type == SERIAL_DATA_UNCOMPRESSED) {
+        if(type == SERIAL_DATA_UNCOMPRESSED) {
             ser_blread(ctx, out, size);
             uint8_t sum;
             ser_blread(ctx, &sum, 1);
@@ -798,9 +819,9 @@ static void ser_recv_data(kostool_context_t *ctx, void *data, uint32_t total) {
             ctx->serial_ops->write(ctx->serial_handle, &ok, 1);
             total -= size;
             out += size;
-        } else if (type == SERIAL_DATA_COMPRESSED) {
+        } else if(type == SERIAL_DATA_COMPRESSED) {
             uint8_t *tmp = malloc(size);
-            if (!tmp) {
+            if(!tmp) {
                 fprintf(stderr, "\nser_recv_data: malloc(%u) failed\n", size);
                 return;
             }
@@ -808,7 +829,7 @@ static void ser_recv_data(kostool_context_t *ctx, void *data, uint32_t total) {
             uint8_t sum;
             ser_blread(ctx, &sum, 1);
             lzo_uint newsize;
-            if (lzo1x_decompress(tmp, size, out, &newsize, 0) == LZO_E_OK) {
+            if(lzo1x_decompress(tmp, size, out, &newsize, 0) == LZO_E_OK) {
                 uint8_t ok = SERIAL_DATA_GOOD;
                 ctx->serial_ops->write(ctx->serial_handle, &ok, 1);
                 total -= newsize;
@@ -827,8 +848,7 @@ static void ser_recv_data(kostool_context_t *ctx, void *data, uint32_t total) {
 
 #define GC_ENC_RETVAL_DELAY_USEC 5000
 
-static int net_send_cmd(kostool_context_t *ctx, const char cmd[4],
-                        uint32_t addr, uint32_t size,
+static int net_send_cmd(kostool_context_t *ctx, const char cmd[4], uint32_t addr, uint32_t size,
                         const uint8_t *data, uint32_t dsize) {
     uint8_t buf[2048];
     uint32_t tmp;
@@ -836,12 +856,15 @@ static int net_send_cmd(kostool_context_t *ctx, const char cmd[4],
     int append_trailer;
 
     /* Reserve trailer headroom up front so dsize never overruns buf. */
-    if (dsize > sizeof(buf) - 12 - NET_SEQ_TRAILER_LEN)
+    if(dsize > sizeof(buf) - 12 - NET_SEQ_TRAILER_LEN)
         dsize = (uint32_t)(sizeof(buf) - 12 - NET_SEQ_TRAILER_LEN);
     memcpy(buf, cmd, 4);
-    tmp = htonl(addr); memcpy(buf + 4, &tmp, 4);
-    tmp = htonl(size); memcpy(buf + 8, &tmp, 4);
-    if (data && dsize > 0) memcpy(buf + 12, data, dsize);
+    tmp = htonl(addr);
+    memcpy(buf + 4, &tmp, 4);
+    tmp = htonl(size);
+    memcpy(buf + 8, &tmp, 4);
+    if(data && dsize > 0)
+        memcpy(buf + 12, data, dsize);
     wire_len = 12 + dsize;
 
     /* Echo the KSQ0 trailer on the RETVAL when a syscall dispatch is
@@ -850,9 +873,8 @@ static int net_send_cmd(kostool_context_t *ctx, const char cmd[4],
      * Other commands (LOADBIN ACK, etc.) don't carry the trailer; the
      * client only inspects it on RETVAL, so untrailered command
      * responses are unaffected. */
-    append_trailer = (dedup_is_capturing() &&
-                      memcmp(cmd, NET_CMD_RETVAL, 4) == 0);
-    if (append_trailer) {
+    append_trailer = (dedup_is_capturing() && memcmp(cmd, NET_CMD_RETVAL, 4) == 0);
+    if(append_trailer) {
         uint32_t seq = dedup_current_seq();
         memcpy(buf + wire_len, NET_SEQ_MAGIC, NET_SEQ_MAGIC_LEN);
         buf[wire_len + NET_SEQ_MAGIC_LEN + 0] = (uint8_t)(seq >> 24);
@@ -862,13 +884,12 @@ static int net_send_cmd(kostool_context_t *ctx, const char cmd[4],
         wire_len += NET_SEQ_TRAILER_LEN;
     }
 
-    if (ctx->installed_adapter == ADAPTER_GC_ENC &&
-        memcmp(cmd, NET_CMD_RETVAL, 4) == 0 &&
-        ctx->time_ops && ctx->time_ops->sleep_usec) {
+    if(ctx->installed_adapter == ADAPTER_GC_ENC && memcmp(cmd, NET_CMD_RETVAL, 4) == 0 && ctx->time_ops &&
+       ctx->time_ops->sleep_usec) {
         ctx->time_ops->sleep_usec(GC_ENC_RETVAL_DELAY_USEC);
     }
     int ret = ctx->socket_ops->send(ctx->global_socket, buf, wire_len);
-    if (ret >= 0)
+    if(ret >= 0)
         dedup_capture_pkt(buf, wire_len);
     return ret;
 }
@@ -877,41 +898,37 @@ static int net_send_cmd(kostool_context_t *ctx, const char cmd[4],
  * `magic_offset` (right after the legacy command struct but before the
  * KSQ0 trailer).  Used by fstat/stat/readdir to decide between the
  * single-packet inline-return reply and the legacy 2-packet path. */
-static int net_has_inline_ret_request(const uint8_t *pkt, int pkt_len,
-                                      size_t magic_offset) {
-    if (pkt_len < 0 || (size_t)pkt_len < magic_offset + NET_INLINE_RET_MAGIC_LEN)
+static int net_has_inline_ret_request(const uint8_t *pkt, int pkt_len, size_t magic_offset) {
+    if(pkt_len < 0 || (size_t)pkt_len < magic_offset + NET_INLINE_RET_MAGIC_LEN)
         return 0;
-    return memcmp(pkt + magic_offset, NET_INLINE_RET_MAGIC,
-                  NET_INLINE_RET_MAGIC_LEN) == 0;
+    return memcmp(pkt + magic_offset, NET_INLINE_RET_MAGIC, NET_INLINE_RET_MAGIC_LEN) == 0;
 }
 
 /* Send the RETVAL with the small fixed-size out-buffer inlined right
  * after the KIR0 magic.  Returns 1 on success, 0 if the buffer would
  * exceed NET_INLINE_RET_MAX (caller then falls back to the 2-packet
  * SENDBINQ + DONEBIN path).  See network_syscalls.c copy_inline_ret. */
-static int net_send_ret_inline(kostool_context_t *ctx, int ret,
-                               const uint8_t *data, uint32_t dsize) {
+static int net_send_ret_inline(kostool_context_t *ctx, int ret, const uint8_t *data, uint32_t dsize) {
     uint8_t inline_data[NET_INLINE_RET_MAGIC_LEN + NET_INLINE_RET_MAX];
 
-    if (dsize > NET_INLINE_RET_MAX)
+    if(dsize > NET_INLINE_RET_MAX)
         return 0;
 
     memcpy(inline_data, NET_INLINE_RET_MAGIC, NET_INLINE_RET_MAGIC_LEN);
-    if (dsize > 0)
+    if(dsize > 0)
         memcpy(inline_data + NET_INLINE_RET_MAGIC_LEN, data, dsize);
 
-    net_send_cmd(ctx, NET_CMD_RETVAL, (uint32_t)ret,
-                 NET_INLINE_RET_MAGIC_LEN + dsize,
-                 inline_data, NET_INLINE_RET_MAGIC_LEN + dsize);
+    net_send_cmd(ctx, NET_CMD_RETVAL, (uint32_t)ret, NET_INLINE_RET_MAGIC_LEN + dsize, inline_data,
+                 NET_INLINE_RET_MAGIC_LEN + dsize);
     return 1;
 }
 
-static int net_recv_resp(kostool_context_t *ctx, uint8_t *buffer,
-                         size_t buffer_size, int timeout) {
+static int net_recv_resp(kostool_context_t *ctx, uint8_t *buffer, size_t buffer_size, int timeout) {
     uint64_t start = ctx->time_ops->time_usec();
-    while ((ctx->time_ops->time_usec() - start) < (uint64_t)timeout) {
+    while((ctx->time_ops->time_usec() - start) < (uint64_t)timeout) {
         int rv = ctx->socket_ops->recv(ctx->global_socket, buffer, buffer_size);
-        if (rv > 0) return rv;
+        if(rv > 0)
+            return rv;
     }
     return -1;
 }
@@ -946,16 +963,22 @@ static void ser_syscall_fstat(kostool_context_t *ctx) {
 static void ser_syscall_write(kostool_context_t *ctx) {
     int fd = ser_recv_uint(ctx);
     uint32_t count = ser_recv_uint(ctx);
-    if (!count || count > MAX_SYSCALL_SIZE) { ser_send_uint(ctx, -1); return; }
+    if(!count || count > MAX_SYSCALL_SIZE) {
+        ser_send_uint(ctx, -1);
+        return;
+    }
     uint8_t *data = malloc(count);
-    if (!data) { ser_send_uint(ctx, -1); return; }
+    if(!data) {
+        ser_send_uint(ctx, -1);
+        return;
+    }
     ser_recv_data(ctx, data, count);
 
     int ret;
-    if (fd != STDOUT_FILENO && fd != STDERR_FILENO) {
+    if(fd != STDOUT_FILENO && fd != STDERR_FILENO) {
         ret = count ? write_full(fd, data, count) : 0;
-    } else if (count >= 8 && !memcmp(data, KOSLOAD_EXCEPTION_TAG, 4)) {
-        if (ctx->target_big_endian)
+    } else if(count >= 8 && !memcmp(data, KOSLOAD_EXCEPTION_TAG, 4)) {
+        if(ctx->target_big_endian)
             handle_gc_exception(ctx, data, count);
         else
             handle_dc_exception(ctx, data, count);
@@ -971,9 +994,15 @@ static void ser_syscall_write(kostool_context_t *ctx) {
 static void ser_syscall_read(kostool_context_t *ctx) {
     int fd = ser_recv_uint(ctx);
     uint32_t count = ser_recv_uint(ctx);
-    if (!count || count > MAX_SYSCALL_SIZE) { ser_send_uint(ctx, -1); return; }
+    if(!count || count > MAX_SYSCALL_SIZE) {
+        ser_send_uint(ctx, -1);
+        return;
+    }
     uint8_t *data = malloc(count);
-    if (!data) { ser_send_uint(ctx, -1); return; }
+    if(!data) {
+        ser_send_uint(ctx, -1);
+        return;
+    }
     int ret = read(fd, data, count);
     ser_send_data(ctx, data, count);
     ser_send_uint(ctx, ret);
@@ -982,9 +1011,15 @@ static void ser_syscall_read(kostool_context_t *ctx) {
 
 static void ser_syscall_open(kostool_context_t *ctx) {
     uint32_t namelen = ser_recv_uint(ctx);
-    if (!namelen || namelen > MAX_PATH_LEN) { ser_send_uint(ctx, -1); return; }
+    if(!namelen || namelen > MAX_PATH_LEN) {
+        ser_send_uint(ctx, -1);
+        return;
+    }
     char *pathname = malloc(namelen);
-    if (!pathname) { ser_send_uint(ctx, -1); return; }
+    if(!pathname) {
+        ser_send_uint(ctx, -1);
+        return;
+    }
     ser_recv_data(ctx, pathname, namelen);
     int flags = ser_recv_uint(ctx);
     int mode = ser_recv_uint(ctx);
@@ -1005,9 +1040,15 @@ static void ser_syscall_close(kostool_context_t *ctx) {
 
 static void ser_syscall_creat(kostool_context_t *ctx) {
     uint32_t namelen = ser_recv_uint(ctx);
-    if (!namelen || namelen > MAX_PATH_LEN) { ser_send_uint(ctx, -1); return; }
+    if(!namelen || namelen > MAX_PATH_LEN) {
+        ser_send_uint(ctx, -1);
+        return;
+    }
     char *pathname = malloc(namelen);
-    if (!pathname) { ser_send_uint(ctx, -1); return; }
+    if(!pathname) {
+        ser_send_uint(ctx, -1);
+        return;
+    }
     ser_recv_data(ctx, pathname, namelen);
     int mode = ser_recv_uint(ctx);
     int ret = creat(pathname, mode);
@@ -1017,25 +1058,46 @@ static void ser_syscall_creat(kostool_context_t *ctx) {
 
 static void ser_syscall_link(kostool_context_t *ctx) {
     uint32_t len1 = ser_recv_uint(ctx);
-    if (!len1 || len1 > MAX_PATH_LEN) { ser_send_uint(ctx, -1); return; }
+    if(!len1 || len1 > MAX_PATH_LEN) {
+        ser_send_uint(ctx, -1);
+        return;
+    }
     char *path1 = malloc(len1);
-    if (!path1) { ser_send_uint(ctx, -1); return; }
+    if(!path1) {
+        ser_send_uint(ctx, -1);
+        return;
+    }
     ser_recv_data(ctx, path1, len1);
     uint32_t len2 = ser_recv_uint(ctx);
-    if (!len2 || len2 > MAX_PATH_LEN) { free(path1); ser_send_uint(ctx, -1); return; }
+    if(!len2 || len2 > MAX_PATH_LEN) {
+        free(path1);
+        ser_send_uint(ctx, -1);
+        return;
+    }
     char *path2 = malloc(len2);
-    if (!path2) { free(path1); ser_send_uint(ctx, -1); return; }
+    if(!path2) {
+        free(path1);
+        ser_send_uint(ctx, -1);
+        return;
+    }
     ser_recv_data(ctx, path2, len2);
     int ret = link(path1, path2);
     ser_send_uint(ctx, ret);
-    free(path1); free(path2);
+    free(path1);
+    free(path2);
 }
 
 static void ser_syscall_unlink(kostool_context_t *ctx) {
     uint32_t namelen = ser_recv_uint(ctx);
-    if (!namelen || namelen > MAX_PATH_LEN) { ser_send_uint(ctx, -1); return; }
+    if(!namelen || namelen > MAX_PATH_LEN) {
+        ser_send_uint(ctx, -1);
+        return;
+    }
     char *pathname = malloc(namelen);
-    if (!pathname) { ser_send_uint(ctx, -1); return; }
+    if(!pathname) {
+        ser_send_uint(ctx, -1);
+        return;
+    }
     ser_recv_data(ctx, pathname, namelen);
     int ret = unlink(pathname);
     ser_send_uint(ctx, ret);
@@ -1044,9 +1106,15 @@ static void ser_syscall_unlink(kostool_context_t *ctx) {
 
 static void ser_syscall_chdir(kostool_context_t *ctx) {
     uint32_t namelen = ser_recv_uint(ctx);
-    if (!namelen || namelen > MAX_PATH_LEN) { ser_send_uint(ctx, -1); return; }
+    if(!namelen || namelen > MAX_PATH_LEN) {
+        ser_send_uint(ctx, -1);
+        return;
+    }
     char *pathname = malloc(namelen);
-    if (!pathname) { ser_send_uint(ctx, -1); return; }
+    if(!pathname) {
+        ser_send_uint(ctx, -1);
+        return;
+    }
     ser_recv_data(ctx, pathname, namelen);
     char buf[MAX_PATH_LEN];
     const char *resolved = resolve_path(ctx, pathname, buf, sizeof(buf));
@@ -1057,9 +1125,15 @@ static void ser_syscall_chdir(kostool_context_t *ctx) {
 
 static void ser_syscall_chmod(kostool_context_t *ctx) {
     uint32_t namelen = ser_recv_uint(ctx);
-    if (!namelen || namelen > MAX_PATH_LEN) { ser_send_uint(ctx, -1); return; }
+    if(!namelen || namelen > MAX_PATH_LEN) {
+        ser_send_uint(ctx, -1);
+        return;
+    }
     char *pathname = malloc(namelen);
-    if (!pathname) { ser_send_uint(ctx, -1); return; }
+    if(!pathname) {
+        ser_send_uint(ctx, -1);
+        return;
+    }
     ser_recv_data(ctx, pathname, namelen);
     int mode = ser_recv_uint(ctx);
     int ret = chmod(pathname, mode);
@@ -1069,9 +1143,15 @@ static void ser_syscall_chmod(kostool_context_t *ctx) {
 
 static void ser_syscall_mkdir(kostool_context_t *ctx) {
     uint32_t namelen = ser_recv_uint(ctx);
-    if (!namelen || namelen > MAX_PATH_LEN) { ser_send_uint(ctx, -1); return; }
+    if(!namelen || namelen > MAX_PATH_LEN) {
+        ser_send_uint(ctx, -1);
+        return;
+    }
     char *pathname = malloc(namelen);
-    if (!pathname) { ser_send_uint(ctx, -1); return; }
+    if(!pathname) {
+        ser_send_uint(ctx, -1);
+        return;
+    }
     ser_recv_data(ctx, pathname, namelen);
     int mode = ser_recv_uint(ctx);
     char buf[MAX_PATH_LEN];
@@ -1097,9 +1177,15 @@ static void ser_syscall_time(kostool_context_t *ctx) {
 
 static void ser_syscall_stat(kostool_context_t *ctx) {
     uint32_t namelen = ser_recv_uint(ctx);
-    if (!namelen || namelen > MAX_PATH_LEN) { ser_send_uint(ctx, -1); return; }
+    if(!namelen || namelen > MAX_PATH_LEN) {
+        ser_send_uint(ctx, -1);
+        return;
+    }
     char *filename = malloc(namelen);
-    if (!filename) { ser_send_uint(ctx, -1); return; }
+    if(!filename) {
+        ser_send_uint(ctx, -1);
+        return;
+    }
     ser_recv_data(ctx, filename, namelen);
     struct stat st = {0};
     char buf[MAX_PATH_LEN];
@@ -1129,13 +1215,19 @@ static void ser_syscall_stat(kostool_context_t *ctx) {
 
 static void ser_syscall_utime(kostool_context_t *ctx) {
     uint32_t namelen = ser_recv_uint(ctx);
-    if (!namelen || namelen > MAX_PATH_LEN) { ser_send_uint(ctx, -1); return; }
+    if(!namelen || namelen > MAX_PATH_LEN) {
+        ser_send_uint(ctx, -1);
+        return;
+    }
     char *pathname = malloc(namelen);
-    if (!pathname) { ser_send_uint(ctx, -1); return; }
+    if(!pathname) {
+        ser_send_uint(ctx, -1);
+        return;
+    }
     ser_recv_data(ctx, pathname, namelen);
     int has_times = ser_recv_uint(ctx);
     int ret;
-    if (has_times) {
+    if(has_times) {
         struct utimbuf tbuf;
         tbuf.actime = ser_recv_uint(ctx);
         tbuf.modtime = ser_recv_uint(ctx);
@@ -1149,19 +1241,26 @@ static void ser_syscall_utime(kostool_context_t *ctx) {
 
 static void ser_syscall_opendir(kostool_context_t *ctx) {
     uint32_t namelen = ser_recv_uint(ctx);
-    if (!namelen || namelen > MAX_PATH_LEN) { ser_send_uint(ctx, 0); return; }
+    if(!namelen || namelen > MAX_PATH_LEN) {
+        ser_send_uint(ctx, 0);
+        return;
+    }
     char *dirname_str = malloc(namelen);
-    if (!dirname_str) { ser_send_uint(ctx, 0); return; }
+    if(!dirname_str) {
+        ser_send_uint(ctx, 0);
+        return;
+    }
     ser_recv_data(ctx, dirname_str, namelen);
 
     uint32_t i;
-    for (i = 0; i < MAX_OPEN_DIRS; i++)
-        if (!opendirs[i]) break;
+    for(i = 0; i < MAX_OPEN_DIRS; i++)
+        if(!opendirs[i])
+            break;
 
-    if (i < MAX_OPEN_DIRS) {
+    if(i < MAX_OPEN_DIRS) {
         char buf[MAX_PATH_LEN];
         const char *resolved = resolve_path(ctx, dirname_str, buf, sizeof(buf));
-        if (!(opendirs[i] = opendir(resolved)))
+        if(!(opendirs[i] = opendir(resolved)))
             i = 0;
         else
             i += DIRENT_OFFSET;
@@ -1175,7 +1274,7 @@ static void ser_syscall_opendir(kostool_context_t *ctx) {
 static void ser_syscall_closedir(kostool_context_t *ctx) {
     uint32_t i = ser_recv_uint(ctx);
     int ret;
-    if (i >= DIRENT_OFFSET && i < MAX_OPEN_DIRS + DIRENT_OFFSET) {
+    if(i >= DIRENT_OFFSET && i < MAX_OPEN_DIRS + DIRENT_OFFSET) {
         ret = closedir(opendirs[i - DIRENT_OFFSET]);
         opendirs[i - DIRENT_OFFSET] = NULL;
     } else {
@@ -1187,10 +1286,13 @@ static void ser_syscall_closedir(kostool_context_t *ctx) {
 static void ser_syscall_readdir(kostool_context_t *ctx) {
     uint32_t i = ser_recv_uint(ctx);
     struct dirent *de = NULL;
-    if (i >= DIRENT_OFFSET && i < MAX_OPEN_DIRS + DIRENT_OFFSET)
+    if(i >= DIRENT_OFFSET && i < MAX_OPEN_DIRS + DIRENT_OFFSET)
         de = readdir(opendirs[i - DIRENT_OFFSET]);
 
-    if (!de) { ser_send_uint(ctx, 0); return; }
+    if(!de) {
+        ser_send_uint(ctx, 0);
+        return;
+    }
     ser_send_uint(ctx, 1);
     ser_send_uint(ctx, de->d_ino);
 #if defined(__APPLE__) || defined(__FreeBSD__)
@@ -1208,14 +1310,15 @@ static void ser_syscall_readdir(kostool_context_t *ctx) {
     ser_send_uint(ctx, 0);
 #endif
     uint32_t namelen = strlen(de->d_name) + 1;
-    if (namelen > 256) namelen = 256;
+    if(namelen > 256)
+        namelen = 256;
     ser_send_uint(ctx, namelen);
     ser_send_data(ctx, (const uint8_t *)de->d_name, namelen);
 }
 
 static void ser_syscall_rewinddir(kostool_context_t *ctx) {
     uint32_t i = ser_recv_uint(ctx);
-    if (i >= DIRENT_OFFSET && i < MAX_OPEN_DIRS + DIRENT_OFFSET) {
+    if(i >= DIRENT_OFFSET && i < MAX_OPEN_DIRS + DIRENT_OFFSET) {
         rewinddir(opendirs[i - DIRENT_OFFSET]);
     }
     ser_send_uint(ctx, 0);
@@ -1225,18 +1328,28 @@ static void ser_syscall_cdfs_read(kostool_context_t *ctx) {
     int start = ser_recv_uint(ctx);
     uint32_t num = ser_recv_uint(ctx);
     start -= 150;
-    if (!num || num > MAX_SYSCALL_SIZE / 2048) { ser_send_uint(ctx, -1); return; }
+    if(!num || num > MAX_SYSCALL_SIZE / 2048) {
+        ser_send_uint(ctx, -1);
+        return;
+    }
     uint32_t bytes = num * 2048;
-    if (bytes > MAX_SYSCALL_SIZE) { ser_send_uint(ctx, -1); return; }
+    if(bytes > MAX_SYSCALL_SIZE) {
+        ser_send_uint(ctx, -1);
+        return;
+    }
     uint8_t *buf = malloc(bytes);
-    if (!buf) { ser_send_uint(ctx, -1); return; }
+    if(!buf) {
+        ser_send_uint(ctx, -1);
+        return;
+    }
     memset(buf, 0, bytes);
-    if (ctx->cdfs_fd >= 0) {
-        if (lseek(ctx->cdfs_fd, (off_t)start * 2048, SEEK_SET) != (off_t)-1) {
+    if(ctx->cdfs_fd >= 0) {
+        if(lseek(ctx->cdfs_fd, (off_t)start * 2048, SEEK_SET) != (off_t)-1) {
             ssize_t rd = read(ctx->cdfs_fd, buf, bytes);
-            if (rd < 0) rd = 0;
+            if(rd < 0)
+                rd = 0;
             /* Zero-fill any remainder if short read */
-            if ((uint32_t)rd < bytes)
+            if((uint32_t)rd < bytes)
                 memset(buf + rd, 0, bytes - rd);
         }
     }
@@ -1244,17 +1357,15 @@ static void ser_syscall_cdfs_read(kostool_context_t *ctx) {
     free(buf);
 }
 
-static void gdb_probe_stream(int *in_packet, int *checksum_bytes,
-                             size_t *payload_len, char *payload,
-                             size_t payload_cap, const char *data, size_t len,
-                             int *saw_detach, int *saw_ok) {
+static void gdb_probe_stream(int *in_packet, int *checksum_bytes, size_t *payload_len, char *payload,
+                             size_t payload_cap, const char *data, size_t len, int *saw_detach, int *saw_ok) {
     size_t i;
 
-    for (i = 0; i < len; ++i) {
+    for(i = 0; i < len; ++i) {
         unsigned char ch = (unsigned char)data[i];
 
-        if (!*in_packet) {
-            if (ch == '$') {
+        if(!*in_packet) {
+            if(ch == '$') {
                 *in_packet = 1;
                 *checksum_bytes = 0;
                 *payload_len = 0;
@@ -1262,24 +1373,21 @@ static void gdb_probe_stream(int *in_packet, int *checksum_bytes,
             continue;
         }
 
-        if (ch == '$') {
+        if(ch == '$') {
             *checksum_bytes = 0;
             *payload_len = 0;
             continue;
         }
 
-        if (*checksum_bytes) {
-            if (++(*checksum_bytes) == 3) {
+        if(*checksum_bytes) {
+            if(++(*checksum_bytes) == 3) {
                 payload[*payload_len] = '\0';
 
-                if (saw_detach &&
-                    payload[0] == 'D' &&
-                    (payload[1] == '\0' || payload[1] == ';')) {
+                if(saw_detach && payload[0] == 'D' && (payload[1] == '\0' || payload[1] == ';')) {
                     *saw_detach = 1;
                 }
 
-                if (saw_ok && payload[0] == 'O' && payload[1] == 'K' &&
-                    payload[2] == '\0') {
+                if(saw_ok && payload[0] == 'O' && payload[1] == 'K' && payload[2] == '\0') {
                     *saw_ok = 1;
                 }
 
@@ -1290,12 +1398,12 @@ static void gdb_probe_stream(int *in_packet, int *checksum_bytes,
             continue;
         }
 
-        if (ch == '#') {
+        if(ch == '#') {
             *checksum_bytes = 1;
             continue;
         }
 
-        if (*payload_len + 1 < payload_cap)
+        if(*payload_len + 1 < payload_cap)
             payload[(*payload_len)++] = (char)ch;
     }
 }
@@ -1303,29 +1411,23 @@ static void gdb_probe_stream(int *in_packet, int *checksum_bytes,
 static void gdb_note_client_bytes(kostool_context_t *ctx, const char *data, size_t len) {
     int saw_detach = 0;
 
-    gdb_probe_stream(&ctx->gdb_client_probe.in_packet,
-                     &ctx->gdb_client_probe.checksum_bytes,
-                     &ctx->gdb_client_probe.payload_len,
-                     ctx->gdb_client_probe.payload,
-                     sizeof(ctx->gdb_client_probe.payload),
-                     data, len, &saw_detach, NULL);
+    gdb_probe_stream(&ctx->gdb_client_probe.in_packet, &ctx->gdb_client_probe.checksum_bytes,
+                     &ctx->gdb_client_probe.payload_len, ctx->gdb_client_probe.payload,
+                     sizeof(ctx->gdb_client_probe.payload), data, len, &saw_detach, NULL);
 
-    if (saw_detach)
+    if(saw_detach)
         ctx->gdb_detach_pending = 1;
 }
 
 static int gdb_note_target_bytes(kostool_context_t *ctx, const char *data, size_t len) {
     int saw_ok = 0;
 
-    if (!ctx->gdb_detach_pending)
+    if(!ctx->gdb_detach_pending)
         return 0;
 
-    gdb_probe_stream(&ctx->gdb_target_probe.in_packet,
-                     &ctx->gdb_target_probe.checksum_bytes,
-                     &ctx->gdb_target_probe.payload_len,
-                     ctx->gdb_target_probe.payload,
-                     sizeof(ctx->gdb_target_probe.payload),
-                     data, len, NULL, &saw_ok);
+    gdb_probe_stream(&ctx->gdb_target_probe.in_packet, &ctx->gdb_target_probe.checksum_bytes,
+                     &ctx->gdb_target_probe.payload_len, ctx->gdb_target_probe.payload,
+                     sizeof(ctx->gdb_target_probe.payload), data, len, NULL, &saw_ok);
 
     return saw_ok;
 }
@@ -1343,18 +1445,18 @@ static void ser_syscall_gdbpacket(kostool_context_t *ctx) {
     int retval = 0;
     int close_after_reply = 0;
 
-    if (in_size)
+    if(in_size)
         ser_recv_data(ctx, gdb_buf, in_size > 1024 ? 1024 : in_size);
 
-    if (ctx->gdb_server_socket < 0) {
+    if(ctx->gdb_server_socket < 0) {
         ser_send_uint(ctx, (uint32_t)-1);
         return;
     }
 
-    if (ctx->gdb_client_socket < 0) {
+    if(ctx->gdb_client_socket < 0) {
         printf("waiting for gdb client connection...\n");
         ctx->gdb_client_socket = ctx->socket_ops->accept(ctx->gdb_server_socket);
-        if (ctx->gdb_client_socket < 0) {
+        if(ctx->gdb_client_socket < 0) {
             fprintf(stderr, "error accepting gdb connection\n");
             ser_send_uint(ctx, (uint32_t)-1);
             return;
@@ -1362,10 +1464,10 @@ static void ser_syscall_gdbpacket(kostool_context_t *ctx) {
         printf("GDB client connected\n");
     }
 
-    if (in_size) {
+    if(in_size) {
         close_after_reply = gdb_note_target_bytes(ctx, gdb_buf, in_size);
 
-        if (gdb_send_all(ctx, ctx->gdb_client_socket, gdb_buf, in_size) < 0) {
+        if(gdb_send_all(ctx, ctx->gdb_client_socket, gdb_buf, in_size) < 0) {
             fprintf(stderr, "GDB socket error\n");
             gdb_close_client(ctx);
             gdb_clear_detach_state(ctx);
@@ -1375,32 +1477,30 @@ static void ser_syscall_gdbpacket(kostool_context_t *ctx) {
         }
     }
 
-    if (out_size) {
-        retval = ctx->socket_ops->recv(ctx->gdb_client_socket,
-                                       gdb_buf, out_size > 1024 ? 1024 : out_size);
-        if (retval == 0) {
+    if(out_size) {
+        retval = ctx->socket_ops->recv(ctx->gdb_client_socket, gdb_buf, out_size > 1024 ? 1024 : out_size);
+        if(retval == 0) {
             printf("GDB client disconnected\n");
             gdb_close_client(ctx);
             gdb_clear_detach_state(ctx);
-        }
-        else if (retval > 0)
+        } else if(retval > 0)
             gdb_note_client_bytes(ctx, gdb_buf, (size_t)retval);
     }
-    if (retval < 0) {
+    if(retval < 0) {
         fprintf(stderr, "GDB socket error\n");
         gdb_close_client(ctx);
         gdb_clear_detach_state(ctx);
         retval = 0;
     }
 
-    if (close_after_reply) {
+    if(close_after_reply) {
         printf("GDB client detached\n");
         gdb_close_client(ctx);
         gdb_clear_detach_state(ctx);
     }
 
     ser_send_uint(ctx, retval);
-    if (retval > 0)
+    if(retval > 0)
         ser_send_data(ctx, (const uint8_t *)gdb_buf, retval);
 }
 
@@ -1408,28 +1508,27 @@ static int ser_syscall_exit(kostool_context_t *ctx) {
     return (int32_t)ser_recv_uint(ctx);
 }
 
-static int ser_try_recv_uint(kostool_context_t *ctx, uint32_t *value,
-                             uint32_t timeout_usec) {
+static int ser_try_recv_uint(kostool_context_t *ctx, uint32_t *value, uint32_t timeout_usec) {
     uint64_t deadline = 0;
 
-    if (!ctx->serial_ops->bytes_available || !value)
+    if(!ctx->serial_ops->bytes_available || !value)
         return 0;
 
-    if (ctx->time_ops)
+    if(ctx->time_ops)
         deadline = ctx->time_ops->time_usec() + timeout_usec;
 
-    while (1) {
+    while(1) {
         int available = ctx->serial_ops->bytes_available(ctx->serial_handle);
 
-        if (available >= 4) {
+        if(available >= 4) {
             *value = ser_recv_uint(ctx);
             return 1;
         }
 
-        if (available < 0)
+        if(available < 0)
             return 0;
 
-        if (!ctx->time_ops || ctx->time_ops->time_usec() >= deadline)
+        if(!ctx->time_ops || ctx->time_ops->time_usec() >= deadline)
             return 0;
 
         ctx->time_ops->sleep_usec(1000);
@@ -1465,8 +1564,7 @@ static void net_syscall_fstat(kostool_context_t *ctx, uint8_t *pkt, int pkt_len)
     ds.st_ctime_val = target_order32(ctx, st.st_ctime);
     /* KIR0 fast path: inline the stat result in the RETVAL.  Collapses
      * 2-packet exchange to 1, halving loss probability on lossy links. */
-    if (inline_ret && ret >= 0 && sz <= sizeof(ds) &&
-        net_send_ret_inline(ctx, ret, (uint8_t *)&ds, sz))
+    if(inline_ret && ret >= 0 && sz <= sizeof(ds) && net_send_ret_inline(ctx, ret, (uint8_t *)&ds, sz))
         return;
     ctx->transport->send_data(ctx, (uint8_t *)&ds, addr, sz);
     net_send_cmd(ctx, NET_CMD_RETVAL, ret, ret, NULL, 0);
@@ -1477,12 +1575,12 @@ static void net_syscall_write(kostool_context_t *ctx, uint8_t *pkt, int pkt_len)
     int fd = ntohl(cmd->value0);
     uint32_t addr = ntohl(cmd->value1);
     uint32_t count = ntohl(cmd->value2);
-    if (!count || count > MAX_SYSCALL_SIZE) {
+    if(!count || count > MAX_SYSCALL_SIZE) {
         net_send_cmd(ctx, NET_CMD_RETVAL, (uint32_t)-1, (uint32_t)-1, NULL, 0);
         return;
     }
     uint8_t *data = malloc(count);
-    if (!data) {
+    if(!data) {
         net_send_cmd(ctx, NET_CMD_RETVAL, (uint32_t)-1, (uint32_t)-1, NULL, 0);
         return;
     }
@@ -1491,22 +1589,20 @@ static void net_syscall_write(kostool_context_t *ctx, uint8_t *pkt, int pkt_len)
      * command struct.  When present, skip the recv_data round-trip and
      * use the bytes already in `pkt`. */
     size_t inline_off = sizeof(net_command_3int_t);
-    int have_inline =
-        (pkt_len >= 0 &&
-         (size_t)pkt_len >= inline_off + count &&
-         count <= NET_PAYLOAD_SIZE - sizeof(net_command_3int_t));
+    int have_inline = (pkt_len >= 0 && (size_t)pkt_len >= inline_off + count &&
+                       count <= NET_PAYLOAD_SIZE - sizeof(net_command_3int_t));
 
-    if (have_inline) {
+    if(have_inline) {
         memcpy(data, pkt + inline_off, count);
     } else {
         ctx->transport->recv_data(ctx, data, addr, count, 1);
     }
 
     int ret;
-    if (fd != STDOUT_FILENO && fd != STDERR_FILENO) {
+    if(fd != STDOUT_FILENO && fd != STDERR_FILENO) {
         ret = count ? write_full(fd, data, count) : 0;
-    } else if (count >= 8 && !memcmp(data, KOSLOAD_EXCEPTION_TAG, 4)) {
-        if (ctx->target_big_endian)
+    } else if(count >= 8 && !memcmp(data, KOSLOAD_EXCEPTION_TAG, 4)) {
+        if(ctx->target_big_endian)
             handle_gc_exception(ctx, data, count);
         else
             handle_dc_exception(ctx, data, count);
@@ -1524,12 +1620,12 @@ static void net_syscall_read(kostool_context_t *ctx, uint8_t *pkt) {
     int fd = ntohl(cmd->value0);
     uint32_t addr = ntohl(cmd->value1);
     uint32_t count = ntohl(cmd->value2);
-    if (!count || count > MAX_SYSCALL_SIZE) {
+    if(!count || count > MAX_SYSCALL_SIZE) {
         net_send_cmd(ctx, NET_CMD_RETVAL, (uint32_t)-1, (uint32_t)-1, NULL, 0);
         return;
     }
     uint8_t *data = malloc(count);
-    if (!data) {
+    if(!data) {
         net_send_cmd(ctx, NET_CMD_RETVAL, (uint32_t)-1, (uint32_t)-1, NULL, 0);
         return;
     }
@@ -1624,8 +1720,8 @@ static void net_syscall_stat(kostool_context_t *ctx, uint8_t *pkt, int pkt_len) 
     int ret = stat(resolved, &st);
     kosload_stat_t ds = {0};
     /* KIR0 magic sits AFTER the variable-length path string. */
-    int inline_ret = net_has_inline_ret_request(
-        pkt, pkt_len, sizeof(net_command_2int_string_t) + strlen(cmd->string) + 1);
+    int inline_ret =
+        net_has_inline_ret_request(pkt, pkt_len, sizeof(net_command_2int_string_t) + strlen(cmd->string) + 1);
     ds.st_dev = target_order16(ctx, st.st_dev);
     ds.st_ino = target_order16(ctx, st.st_ino);
     ds.st_mode = target_order32(ctx, st.st_mode);
@@ -1641,8 +1737,7 @@ static void net_syscall_stat(kostool_context_t *ctx, uint8_t *pkt, int pkt_len) 
     ds.st_atime_val = target_order32(ctx, st.st_atime);
     ds.st_mtime_val = target_order32(ctx, st.st_mtime);
     ds.st_ctime_val = target_order32(ctx, st.st_ctime);
-    if (inline_ret && ret >= 0 && sz <= sizeof(ds) &&
-        net_send_ret_inline(ctx, ret, (uint8_t *)&ds, sz))
+    if(inline_ret && ret >= 0 && sz <= sizeof(ds) && net_send_ret_inline(ctx, ret, (uint8_t *)&ds, sz))
         return;
     ctx->transport->send_data(ctx, (uint8_t *)&ds, addr, sz);
     net_send_cmd(ctx, NET_CMD_RETVAL, ret, ret, NULL, 0);
@@ -1651,7 +1746,7 @@ static void net_syscall_stat(kostool_context_t *ctx, uint8_t *pkt, int pkt_len) 
 static void net_syscall_utime(kostool_context_t *ctx, uint8_t *pkt) {
     net_command_3int_string_t *cmd = (net_command_3int_string_t *)pkt;
     int ret;
-    if (ntohl(cmd->value0)) {
+    if(ntohl(cmd->value0)) {
         struct utimbuf tbuf;
         tbuf.actime = ntohl(cmd->value1);
         tbuf.modtime = ntohl(cmd->value2);
@@ -1665,12 +1760,13 @@ static void net_syscall_utime(kostool_context_t *ctx, uint8_t *pkt) {
 static void net_syscall_opendir(kostool_context_t *ctx, uint8_t *pkt) {
     net_command_string_t *cmd = (net_command_string_t *)pkt;
     uint32_t i;
-    for (i = 0; i < MAX_OPEN_DIRS; i++)
-        if (!opendirs[i]) break;
-    if (i < MAX_OPEN_DIRS) {
-        char buf[MAX_PATH_LEN];
+    for(i = 0; i < MAX_OPEN_DIRS; i++)
+        if(!opendirs[i])
+            break;
+    if(i < MAX_OPEN_DIRS) {
+        char        buf[MAX_PATH_LEN];
         const char *resolved = resolve_path(ctx, cmd->string, buf, sizeof(buf));
-        if (!(opendirs[i] = opendir(resolved)))
+        if(!(opendirs[i] = opendir(resolved)))
             i = 0;
         else
             i += DIRENT_OFFSET;
@@ -1684,7 +1780,7 @@ static void net_syscall_closedir(kostool_context_t *ctx, uint8_t *pkt) {
     net_command_int_t *cmd = (net_command_int_t *)pkt;
     uint32_t i = ntohl(cmd->value0);
     int ret;
-    if (i >= DIRENT_OFFSET && i < MAX_OPEN_DIRS + DIRENT_OFFSET) {
+    if(i >= DIRENT_OFFSET && i < MAX_OPEN_DIRS + DIRENT_OFFSET) {
         ret = closedir(opendirs[i - DIRENT_OFFSET]);
         opendirs[i - DIRENT_OFFSET] = NULL;
     } else {
@@ -1698,12 +1794,11 @@ static void net_syscall_readdir(kostool_context_t *ctx, uint8_t *pkt, int pkt_le
     uint32_t i = ntohl(cmd->value0);
     uint32_t addr = ntohl(cmd->value1);
     uint32_t sz = ntohl(cmd->value2);
-    int inline_ret = net_has_inline_ret_request(pkt, pkt_len,
-                                                sizeof(net_command_3int_t));
-    struct dirent *de = NULL;
-    if (i >= DIRENT_OFFSET && i < MAX_OPEN_DIRS + DIRENT_OFFSET)
+    int inline_ret = net_has_inline_ret_request(pkt, pkt_len, sizeof(net_command_3int_t));
+    struct dirent*de = NULL;
+    if(i >= DIRENT_OFFSET && i < MAX_OPEN_DIRS + DIRENT_OFFSET)
         de = readdir(opendirs[i - DIRENT_OFFSET]);
-    if (de) {
+    if(de) {
         kosload_dirent_t dd = {0};
         dd.d_ino = target_order32(ctx, de->d_ino);
 #if defined(__APPLE__) || defined(__FreeBSD__)
@@ -1720,8 +1815,7 @@ static void net_syscall_readdir(kostool_context_t *ctx, uint8_t *pkt, int pkt_le
         dd.d_type = de->d_type;
 #endif
         compat_str_copy(dd.d_name, sizeof(dd.d_name), de->d_name);
-        if (inline_ret && sz <= sizeof(dd) &&
-            net_send_ret_inline(ctx, 1, (uint8_t *)&dd, sz))
+        if(inline_ret && sz <= sizeof(dd) && net_send_ret_inline(ctx, 1, (uint8_t *)&dd, sz))
             return;
         ctx->transport->send_data(ctx, (uint8_t *)&dd, addr, sz);
         net_send_cmd(ctx, NET_CMD_RETVAL, 1, 1, NULL, 0);
@@ -1748,22 +1842,23 @@ static void net_syscall_cdfs_read(kostool_context_t *ctx, uint8_t *pkt) {
     int start = ntohl(cmd->value0) - 150;
     uint32_t addr = ntohl(cmd->value1);
     uint32_t bytes = ntohl(cmd->value2);
-    if (!bytes || bytes > MAX_SYSCALL_SIZE) {
+    if(!bytes || bytes > MAX_SYSCALL_SIZE) {
         net_send_cmd(ctx, NET_CMD_RETVAL, (uint32_t)-1, (uint32_t)-1, NULL, 0);
         return;
     }
     uint8_t *buf = malloc(bytes);
-    if (!buf) {
+    if(!buf) {
         net_send_cmd(ctx, NET_CMD_RETVAL, (uint32_t)-1, (uint32_t)-1, NULL, 0);
         return;
     }
     memset(buf, 0, bytes);
-    if (ctx->cdfs_fd >= 0) {
-        if (lseek(ctx->cdfs_fd, (off_t)start * 2048, SEEK_SET) != (off_t)-1) {
+    if(ctx->cdfs_fd >= 0) {
+        if(lseek(ctx->cdfs_fd, (off_t)start * 2048, SEEK_SET) != (off_t)-1) {
             ssize_t rd = read(ctx->cdfs_fd, buf, bytes);
-            if (rd < 0) rd = 0;
+            if(rd < 0)
+                rd = 0;
             /* Zero-fill any remainder if short read */
-            if ((uint32_t)rd < bytes)
+            if((uint32_t)rd < bytes)
                 memset(buf + rd, 0, bytes - rd);
         }
     }
@@ -1780,15 +1875,15 @@ static void net_syscall_gdbpacket(kostool_context_t *ctx, uint8_t *pkt) {
     int retval = 0;
     int close_after_reply = 0;
 
-    if (ctx->gdb_server_socket < 0) {
+    if(ctx->gdb_server_socket < 0) {
         net_send_cmd(ctx, NET_CMD_RETVAL, (uint32_t)-1, (uint32_t)-1, NULL, 0);
         return;
     }
 
-    if (ctx->gdb_client_socket < 0) {
+    if(ctx->gdb_client_socket < 0) {
         printf("waiting for gdb client connection...\n");
         ctx->gdb_client_socket = ctx->socket_ops->accept(ctx->gdb_server_socket);
-        if (ctx->gdb_client_socket < 0) {
+        if(ctx->gdb_client_socket < 0) {
             fprintf(stderr, "error accepting gdb connection\n");
             net_send_cmd(ctx, NET_CMD_RETVAL, (uint32_t)-1, (uint32_t)-1, NULL, 0);
             return;
@@ -1796,10 +1891,10 @@ static void net_syscall_gdbpacket(kostool_context_t *ctx, uint8_t *pkt) {
         printf("GDB client connected\n");
     }
 
-    if (in_size) {
+    if(in_size) {
         close_after_reply = gdb_note_target_bytes(ctx, cmd->string, in_size);
 
-        if (gdb_send_all(ctx, ctx->gdb_client_socket, cmd->string, in_size) < 0) {
+        if(gdb_send_all(ctx, ctx->gdb_client_socket, cmd->string, in_size) < 0) {
             fprintf(stderr, "GDB socket error\n");
             gdb_close_client(ctx);
             gdb_clear_detach_state(ctx);
@@ -1808,32 +1903,29 @@ static void net_syscall_gdbpacket(kostool_context_t *ctx, uint8_t *pkt) {
         }
     }
 
-    if (out_size) {
-        retval = ctx->socket_ops->recv(ctx->gdb_client_socket,
-                                       gdb_buf, out_size > 1024 ? 1024 : out_size);
-        if (retval == 0) {
+    if(out_size) {
+        retval = ctx->socket_ops->recv(ctx->gdb_client_socket, gdb_buf, out_size > 1024 ? 1024 : out_size);
+        if(retval == 0) {
             printf("GDB client disconnected\n");
             gdb_close_client(ctx);
             gdb_clear_detach_state(ctx);
-        }
-        else if (retval > 0)
+        } else if(retval > 0)
             gdb_note_client_bytes(ctx, gdb_buf, (size_t)retval);
     }
-    if (retval < 0) {
+    if(retval < 0) {
         fprintf(stderr, "GDB socket error\n");
         gdb_close_client(ctx);
         gdb_clear_detach_state(ctx);
         retval = 0;
     }
 
-    if (close_after_reply) {
+    if(close_after_reply) {
         printf("GDB client detached\n");
         gdb_close_client(ctx);
         gdb_clear_detach_state(ctx);
     }
 
-    net_send_cmd(ctx, NET_CMD_RETVAL, retval, retval,
-                 (const uint8_t *)gdb_buf, retval);
+    net_send_cmd(ctx, NET_CMD_RETVAL, retval, retval, (const uint8_t *)gdb_buf, retval);
 }
 
 /* ===== Dumb terminal mode ===== */
@@ -1841,7 +1933,7 @@ static void net_syscall_gdbpacket(kostool_context_t *ctx, uint8_t *pkt) {
 static void do_dumbterm(kostool_context_t *ctx) {
     printf("\nDumb terminal mode\n\n");
     fflush(stdout);
-    while (1) {
+    while(1) {
         uint8_t c;
         ser_blread(ctx, &c, 1);
         printf("%c", c);
@@ -1852,9 +1944,9 @@ static void do_dumbterm(kostool_context_t *ctx) {
 /* ===== Serial console loop ===== */
 
 static int do_serial_console(kostool_context_t *ctx) {
-    if (ctx->cdfs_enabled && ctx->iso_filename) {
+    if(ctx->cdfs_enabled && ctx->iso_filename) {
         ctx->cdfs_fd = open(ctx->iso_filename, O_RDONLY | O_BINARY);
-        if (ctx->cdfs_fd < 0)
+        if(ctx->cdfs_fd < 0)
             perror(ctx->iso_filename);
     }
 
@@ -1862,46 +1954,88 @@ static int do_serial_console(kostool_context_t *ctx) {
     //     ctx->fs_ops->chroot(ctx->chroot_path);
     // }
 
-    while (1) {
+    while(1) {
         fflush(stdout);
         uint8_t command;
         ser_blread(ctx, &command, 1);
 
-        switch (command) {
+        switch(command) {
         case SERIAL_SYSCALL_EXIT: {
             uint32_t ret_code = 0;
 
-            if (ser_try_recv_uint(ctx, &ret_code, SERIAL_EXIT_CODE_PROBE_USEC))
+            if(ser_try_recv_uint(ctx, &ret_code, SERIAL_EXIT_CODE_PROBE_USEC))
                 printf("Program returned %d\n", (int32_t)ret_code);
 
             gdb_report_program_exit(ctx, (int32_t)ret_code);
             exit(0);
             break;
         }
-        case SERIAL_SYSCALL_FSTAT:     ser_syscall_fstat(ctx); break;
-        case SERIAL_SYSCALL_WRITE:     ser_syscall_write(ctx); break;
-        case SERIAL_SYSCALL_READ:      ser_syscall_read(ctx); break;
-        case SERIAL_SYSCALL_OPEN:      ser_syscall_open(ctx); break;
-        case SERIAL_SYSCALL_CLOSE:     ser_syscall_close(ctx); break;
-        case SERIAL_SYSCALL_CREAT:     ser_syscall_creat(ctx); break;
-        case SERIAL_SYSCALL_LINK:      ser_syscall_link(ctx); break;
-        case SERIAL_SYSCALL_UNLINK:    ser_syscall_unlink(ctx); break;
-        case SERIAL_SYSCALL_CHDIR:     ser_syscall_chdir(ctx); break;
-        case SERIAL_SYSCALL_CHMOD:     ser_syscall_chmod(ctx); break;
-        case SERIAL_SYSCALL_LSEEK:     ser_syscall_lseek(ctx); break;
-        case SERIAL_SYSCALL_TIME:      ser_syscall_time(ctx); break;
-        case SERIAL_SYSCALL_STAT:      ser_syscall_stat(ctx); break;
-        case SERIAL_SYSCALL_UTIME:     ser_syscall_utime(ctx); break;
+        case SERIAL_SYSCALL_FSTAT:
+            ser_syscall_fstat(ctx);
+            break;
+        case SERIAL_SYSCALL_WRITE:
+            ser_syscall_write(ctx);
+            break;
+        case SERIAL_SYSCALL_READ:
+            ser_syscall_read(ctx);
+            break;
+        case SERIAL_SYSCALL_OPEN:
+            ser_syscall_open(ctx);
+            break;
+        case SERIAL_SYSCALL_CLOSE:
+            ser_syscall_close(ctx);
+            break;
+        case SERIAL_SYSCALL_CREAT:
+            ser_syscall_creat(ctx);
+            break;
+        case SERIAL_SYSCALL_LINK:
+            ser_syscall_link(ctx);
+            break;
+        case SERIAL_SYSCALL_UNLINK:
+            ser_syscall_unlink(ctx);
+            break;
+        case SERIAL_SYSCALL_CHDIR:
+            ser_syscall_chdir(ctx);
+            break;
+        case SERIAL_SYSCALL_CHMOD:
+            ser_syscall_chmod(ctx);
+            break;
+        case SERIAL_SYSCALL_LSEEK:
+            ser_syscall_lseek(ctx);
+            break;
+        case SERIAL_SYSCALL_TIME:
+            ser_syscall_time(ctx);
+            break;
+        case SERIAL_SYSCALL_STAT:
+            ser_syscall_stat(ctx);
+            break;
+        case SERIAL_SYSCALL_UTIME:
+            ser_syscall_utime(ctx);
+            break;
         case SERIAL_SYSCALL_BAD:
             printf("command 15 should not happen... (but it did)\n");
             break;
-        case SERIAL_SYSCALL_OPENDIR:   ser_syscall_opendir(ctx); break;
-        case SERIAL_SYSCALL_CLOSEDIR:  ser_syscall_closedir(ctx); break;
-        case SERIAL_SYSCALL_READDIR:   ser_syscall_readdir(ctx); break;
-        case SERIAL_SYSCALL_CDFSREAD:  ser_syscall_cdfs_read(ctx); break;
-        case SERIAL_SYSCALL_GDBPACKET: ser_syscall_gdbpacket(ctx); break;
-        case SERIAL_SYSCALL_REWINDDIR: ser_syscall_rewinddir(ctx); break;
-        case SERIAL_SYSCALL_MKDIR:     ser_syscall_mkdir(ctx); break;
+        case SERIAL_SYSCALL_OPENDIR:
+            ser_syscall_opendir(ctx);
+            break;
+        case SERIAL_SYSCALL_CLOSEDIR:
+            ser_syscall_closedir(ctx);
+            break;
+        case SERIAL_SYSCALL_READDIR:
+            ser_syscall_readdir(ctx);
+            break;
+        case SERIAL_SYSCALL_CDFSREAD:
+            ser_syscall_cdfs_read(ctx);
+            break;
+        case SERIAL_SYSCALL_GDBPACKET:
+            ser_syscall_gdbpacket(ctx);
+            break;
+        case SERIAL_SYSCALL_REWINDDIR:
+            ser_syscall_rewinddir(ctx);
+            break;
+        case SERIAL_SYSCALL_MKDIR:
+            ser_syscall_mkdir(ctx);
+            break;
         case SERIAL_SYSCALL_PROGEXIT: {
             int32_t ret_code = ser_syscall_exit(ctx);
             printf("Program returned %d\n", ret_code);
@@ -1922,19 +2056,18 @@ static int do_network_console(kostool_context_t *ctx) {
     uint8_t buffer[2048];
     int pkt_len;
 
-    if (ctx->cdfs_enabled && ctx->iso_filename) {
+    if(ctx->cdfs_enabled && ctx->iso_filename) {
         ctx->cdfs_fd = open(ctx->iso_filename, O_RDONLY | O_BINARY);
-        if (ctx->cdfs_fd < 0)
+        if(ctx->cdfs_fd < 0)
             perror(ctx->iso_filename);
     }
 
-    while (1) {
+    while(1) {
         fflush(stdout);
 
-        while ((pkt_len = net_recv_resp(ctx, buffer, sizeof(buffer),
-                                         NET_PACKET_TIMEOUT_USEC)) == -1)
+        while((pkt_len = net_recv_resp(ctx, buffer, sizeof(buffer), NET_PACKET_TIMEOUT_USEC)) == -1)
             ;
-        if (pkt_len < 4)
+        if(pkt_len < 4)
             continue;
 
         /* Dedup: extract trailing KSQ0 seq id if present, replay on
@@ -1947,11 +2080,10 @@ static int do_network_console(kostool_context_t *ctx) {
          * right offset for string-bearing commands. */
         int dedup_active = 0;
         uint32_t seq = 0;
-        if (dedup_extract_seq(buffer, (size_t)pkt_len, &seq)) {
+        if(dedup_extract_seq(buffer, (size_t)pkt_len, &seq)) {
             pkt_len -= (int)NET_SEQ_TRAILER_LEN;
             uint64_t now = ctx->time_ops->time_usec();
-            if (dedup_try_replay(seq, now, ctx->socket_ops,
-                                 ctx->global_socket)) {
+            if(dedup_try_replay(seq, now, ctx->socket_ops, ctx->global_socket)) {
                 /* Replayed cached response set — skip dispatch entirely. */
                 continue;
             }
@@ -1960,7 +2092,7 @@ static int do_network_console(kostool_context_t *ctx) {
              * host-side state — read() would bump the file pointer and its
              * PARTBINs would overwrite the guest's current read buffer.
              * Only fresh (seq > high-water) requests fall through. */
-            if (dedup_is_stale(seq))
+            if(dedup_is_stale(seq))
                 continue;
             dedup_begin_capture(seq, now);
             dedup_active = 1;
@@ -1968,48 +2100,70 @@ static int do_network_console(kostool_context_t *ctx) {
 
         /* Guarantee null termination so strlen() on string commands
          * can never walk past the buffer. */
-        if ((size_t)pkt_len < sizeof(buffer))
+        if((size_t)pkt_len < sizeof(buffer))
             buffer[pkt_len] = '\0';
         else
             buffer[sizeof(buffer) - 1] = '\0';
 
-        if (!memcmp(buffer, NET_SYSCALL_EXIT, 4) || !memcmp(buffer, NET_SYSCALL_PROGEXIT, 4)) {
+        if(!memcmp(buffer, NET_SYSCALL_EXIT, 4) || !memcmp(buffer, NET_SYSCALL_PROGEXIT, 4)) {
             net_command_t *exit_cmd = (net_command_t *)buffer;
             int32_t ret_code = (int32_t)ntohl(exit_cmd->address);
             printf("Program returned %d\n", ret_code);
             gdb_report_program_exit(ctx, ret_code);
             return 0;
         }
-        if (!memcmp(buffer, NET_SYSCALL_FSTAT, 4))      net_syscall_fstat(ctx, buffer, pkt_len);
-        else if (!memcmp(buffer, NET_SYSCALL_WRITE, 4))  net_syscall_write(ctx, buffer, pkt_len);
-        else if (!memcmp(buffer, "DD02", 4))         net_syscall_write(ctx, buffer, pkt_len); /* legacy */
-        else if (!memcmp(buffer, NET_SYSCALL_READ, 4))   net_syscall_read(ctx, buffer);
-        else if (!memcmp(buffer, NET_SYSCALL_OPEN, 4))   net_syscall_open(ctx, buffer);
-        else if (!memcmp(buffer, NET_SYSCALL_CLOSE, 4))  net_syscall_close(ctx, buffer);
-        else if (!memcmp(buffer, NET_SYSCALL_CREAT, 4))  net_syscall_creat(ctx, buffer);
-        else if (!memcmp(buffer, NET_SYSCALL_LINK, 4))   net_syscall_link(ctx, buffer);
-        else if (!memcmp(buffer, NET_SYSCALL_UNLINK, 4)) net_syscall_unlink(ctx, buffer);
-        else if (!memcmp(buffer, NET_SYSCALL_CHDIR, 4))  net_syscall_chdir(ctx, buffer);
-        else if (!memcmp(buffer, NET_SYSCALL_CHMOD, 4))  net_syscall_chmod(ctx, buffer);
-        else if (!memcmp(buffer, NET_SYSCALL_LSEEK, 4))  net_syscall_lseek(ctx, buffer);
-        else if (!memcmp(buffer, NET_SYSCALL_TIME, 4))   net_syscall_time(ctx, buffer);
-        else if (!memcmp(buffer, NET_SYSCALL_STAT, 4))   net_syscall_stat(ctx, buffer, pkt_len);
-        else if (!memcmp(buffer, NET_SYSCALL_UTIME, 4))  net_syscall_utime(ctx, buffer);
-        else if (!memcmp(buffer, NET_SYSCALL_BAD, 4))
+        if(!memcmp(buffer, NET_SYSCALL_FSTAT, 4))
+            net_syscall_fstat(ctx, buffer, pkt_len);
+        else if(!memcmp(buffer, NET_SYSCALL_WRITE, 4))
+            net_syscall_write(ctx, buffer, pkt_len);
+        else if(!memcmp(buffer, "DD02", 4))
+            net_syscall_write(ctx, buffer, pkt_len); /* legacy */
+        else if(!memcmp(buffer, NET_SYSCALL_READ, 4))
+            net_syscall_read(ctx, buffer);
+        else if(!memcmp(buffer, NET_SYSCALL_OPEN, 4))
+            net_syscall_open(ctx, buffer);
+        else if(!memcmp(buffer, NET_SYSCALL_CLOSE, 4))
+            net_syscall_close(ctx, buffer);
+        else if(!memcmp(buffer, NET_SYSCALL_CREAT, 4))
+            net_syscall_creat(ctx, buffer);
+        else if(!memcmp(buffer, NET_SYSCALL_LINK, 4))
+            net_syscall_link(ctx, buffer);
+        else if(!memcmp(buffer, NET_SYSCALL_UNLINK, 4))
+            net_syscall_unlink(ctx, buffer);
+        else if(!memcmp(buffer, NET_SYSCALL_CHDIR, 4))
+            net_syscall_chdir(ctx, buffer);
+        else if(!memcmp(buffer, NET_SYSCALL_CHMOD, 4))
+            net_syscall_chmod(ctx, buffer);
+        else if(!memcmp(buffer, NET_SYSCALL_LSEEK, 4))
+            net_syscall_lseek(ctx, buffer);
+        else if(!memcmp(buffer, NET_SYSCALL_TIME, 4))
+            net_syscall_time(ctx, buffer);
+        else if(!memcmp(buffer, NET_SYSCALL_STAT, 4))
+            net_syscall_stat(ctx, buffer, pkt_len);
+        else if(!memcmp(buffer, NET_SYSCALL_UTIME, 4))
+            net_syscall_utime(ctx, buffer);
+        else if(!memcmp(buffer, NET_SYSCALL_BAD, 4))
             fprintf(stderr, "command 15 should not happen... (but it did)\n");
-        else if (!memcmp(buffer, NET_SYSCALL_OPENDIR, 4))   net_syscall_opendir(ctx, buffer);
-        else if (!memcmp(buffer, NET_SYSCALL_CLOSEDIR, 4))  net_syscall_closedir(ctx, buffer);
-        else if (!memcmp(buffer, NET_SYSCALL_READDIR, 4))   net_syscall_readdir(ctx, buffer, pkt_len);
-        else if (!memcmp(buffer, NET_SYSCALL_CDFSREAD, 4))  net_syscall_cdfs_read(ctx, buffer);
-        else if (!memcmp(buffer, NET_SYSCALL_GDBPACKET, 4)) net_syscall_gdbpacket(ctx, buffer);
-        else if (!memcmp(buffer, NET_SYSCALL_REWINDDIR, 4)) net_syscall_rewinddir(ctx, buffer);
-        else if (!memcmp(buffer, NET_SYSCALL_MKDIR, 4))     net_syscall_mkdir(ctx, buffer);
+        else if(!memcmp(buffer, NET_SYSCALL_OPENDIR, 4))
+            net_syscall_opendir(ctx, buffer);
+        else if(!memcmp(buffer, NET_SYSCALL_CLOSEDIR, 4))
+            net_syscall_closedir(ctx, buffer);
+        else if(!memcmp(buffer, NET_SYSCALL_READDIR, 4))
+            net_syscall_readdir(ctx, buffer, pkt_len);
+        else if(!memcmp(buffer, NET_SYSCALL_CDFSREAD, 4))
+            net_syscall_cdfs_read(ctx, buffer);
+        else if(!memcmp(buffer, NET_SYSCALL_GDBPACKET, 4))
+            net_syscall_gdbpacket(ctx, buffer);
+        else if(!memcmp(buffer, NET_SYSCALL_REWINDDIR, 4))
+            net_syscall_rewinddir(ctx, buffer);
+        else if(!memcmp(buffer, NET_SYSCALL_MKDIR, 4))
+            net_syscall_mkdir(ctx, buffer);
 
         /* Commit the captured response set as the live cache.  If a
          * retransmit of this same seq id arrives within
          * DEDUP_WINDOW_USEC, dedup_try_replay() above will resend the
          * captured packets verbatim instead of re-running the syscall. */
-        if (dedup_active)
+        if(dedup_active)
             dedup_end_capture();
     }
 
@@ -2020,17 +2174,17 @@ static int do_network_console(kostool_context_t *ctx) {
 
 int do_console(kostool_context_t *ctx) {
     /* Set up GDB server if requested */
-    if (ctx->gdb_enabled && ctx->gdb_server_socket < 0) {
-        if (gdb_init(ctx, NET_GDB_PORT) != 0)
+    if(ctx->gdb_enabled && ctx->gdb_server_socket < 0) {
+        if(gdb_init(ctx, NET_GDB_PORT) != 0)
             return 1;
     }
 
-    if (ctx->dumb_terminal) {
+    if(ctx->dumb_terminal) {
         do_dumbterm(ctx);
         return 0;
     }
 
-    if (strcmp(ctx->transport->name, "serial") == 0)
+    if(strcmp(ctx->transport->name, "serial") == 0)
         return do_serial_console(ctx);
     else
         return do_network_console(ctx);

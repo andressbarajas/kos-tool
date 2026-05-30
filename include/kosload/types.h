@@ -41,7 +41,7 @@ typedef struct {
 
 /* SH4 exception frame (for exception reporting) */
 typedef struct {
-    uint8_t  id[4];         /* "EXPT" */
+    uint8_t  id[4]; /* "EXPT" */
     uint32_t expt_code;
     uint32_t pc;
     uint32_t pr;
@@ -65,10 +65,10 @@ typedef struct {
 /* PPC 750 (Gekko) exception frame (for exception reporting).
  * Layout: 4-byte "EXPT" header + 428-byte exc_save_area from exception.S. */
 typedef struct {
-    uint8_t  id[4];         /* "EXPT" */
-    uint32_t expt_code;     /* Exception vector offset (e.g. 0x0300 = DSI) */
-    uint32_t srr0;          /* PC at exception */
-    uint32_t srr1;          /* Saved MSR */
+    uint8_t  id[4];     /* "EXPT" */
+    uint32_t expt_code; /* Exception vector offset (e.g. 0x0300 = DSI) */
+    uint32_t srr0;      /* PC at exception */
+    uint32_t srr1;      /* Saved MSR */
     uint32_t r0, r1, r2, r3, r4, r5, r6, r7;
     uint32_t r8, r9, r10, r11, r12, r13, r14, r15;
     uint32_t r16, r17, r18, r19, r20, r21, r22, r23;
@@ -80,10 +80,10 @@ typedef struct {
     uint32_t dsisr;
     uint32_t dar;
     /* FPU state (double-precision, 8 bytes each via stfd) */
-    uint32_t fpscr_hi, fpscr_lo;  /* mffs result (hi reserved, lo = FPSCR) */
-    uint32_t f0_hi,  f0_lo,  f1_hi,  f1_lo,  f2_hi,  f2_lo,  f3_hi,  f3_lo;
-    uint32_t f4_hi,  f4_lo,  f5_hi,  f5_lo,  f6_hi,  f6_lo,  f7_hi,  f7_lo;
-    uint32_t f8_hi,  f8_lo,  f9_hi,  f9_lo,  f10_hi, f10_lo, f11_hi, f11_lo;
+    uint32_t fpscr_hi, fpscr_lo; /* mffs result (hi reserved, lo = FPSCR) */
+    uint32_t f0_hi, f0_lo, f1_hi, f1_lo, f2_hi, f2_lo, f3_hi, f3_lo;
+    uint32_t f4_hi, f4_lo, f5_hi, f5_lo, f6_hi, f6_lo, f7_hi, f7_lo;
+    uint32_t f8_hi, f8_lo, f9_hi, f9_lo, f10_hi, f10_lo, f11_hi, f11_lo;
     uint32_t f12_hi, f12_lo, f13_hi, f13_lo, f14_hi, f14_lo, f15_hi, f15_lo;
     uint32_t f16_hi, f16_lo, f17_hi, f17_lo, f18_hi, f18_lo, f19_hi, f19_lo;
     uint32_t f20_hi, f20_lo, f21_hi, f21_lo, f22_hi, f22_lo, f23_hi, f23_lo;

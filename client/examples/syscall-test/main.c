@@ -15,57 +15,57 @@
  */
 
 /* Syscall numbers (from crt0.S jump table) */
-#define SYSCALL_READ       0
-#define SYSCALL_WRITE      1
-#define SYSCALL_OPEN       2
-#define SYSCALL_CLOSE      3
-#define SYSCALL_CREAT      4
-#define SYSCALL_LINK       5
-#define SYSCALL_UNLINK     6
-#define SYSCALL_CHDIR      7
-#define SYSCALL_CHMOD      8
-#define SYSCALL_LSEEK      9
-#define SYSCALL_FSTAT     10
-#define SYSCALL_TIME      11
-#define SYSCALL_STAT      12
-#define SYSCALL_UTIME     13
+#define SYSCALL_READ   0
+#define SYSCALL_WRITE  1
+#define SYSCALL_OPEN   2
+#define SYSCALL_CLOSE  3
+#define SYSCALL_CREAT  4
+#define SYSCALL_LINK   5
+#define SYSCALL_UNLINK 6
+#define SYSCALL_CHDIR  7
+#define SYSCALL_CHMOD  8
+#define SYSCALL_LSEEK  9
+#define SYSCALL_FSTAT  10
+#define SYSCALL_TIME   11
+#define SYSCALL_STAT   12
+#define SYSCALL_UTIME  13
 /* 14 = assign_wrkmem (stub) */
-#define SYSCALL_EXIT      15
-#define SYSCALL_OPENDIR   16
-#define SYSCALL_CLOSEDIR  17
-#define SYSCALL_READDIR   18
-#define SYSCALL_HOSTINFO  19
+#define SYSCALL_EXIT     15
+#define SYSCALL_OPENDIR  16
+#define SYSCALL_CLOSEDIR 17
+#define SYSCALL_READDIR  18
+#define SYSCALL_HOSTINFO 19
 /* 20 = gdbpacket */
 #define SYSCALL_REWINDDIR 21
 
-#define SYSCALL_MKDIR     22
+#define SYSCALL_MKDIR 22
 
 /* Open flags (KOS-compatible) */
-#define O_RDONLY    0x0000
-#define O_WRONLY    0x0001
+#define O_RDONLY 0x0000
+#define O_WRONLY 0x0001
 
 /* Seek whence */
-#define SEEK_SET    0
+#define SEEK_SET 0
 
 /* Kosload magic detection */
 #if defined(__sh__) || defined(__SH4_SINGLE__)
-#define KOSLOAD_BASE    0x8c004000
+#define KOSLOAD_BASE 0x8c004000
 #elif defined(__PPC__) || defined(__powerpc__)
 #if defined(WII_KOSLOAD_BASE)
-#define KOSLOAD_BASE    WII_KOSLOAD_BASE
+#define KOSLOAD_BASE WII_KOSLOAD_BASE
 #elif defined(GC_KOSLOAD_BASE)
-#define KOSLOAD_BASE    GC_KOSLOAD_BASE
+#define KOSLOAD_BASE GC_KOSLOAD_BASE
 #else
-#define KOSLOAD_BASE    0x817EC000
+#define KOSLOAD_BASE 0x817EC000
 #endif
 #elif defined(__mips__) || defined(__mips)
 #ifdef PS2_KOSLOAD_BASE
-#define KOSLOAD_BASE    PS2_KOSLOAD_BASE
+#define KOSLOAD_BASE PS2_KOSLOAD_BASE
 #else
 /* crt0 layout: j(+0) nop(+4) magic(+8) syscall_ptr(+12).
  * DC/GC pattern needs BASE+4=magic, BASE+8=syscall, so PS2 base
  * is _start+4 (0x80000280+4), not the real entry. */
-#define KOSLOAD_BASE    0x80000284
+#define KOSLOAD_BASE 0x80000284
 #endif
 #else
 #error "Unsupported architecture"
@@ -77,9 +77,8 @@
 
 typedef int (*kosload_syscall_fn)(int syscall, int arg1, int arg2, int arg3);
 
-static kosload_syscall_fn get_syscall(void)
-{
-    if (KOSLOAD_MAGIC_ADDR != KOSLOAD_MAGIC)
+static kosload_syscall_fn get_syscall(void) {
+    if(KOSLOAD_MAGIC_ADDR != KOSLOAD_MAGIC)
         return (kosload_syscall_fn)0;
     return (kosload_syscall_fn)KOSLOAD_SYSCALL_ADDR;
 }
@@ -116,187 +115,197 @@ typedef struct {
 
 /* ===== Syscall wrappers ===== */
 
-static int kl_read(int fd, void *buf, int count)
-{
+static int kl_read(int fd, void *buf, int count) {
     kosload_syscall_fn sc = get_syscall();
-    if (!sc) return -1;
+    if(!sc)
+        return -1;
     return sc(SYSCALL_READ, fd, (int)buf, count);
 }
 
-static int kl_write(int fd, const void *buf, int count)
-{
+static int kl_write(int fd, const void *buf, int count) {
     kosload_syscall_fn sc = get_syscall();
-    if (!sc) return -1;
+    if(!sc)
+        return -1;
     return sc(SYSCALL_WRITE, fd, (int)buf, count);
 }
 
-static int kl_open(const char *path, int flags)
-{
+static int kl_open(const char *path, int flags) {
     kosload_syscall_fn sc = get_syscall();
-    if (!sc) return -1;
+    if(!sc)
+        return -1;
     return sc(SYSCALL_OPEN, (int)path, flags, 0);
 }
 
-static int kl_close(int fd)
-{
+static int kl_close(int fd) {
     kosload_syscall_fn sc = get_syscall();
-    if (!sc) return -1;
+    if(!sc)
+        return -1;
     return sc(SYSCALL_CLOSE, fd, 0, 0);
 }
 
-static int kl_creat(const char *path, int mode)
-{
+static int kl_creat(const char *path, int mode) {
     kosload_syscall_fn sc = get_syscall();
-    if (!sc) return -1;
+    if(!sc)
+        return -1;
     return sc(SYSCALL_CREAT, (int)path, mode, 0);
 }
 
-static int kl_link(const char *oldpath, const char *newpath)
-{
+static int kl_link(const char *oldpath, const char *newpath) {
     kosload_syscall_fn sc = get_syscall();
-    if (!sc) return -1;
+    if(!sc)
+        return -1;
     return sc(SYSCALL_LINK, (int)oldpath, (int)newpath, 0);
 }
 
-static int kl_unlink(const char *path)
-{
+static int kl_unlink(const char *path) {
     kosload_syscall_fn sc = get_syscall();
-    if (!sc) return -1;
+    if(!sc)
+        return -1;
     return sc(SYSCALL_UNLINK, (int)path, 0, 0);
 }
 
-static int kl_chdir(const char *path)
-{
+static int kl_chdir(const char *path) {
     kosload_syscall_fn sc = get_syscall();
-    if (!sc) return -1;
+    if(!sc)
+        return -1;
     return sc(SYSCALL_CHDIR, (int)path, 0, 0);
 }
 
-static int kl_chmod(const char *path, int mode)
-{
+static int kl_chmod(const char *path, int mode) {
     kosload_syscall_fn sc = get_syscall();
-    if (!sc) return -1;
+    if(!sc)
+        return -1;
     return sc(SYSCALL_CHMOD, (int)path, mode, 0);
 }
 
-static int kl_lseek(int fd, int offset, int whence)
-{
+static int kl_lseek(int fd, int offset, int whence) {
     kosload_syscall_fn sc = get_syscall();
-    if (!sc) return -1;
+    if(!sc)
+        return -1;
     return sc(SYSCALL_LSEEK, fd, offset, whence);
 }
 
-static int kl_fstat(int fd, kosload_stat_t *buf)
-{
+static int kl_fstat(int fd, kosload_stat_t *buf) {
     kosload_syscall_fn sc = get_syscall();
-    if (!sc) return -1;
+    if(!sc)
+        return -1;
     return sc(SYSCALL_FSTAT, fd, (int)buf, (int)sizeof(kosload_stat_t));
 }
 
-static int kl_time(void)
-{
+static int kl_time(void) {
     kosload_syscall_fn sc = get_syscall();
-    if (!sc) return -1;
+    if(!sc)
+        return -1;
     return sc(SYSCALL_TIME, 0, 0, 0);
 }
 
-static int kl_stat(const char *path, kosload_stat_t *buf)
-{
+static int kl_stat(const char *path, kosload_stat_t *buf) {
     kosload_syscall_fn sc = get_syscall();
-    if (!sc) return -1;
+    if(!sc)
+        return -1;
     return sc(SYSCALL_STAT, (int)path, (int)buf, (int)sizeof(kosload_stat_t));
 }
 
-static int kl_utime(const char *path, unsigned int *times)
-{
+static int kl_utime(const char *path, unsigned int *times) {
     kosload_syscall_fn sc = get_syscall();
-    if (!sc) return -1;
+    if(!sc)
+        return -1;
     return sc(SYSCALL_UTIME, (int)path, (int)times, 0);
 }
 
-static unsigned int kl_opendir(const char *path)
-{
+static unsigned int kl_opendir(const char *path) {
     kosload_syscall_fn sc = get_syscall();
-    if (!sc) return 0;
+    if(!sc)
+        return 0;
     return (unsigned int)sc(SYSCALL_OPENDIR, (int)path, 0, 0);
 }
 
-static int kl_closedir(unsigned int dir)
-{
+static int kl_closedir(unsigned int dir) {
     kosload_syscall_fn sc = get_syscall();
-    if (!sc) return -1;
+    if(!sc)
+        return -1;
     return sc(SYSCALL_CLOSEDIR, (int)dir, 0, 0);
 }
 
-static kosload_dirent_t *kl_readdir(unsigned int dir)
-{
+static kosload_dirent_t *kl_readdir(unsigned int dir) {
     kosload_syscall_fn sc = get_syscall();
-    if (!sc) return (kosload_dirent_t *)0;
+    if(!sc)
+        return (kosload_dirent_t *)0;
     return (kosload_dirent_t *)sc(SYSCALL_READDIR, (int)dir, 0, 0);
 }
 
-static int kl_rewinddir(unsigned int dir)
-{
+static int kl_rewinddir(unsigned int dir) {
     kosload_syscall_fn sc = get_syscall();
-    if (!sc) return -1;
+    if(!sc)
+        return -1;
     return sc(SYSCALL_REWINDDIR, (int)dir, 0, 0);
 }
 
-static int kl_gethostinfo(unsigned int *ip, unsigned int *port)
-{
+static int kl_gethostinfo(unsigned int *ip, unsigned int *port) {
     kosload_syscall_fn sc = get_syscall();
-    if (!sc) return -1;
+    if(!sc)
+        return -1;
     return sc(SYSCALL_HOSTINFO, (int)ip, (int)port, 0);
 }
 
-static int kl_mkdir(const char *path, int mode)
-{
+static int kl_mkdir(const char *path, int mode) {
     kosload_syscall_fn sc = get_syscall();
-    if (!sc) return -1;
+    if(!sc)
+        return -1;
     return sc(SYSCALL_MKDIR, (int)path, mode, 0);
 }
 
-static void kl_exit(void)
-{
+static void kl_exit(void) {
     kosload_syscall_fn sc = get_syscall();
-    if (sc) sc(SYSCALL_EXIT, 0, 0, 0);
+    if(sc)
+        sc(SYSCALL_EXIT, 0, 0, 0);
 }
 
 /* ===== Utility functions ===== */
 
-static int slen(const char *s) { int n = 0; while (*s++) n++; return n; }
+static int slen(const char *s) {
+    int n = 0;
+    while(*s++)
+        n++;
+    return n;
+}
 
-static void print(const char *msg)
-{
+static void print(const char *msg) {
     kl_write(1, msg, slen(msg));
 }
 
-static int memcmp_b(const void *a, const void *b, int n)
-{
+static int memcmp_b(const void *a, const void *b, int n) {
     const unsigned char *p = a, *q = b;
-    int i;
-    for (i = 0; i < n; i++)
-        if (p[i] != q[i]) return p[i] - q[i];
+    int                  i;
+    for(i = 0; i < n; i++)
+        if(p[i] != q[i])
+            return p[i] - q[i];
     return 0;
 }
 
-static void uint_to_dec(unsigned int val, char *buf)
-{
+static void uint_to_dec(unsigned int val, char *buf) {
     char tmp[12];
-    int i = 0, j;
-    if (val == 0) { buf[0] = '0'; buf[1] = '\0'; return; }
-    while (val > 0) { tmp[i++] = '0' + (val % 10); val /= 10; }
-    for (j = 0; j < i; j++) buf[j] = tmp[i - 1 - j];
+    int  i = 0, j;
+    if(val == 0) {
+        buf[0] = '0';
+        buf[1] = '\0';
+        return;
+    }
+    while(val > 0) {
+        tmp[i++] = '0' + (val % 10);
+        val /= 10;
+    }
+    for(j = 0; j < i; j++)
+        buf[j] = tmp[i - 1 - j];
     buf[i] = '\0';
 }
 
-static void uint_to_hex(unsigned int val, char *buf)
-{
+static void uint_to_hex(unsigned int val, char *buf) {
     static const char hex[] = "0123456789abcdef";
     int i;
     buf[0] = '0';
     buf[1] = 'x';
-    for (i = 0; i < 8; i++)
+    for(i = 0; i < 8; i++)
         buf[2 + i] = hex[(val >> (28 - i * 4)) & 0xf];
     buf[10] = '\0';
 }
@@ -304,11 +313,10 @@ static void uint_to_hex(unsigned int val, char *buf)
 static int pass_count = 0;
 static int fail_count = 0;
 
-static void result(const char *name, int ok)
-{
+static void result(const char *name, int ok) {
     print("  ");
     print(name);
-    if (ok) {
+    if(ok) {
         print(" ... PASS\n");
         pass_count++;
     } else {
@@ -321,12 +329,11 @@ static void result(const char *name, int ok)
 
 static const char *test_file = "/tmp/kosload-syscall-test.txt";
 static const char *test_link = "/tmp/kosload-syscall-link.txt";
-static const char *test_dir  = "/tmp/kosload-syscall-testdir";
+static const char *test_dir = "/tmp/kosload-syscall-testdir";
 
 /* Entry point */
 void start(void) __attribute__((section(".text.start")));
-void start(void)
-{
+void start(void) {
     char buf[256];
     char numbuf[12];
     int fd, n, ret;
@@ -350,7 +357,7 @@ void start(void)
     result("creat(test-file)", fd >= 0);
 
     /* Slot 1: write */
-    if (fd >= 0) {
+    if(fd >= 0) {
         n = kl_write(fd, test_data, test_len);
         result("write(fd, data, len)", n == test_len);
     } else {
@@ -358,7 +365,7 @@ void start(void)
     }
 
     /* Slot 3: close (after write) */
-    if (fd >= 0) {
+    if(fd >= 0) {
         ret = kl_close(fd);
         result("close(fd) after write", ret == 0);
     } else {
@@ -370,7 +377,7 @@ void start(void)
     result("open(test-file, O_RDONLY)", fd >= 0);
 
     /* Slot 0: read */
-    if (fd >= 0) {
+    if(fd >= 0) {
         n = kl_read(fd, buf, sizeof(buf));
         result("read(fd, buf, len)", n == test_len);
         result("read() data matches written", memcmp_b(buf, test_data, test_len) == 0);
@@ -380,25 +387,24 @@ void start(void)
     }
 
     /* Slot 9: lseek */
-    if (fd >= 0) {
+    if(fd >= 0) {
         ret = kl_lseek(fd, 0, SEEK_SET);
         result("lseek(fd, 0, SEEK_SET)", ret == 0);
 
         /* Read again to verify seek worked */
         n = kl_read(fd, buf, sizeof(buf));
-        result("read() after lseek matches", n == test_len &&
-               memcmp_b(buf, test_data, test_len) == 0);
+        result("read() after lseek matches", n == test_len && memcmp_b(buf, test_data, test_len) == 0);
     } else {
         result("lseek(fd, 0, SEEK_SET)", 0);
         result("read() after lseek matches", 0);
     }
 
     /* Slot 10: fstat */
-    if (fd >= 0) {
+    if(fd >= 0) {
         ret = kl_fstat(fd, &st);
         result("fstat(fd, &st)", ret == 0);
         result("fstat() st_size matches", st.st_size == test_len);
-        if (ret == 0) {
+        if(ret == 0) {
             print("         st_size = ");
             uint_to_dec((unsigned int)st.st_size, numbuf);
             print(numbuf);
@@ -410,13 +416,13 @@ void start(void)
     }
 
     /* Close before stat-by-path */
-    if (fd >= 0)
+    if(fd >= 0)
         kl_close(fd);
 
     /* Slot 12: stat */
     ret = kl_stat(test_file, &st);
     result("stat(test-file, &st)", ret == 0);
-    if (ret == 0) {
+    if(ret == 0) {
         result("stat() st_size matches", st.st_size == test_len);
     } else {
         result("stat() st_size matches", 0);
@@ -435,8 +441,8 @@ void start(void)
     result("chmod(test-file, 0666)", ret == 0);
 
     /* Slot 13: utime */
-    times[0] = 1000000;  /* actime */
-    times[1] = 1000000;  /* modtime */
+    times[0] = 1000000; /* actime */
+    times[1] = 1000000; /* modtime */
     ret = kl_utime(test_file, times);
     result("utime(test-file, times)", ret == 0);
 
@@ -454,10 +460,10 @@ void start(void)
     result("opendir(/tmp)", dir != 0);
 
     /* Slot 18: readdir */
-    if (dir) {
+    if(dir) {
         dent = kl_readdir(dir);
         result("readdir(dir) returns entry", dent != (kosload_dirent_t *)0);
-        if (dent) {
+        if(dent) {
             print("         d_name = \"");
             print(dent->d_name);
             print("\"\n");
@@ -467,7 +473,7 @@ void start(void)
     }
 
     /* Slot 21: rewinddir */
-    if (dir) {
+    if(dir) {
         ret = kl_rewinddir(dir);
         result("rewinddir(dir)", ret == 0);
     } else {
@@ -475,7 +481,7 @@ void start(void)
     }
 
     /* readdir after rewind */
-    if (dir) {
+    if(dir) {
         dent = kl_readdir(dir);
         result("readdir() after rewind", dent != (kosload_dirent_t *)0);
     } else {
@@ -483,7 +489,7 @@ void start(void)
     }
 
     /* Slot 17: closedir */
-    if (dir) {
+    if(dir) {
         ret = kl_closedir(dir);
         result("closedir(dir)", ret == 0);
     } else {
@@ -497,7 +503,7 @@ void start(void)
     ret = kl_mkdir(test_dir, 0755);
     dir = kl_opendir(test_dir);
     result("mkdir(test-dir, 0755)", dir != 0);
-    if (dir)
+    if(dir)
         kl_closedir(dir);
 
     /* Slot 7: chdir */
@@ -510,7 +516,7 @@ void start(void)
     print("[Time]\n");
     n = kl_time();
     result("time() returns > 0", n > 0);
-    if (n > 0) {
+    if(n > 0) {
         print("         timestamp = ");
         uint_to_dec((unsigned int)n, numbuf);
         print(numbuf);

@@ -28,13 +28,13 @@
 
 /* Commands are 1 byte: [OP2:OP0][A4:A0]
  * These macros produce the command byte shifted to bits 31:24 for EXI IMM. */
-#define ENC28J60_CMD_RCR(reg)   (((0x00 | ((reg) & 0x1F)) << 24))  /* Read Control Register */
-#define ENC28J60_CMD_RBM         ((0x3A) << 24)                      /* Read Buffer Memory */
-#define ENC28J60_CMD_WCR(reg)   (((0x40 | ((reg) & 0x1F)) << 24))  /* Write Control Register */
-#define ENC28J60_CMD_WBM         ((0x7A) << 24)                      /* Write Buffer Memory */
-#define ENC28J60_CMD_BFS(reg)   (((0x80 | ((reg) & 0x1F)) << 24))  /* Bit Field Set */
-#define ENC28J60_CMD_BFC(reg)   (((0xA0 | ((reg) & 0x1F)) << 24))  /* Bit Field Clear */
-#define ENC28J60_CMD_SRC         ((0xFF) << 24)                      /* Soft Reset */
+#define ENC28J60_CMD_RCR(reg)   (((0x00 | ((reg) & 0x1F)) << 24)) /* Read Control Register */
+#define ENC28J60_CMD_RBM        ((0x3A) << 24)                    /* Read Buffer Memory */
+#define ENC28J60_CMD_WCR(reg)   (((0x40 | ((reg) & 0x1F)) << 24)) /* Write Control Register */
+#define ENC28J60_CMD_WBM        ((0x7A) << 24)                    /* Write Buffer Memory */
+#define ENC28J60_CMD_BFS(reg)   (((0x80 | ((reg) & 0x1F)) << 24)) /* Bit Field Set */
+#define ENC28J60_CMD_BFC(reg)   (((0xA0 | ((reg) & 0x1F)) << 24)) /* Bit Field Clear */
+#define ENC28J60_CMD_SRC       ((0xFF) << 24)                     /* Soft Reset */
 
 /* ===== Register Address Encoding =====
  *

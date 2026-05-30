@@ -55,18 +55,17 @@ extern unsigned short tool_port;
 
 extern kosload_info_t kosload_info;
 
-static void set_ip_from_string(void)
-{
+static void set_ip_from_string(void) {
     unsigned char *ip = (unsigned char *)&our_ip;
     const char *s = ip_config.ip;
     unsigned char i = 0, c = 0;
 
     /* If we already have an IP (e.g. returning from exception), keep it */
-    if (ip[3] != 0)
+    if(ip[3] != 0)
         return;
 
-    while (s[c] != '\0') {
-        if (s[c] == '.') {
+    while(s[c] != '\0') {
+        if(s[c] == '.') {
             i++;
             c++;
         } else {
@@ -80,43 +79,40 @@ static void set_ip_from_string(void)
     our_ip = ntohl(our_ip);
 }
 
-static void network_restore_screen(void)
-{
+static void network_restore_screen(void) {
     disp_info();
 }
 
-static void set_network_init_error(const char *msg)
-{
+static void set_network_init_error(const char *msg) {
     size_t i;
 
-    if (msg == 0)
+    if(msg == 0)
         msg = "NO ETHERNET ADAPTER DETECTED!";
 
-    for (i = 0; i + 1 < sizeof(network_init_error_msg) && msg[i] != '\0'; i++)
+    for(i = 0; i + 1 < sizeof(network_init_error_msg) && msg[i] != '\0'; i++)
         network_init_error_msg[i] = msg[i];
 
     network_init_error_msg[i] = '\0';
 }
 
-static void set_network_init_error_with_phase(const char *msg)
-{
+static void set_network_init_error_with_phase(const char *msg) {
     const char *phase = adapter_get_phase_status();
     size_t i = 0;
 
-    if (phase == 0 || phase[0] == '\0') {
+    if(phase == 0 || phase[0] == '\0') {
         set_network_init_error(msg);
         return;
     }
 
-    if (msg == 0)
+    if(msg == 0)
         msg = "NO ETHERNET ADAPTER DETECTED!";
 
-    while (i + 1 < sizeof(network_init_error_msg) && phase[i] != '\0') {
+    while(i + 1 < sizeof(network_init_error_msg) && phase[i] != '\0') {
         network_init_error_msg[i] = phase[i];
         i++;
     }
 
-    if (i + 3 < sizeof(network_init_error_msg)) {
+    if(i + 3 < sizeof(network_init_error_msg)) {
         network_init_error_msg[i++] = ' ';
         network_init_error_msg[i++] = '|';
         network_init_error_msg[i++] = ' ';
@@ -124,30 +120,28 @@ static void set_network_init_error_with_phase(const char *msg)
 
     {
         size_t j = 0;
-        while (i + 1 < sizeof(network_init_error_msg) && msg[j] != '\0')
+        while(i + 1 < sizeof(network_init_error_msg) && msg[j] != '\0')
             network_init_error_msg[i++] = msg[j++];
     }
 
     network_init_error_msg[i] = '\0';
 }
 
-static int network_transport_init(void)
-{
-    if (global_bg_color == 0)
+static int network_transport_init(void) {
+    if(global_bg_color == 0)
         global_bg_color = 0x00100530;
 
     /* Reset boot state so display is redrawn (needed after program return) */
     booted = false;
 
-    kosload_info.capabilities = KOSLOAD_CAP_NETWORK | KOSLOAD_CAP_GDB |
-                                KOSLOAD_CAP_ARGV;
-    if (target_get_ops()->cdfs_redir_enable)
+    kosload_info.capabilities = KOSLOAD_CAP_NETWORK | KOSLOAD_CAP_GDB | KOSLOAD_CAP_ARGV;
+    if(target_get_ops()->cdfs_redir_enable)
         kosload_info.capabilities |= KOSLOAD_CAP_CDFS_REDIR;
     kosload_info.transport = KOSLOAD_TRANSPORT_NETWORK;
 
     set_network_init_error("NO ETHERNET ADAPTER DETECTED!");
 
-    if (adapter_detect() < 0) {
+    if(adapter_detect() < 0) {
         set_network_init_error_with_phase(adapter_get_last_error());
         return -1;
     }
@@ -161,12 +155,12 @@ static int network_transport_init(void)
 
     /* Static IP skips DHCP, but the adapter may still need to enable RX so
      * it can answer the host's first VERS packet. */
-    if (our_ip != 0)
+    if(our_ip != 0)
         adapter_start_static_ip();
 
     /* Advertise DHCP only when the current config says DHCP.  This is runtime
      * state so a host-patched static ELF reports itself correctly. */
-    if (our_ip == 0)
+    if(our_ip == 0)
         kosload_info.capabilities |= KOSLOAD_CAP_DHCP;
 
     screensaver_init(network_restore_screen, global_bg_color);
@@ -174,46 +168,41 @@ static int network_transport_init(void)
     return 0;
 }
 
-static void network_transport_loop(bool is_main_loop)
-{
+static void network_transport_loop(bool is_main_loop) {
     /* Display adapter/IP info on first entry */
-    if (!booted)
+    if(!booted)
         disp_info();
 
-    while (1) {
-        if (booted && !screensaver_is_active())
+    while(1) {
+        if(booted && !screensaver_is_active())
             disp_status("idle...");
 
         bb->loop(is_main_loop);
 
         /* If not the main loop, return after one iteration */
-        if (!is_main_loop)
+        if(!is_main_loop)
             return;
     }
 }
 
-static int network_transport_syscall_send(const char cmd_id[4],
-                                           const uint8_t *payload,
-                                           size_t payload_len)
-{
+static int network_transport_syscall_send(const char cmd_id[4], const uint8_t *payload, size_t payload_len) {
     /* Network syscalls build their own packets directly.
      * This callback is not used by the network transport. */
-    (void)cmd_id; (void)payload; (void)payload_len;
+    (void)cmd_id;
+    (void)payload;
+    (void)payload_len;
     return -1;
 }
 
-static void network_transport_exit_notify(void)
-{
+static void network_transport_exit_notify(void) {
     /* Handled by the progexit() syscall directly */
 }
 
-static void network_transport_stop(void)
-{
+static void network_transport_stop(void) {
     bb->stop();
 }
 
-static void network_transport_start(void)
-{
+static void network_transport_start(void) {
     bb->start();
 }
 

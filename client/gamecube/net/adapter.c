@@ -31,15 +31,14 @@ static const char *last_error = "NO ETHERNET ADAPTER DETECTED!";
 
 static char adapter_display_name[ADAPTER_DISPLAY_NAME_SIZE];
 
-static const char *exi_location_name(int channel, int device)
-{
-    if (channel == 0 && device == 0)
+static const char *exi_location_name(int channel, int device) {
+    if(channel == 0 && device == 0)
         return "Slot A";
-    if (channel == 1 && device == 0)
+    if(channel == 1 && device == 0)
         return "Slot B";
-    if (channel == 0 && device == 2)
+    if(channel == 0 && device == 2)
         return "Serial Port 1";
-    if (channel == 2 && device == 0)
+    if(channel == 2 && device == 0)
         return "Serial Port 2";
     return "unknown port";
 }
@@ -53,12 +52,12 @@ static void set_adapter_display_name(const char *model, int channel, int device)
     char *out = adapter_display_name;
     int remaining = ADAPTER_DISPLAY_NAME_SIZE;
 
-#define APPEND_LITERAL(s) do { \
-        const char *src_ = (s); \
-        while (*src_ && remaining > 1) { \
-            *out++ = *src_++; \
-            remaining--; \
-        } \
+#define APPEND_LITERAL(s) do {               \
+        const char *src_ = (s);             \
+        while (*src_ && remaining > 1) {    \
+            *out++ = *src_++;              \
+            remaining--;                   \
+        }                                  \
     } while (0)
 
     APPEND_LITERAL(prefix);
@@ -76,36 +75,31 @@ static void set_adapter_display_name(const char *model, int channel, int device)
  * Uses the ECID hardware registers (same approach as ENC28J60,
  * but with a different salt for uniqueness).
  */
-static inline unsigned int mfspr_ecid0(void)
-{
+static inline unsigned int mfspr_ecid0(void) {
     unsigned int val;
     __asm__ volatile("mfspr %0, 0x39C" : "=r"(val));
     return val;
 }
 
-static inline unsigned int mfspr_ecid1(void)
-{
+static inline unsigned int mfspr_ecid1(void) {
     unsigned int val;
     __asm__ volatile("mfspr %0, 0x39D" : "=r"(val));
     return val;
 }
 
-static inline unsigned int mfspr_ecid2(void)
-{
+static inline unsigned int mfspr_ecid2(void) {
     unsigned int val;
     __asm__ volatile("mfspr %0, 0x39E" : "=r"(val));
     return val;
 }
 
-static inline unsigned int mfspr_ecid3(void)
-{
+static inline unsigned int mfspr_ecid3(void) {
     unsigned int val;
     __asm__ volatile("mfspr %0, 0x39F" : "=r"(val));
     return val;
 }
 
-static void w5500_gc_generate_mac(unsigned char *mac)
-{
+static void w5500_gc_generate_mac(unsigned char *mac) {
     union {
         unsigned int cid[4];
         unsigned char data[19];
@@ -124,10 +118,10 @@ static void w5500_gc_generate_mac(unsigned char *mac)
     ecid.data[17] = 0xA5;
 
     /* Hash ECID into 3 bytes */
-    sum = 0x57;  /* Seed: 'W' for W5500 */
-    for (i = 0; i < 18; i += 3) {
+    sum = 0x57; /* Seed: 'W' for W5500 */
+    for(i = 0; i < 18; i += 3) {
         unsigned int word;
-        word  = (unsigned int)ecid.data[i]     << 16;
+        word = (unsigned int)ecid.data[i] << 16;
         word |= (unsigned int)ecid.data[i + 1] << 8;
         word |= (unsigned int)ecid.data[i + 2];
         sum += word;
@@ -136,31 +130,30 @@ static void w5500_gc_generate_mac(unsigned char *mac)
 
     /* Locally administered, unicast */
     mac[0] = 0x02;
-    mac[1] = 0x57;  /* 'W' for W5500 */
-    mac[2] = 0x55;  /* 'U' */
+    mac[1] = 0x57; /* 'W' for W5500 */
+    mac[2] = 0x55; /* 'U' */
     mac[3] = (sum >> 16) & 0xFF;
     mac[4] = (sum >> 8) & 0xFF;
     mac[5] = sum & 0xFF;
 }
 
-int adapter_detect(void)
-{
+int adapter_detect(void) {
     int channel;
     int device;
 
     /* Try ENC28J60 first (most common SPI adapter) */
-    if (adapter_enc28j60.detect() >= 0) {
+    if(adapter_enc28j60.detect() >= 0) {
         enc28j60_get_exi_location(&channel, &device);
         set_adapter_display_name("ENC28J60", channel, device);
         adapter_enc28j60.name = adapter_display_name;
         bb = &adapter_enc28j60;
     } else {
         /* Try W5500 on all EXI locations */
-        if (w5500_probe_exi_all()) {
+        if(w5500_probe_exi_all()) {
             w5500_set_spi_ops(&gc_w5500_spi_ops);
             w5500_gc_generate_mac(adapter_w5500.mac);
 
-            if (adapter_w5500.detect() >= 0) {
+            if(adapter_w5500.detect() >= 0) {
                 w5500_get_exi_location(&channel, &device);
                 set_adapter_display_name("W5500", channel, device);
                 adapter_w5500.name = adapter_display_name;
@@ -170,9 +163,8 @@ int adapter_detect(void)
         }
 
         /* Try BBA last */
-        if (adapter_bba.detect() >= 0) {
-            set_adapter_display_name("DOL-015", GCBBA_EXI_CHANNEL,
-                                     GCBBA_EXI_DEVICE);
+        if(adapter_bba.detect() >= 0) {
+            set_adapter_display_name("DOL-015", GCBBA_EXI_CHANNEL, GCBBA_EXI_DEVICE);
             adapter_bba.name = adapter_display_name;
             bb = &adapter_bba;
         } else {
@@ -182,7 +174,7 @@ int adapter_detect(void)
     }
 
 detected:
-    if (bb->init() < 0) {
+    if(bb->init() < 0) {
         last_error = "NETWORK ADAPTER INIT FAILED!";
         return -1;
     }
@@ -194,18 +186,15 @@ detected:
     return 0;
 }
 
-const char *adapter_get_last_error(void)
-{
+const char *adapter_get_last_error(void) {
     return last_error;
 }
 
-const char *adapter_get_phase_status(void)
-{
+const char *adapter_get_phase_status(void) {
     return 0;
 }
 
-void adapter_start_static_ip(void)
-{
-    if (bb == &adapter_enc28j60 || bb == &adapter_bba)
+void adapter_start_static_ip(void) {
+    if(bb == &adapter_enc28j60 || bb == &adapter_bba)
         bb->start();
 }

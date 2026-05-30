@@ -13,14 +13,14 @@
 static int raw_probe(const char *filename) {
     /* Raw binary is the fallback — always matches */
     struct stat st;
-    if (stat(filename, &st) != 0) return 0;
+    if(stat(filename, &st) != 0)
+        return 0;
     return (st.st_size > 0);
 }
 
-static int raw_load(const char *filename, uint32_t *entry_addr,
-                    binary_section_cb callback, void *user_data) {
+static int raw_load(const char *filename, uint32_t *entry_addr, binary_section_cb callback, void *user_data) {
     int fd = open(filename, O_RDONLY | O_BINARY);
-    if (fd < 0) {
+    if(fd < 0) {
         perror(filename);
         return -1;
     }
@@ -29,12 +29,12 @@ static int raw_load(const char *filename, uint32_t *entry_addr,
     lseek(fd, 0, SEEK_SET);
 
     uint8_t *data = malloc(size);
-    if (!data) {
+    if(!data) {
         close(fd);
         return -1;
     }
 
-    if (read(fd, data, size) != size) {
+    if(read(fd, data, size) != size) {
         free(data);
         close(fd);
         return -1;
@@ -62,8 +62,8 @@ const binary_ops_t raw_binary_ops = {
 };
 
 /* Auto-detect format and load */
-int binary_auto_load(const char *filename, uint32_t default_addr,
-                     uint32_t *entry_addr, binary_section_cb cb, void *ud) {
+int binary_auto_load(const char *filename, uint32_t default_addr, uint32_t *entry_addr, binary_section_cb cb,
+                     void *ud) {
     *entry_addr = default_addr;
 
     static const binary_ops_t *formats[] = {
@@ -73,8 +73,8 @@ int binary_auto_load(const char *filename, uint32_t default_addr,
         &raw_binary_ops,
     };
 
-    for (size_t i = 0; i < sizeof(formats) / sizeof(formats[0]); i++) {
-        if (formats[i]->probe(filename)) {
+    for(size_t i = 0; i < sizeof(formats) / sizeof(formats[0]); i++) {
+        if(formats[i]->probe(filename)) {
             return formats[i]->load(filename, entry_addr, cb, ud);
         }
     }

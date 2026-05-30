@@ -24,10 +24,8 @@ typedef struct {
 const char *wii_ios_net_last_error(void);
 int wii_ios_net_init(wii_net_config_t *config);
 void wii_ios_net_shutdown(void);
-int wii_ios_net_recvfrom(uint8_t *payload, uint32_t payload_capacity,
-                         uint32_t *src_ip, uint16_t *src_port);
-int wii_ios_net_sendto(const uint8_t *payload, uint32_t payload_len,
-                       uint32_t dest_ip, uint16_t dest_port);
+int wii_ios_net_recvfrom(uint8_t *payload, uint32_t payload_capacity, uint32_t *src_ip, uint16_t *src_port);
+int wii_ios_net_sendto(const uint8_t *payload, uint32_t payload_len, uint32_t dest_ip, uint16_t dest_port);
 
 /* Opt 0xC001 = DHCP lease seconds (WiiBrew); <0 = IOS rc.  Does IOS
  * IPC — only call at init / re-init, never from the data-path loop. */

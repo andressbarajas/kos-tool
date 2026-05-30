@@ -17,11 +17,11 @@
  * over-reads and 32-byte cache-line operations.
  */
 #define RAW_TX_PKT_BUF_SIZE 1536
-#define TX_PKT_BUF_SIZE 1514
+#define TX_PKT_BUF_SIZE     1514
 
 /* IP protocol identifiers */
-#define IP_UDP_PROTOCOL 17
-#define IP_ICMP_PROTOCOL 1
+#define IP_UDP_PROTOCOL     17
+#define IP_ICMP_PROTOCOL    1
 
 void process_pkt(unsigned char *pkt);
 

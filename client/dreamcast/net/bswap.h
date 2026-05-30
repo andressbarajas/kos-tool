@@ -7,16 +7,17 @@
 #if __GNUC__ <= 4
 
 static inline unsigned short bswap16(unsigned short x) {
-    __asm__ volatile("swap.b %[out], %[out]\n\t" : [out] "+r" (x) : : );
+    __asm__ volatile("swap.b %[out], %[out]\n\t" : [out] "+r"(x) : :);
     return x;
 }
 
 static inline unsigned int bswap32(unsigned int x) {
-    __asm__ volatile(
-        "swap.b %[out], %[out]\n\t"
-        "swap.w %[out], %[out]\n\t"
-        "swap.b %[out], %[out]\n\t"
-        : [out] "+r" (x) : : );
+    __asm__ volatile("swap.b %[out], %[out]\n\t"
+                     "swap.w %[out], %[out]\n\t"
+                     "swap.b %[out], %[out]\n\t"
+                     : [out] "+r"(x)
+                     :
+                     :);
     return x;
 }
 

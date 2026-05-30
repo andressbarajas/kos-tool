@@ -17,7 +17,7 @@
 
 int cdfs_open(kostool_context_t *ctx, const char *iso_filename) {
     int fd = open(iso_filename, O_RDONLY | O_BINARY);
-    if (fd < 0) {
+    if(fd < 0) {
         perror(iso_filename);
         return -1;
     }
@@ -29,28 +29,28 @@ int cdfs_open(kostool_context_t *ctx, const char *iso_filename) {
 }
 
 void cdfs_close(kostool_context_t *ctx) {
-    if (ctx->cdfs_fd >= 0) {
+    if(ctx->cdfs_fd >= 0) {
         close(ctx->cdfs_fd);
         ctx->cdfs_fd = -1;
     }
 }
 
-int cdfs_read_sectors(kostool_context_t *ctx, int start_sector, int num_sectors,
-                      uint8_t *buffer, size_t buffer_size) {
-    if (ctx->cdfs_fd < 0)
+int cdfs_read_sectors(kostool_context_t *ctx, int start_sector, int num_sectors, uint8_t *buffer,
+                      size_t buffer_size) {
+    if(ctx->cdfs_fd < 0)
         return -1;
 
     size_t bytes = (size_t)num_sectors * 2048;
-    if (bytes > buffer_size)
+    if(bytes > buffer_size)
         bytes = buffer_size;
 
     /* Adjust for 150-sector pregap */
     off_t offset = (off_t)(start_sector - 150) * 2048;
-    if (lseek(ctx->cdfs_fd, offset, SEEK_SET) < 0)
+    if(lseek(ctx->cdfs_fd, offset, SEEK_SET) < 0)
         return -1;
 
     ssize_t ret = read(ctx->cdfs_fd, buffer, bytes);
-    if (ret < 0)
+    if(ret < 0)
         return -1;
 
     return (int)ret;

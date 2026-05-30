@@ -17,8 +17,11 @@
 
 /* POSIX socket ops */
 
-static int posix_socket_init(void) { return 0; }
-static void posix_socket_cleanup(void) { }
+static int posix_socket_init(void) {
+    return 0;
+}
+static void posix_socket_cleanup(void) {
+}
 
 static int64_t posix_udp_socket(void) {
     return socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
@@ -35,9 +38,9 @@ static int posix_bind_listen(int64_t sock, uint16_t port) {
     addr.sin_port = htons(port);
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 
-    if (bind((int)sock, (struct sockaddr *)&addr, sizeof(addr)) < 0)
+    if(bind((int)sock, (struct sockaddr *)&addr, sizeof(addr)) < 0)
         return -1;
-    if (listen((int)sock, 1) < 0)
+    if(listen((int)sock, 1) < 0)
         return -1;
     return 0;
 }
@@ -57,7 +60,8 @@ static int posix_connect(int64_t sock, const char *host, uint16_t port) {
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
     he = gethostbyname(host);
-    if (!he) return -1;
+    if(!he)
+        return -1;
     memcpy(&addr.sin_addr, he->h_addr_list[0], he->h_length);
     return connect((int)sock, (struct sockaddr *)&addr, sizeof(addr));
 }
@@ -98,20 +102,26 @@ const platform_socket_ops_t posix_socket_ops = {
 
 static int posix_translate_flags(int kos_flags) {
     int flags = O_RDONLY;
-    if (kos_flags & KOS_O_WRONLY) flags = O_WRONLY;
-    if (kos_flags & KOS_O_RDWR) flags = O_RDWR;
-    if (kos_flags & KOS_O_APPEND) flags |= O_APPEND;
-    if (kos_flags & KOS_O_CREAT) flags |= O_CREAT;
-    if (kos_flags & KOS_O_TRUNC) flags |= O_TRUNC;
-    if (kos_flags & KOS_O_EXCL) flags |= O_EXCL;
+    if(kos_flags & KOS_O_WRONLY)
+        flags = O_WRONLY;
+    if(kos_flags & KOS_O_RDWR)
+        flags = O_RDWR;
+    if(kos_flags & KOS_O_APPEND)
+        flags |= O_APPEND;
+    if(kos_flags & KOS_O_CREAT)
+        flags |= O_CREAT;
+    if(kos_flags & KOS_O_TRUNC)
+        flags |= O_TRUNC;
+    if(kos_flags & KOS_O_EXCL)
+        flags |= O_EXCL;
     return flags;
 }
 
-static const char *posix_resolve_path(const char *dc_path, const char *map_root,
-                                      char *out, size_t out_size) {
+static const char *posix_resolve_path(const char *dc_path, const char *map_root, char *out, size_t out_size) {
     size_t len;
 
-    if (!map_root) return dc_path;
+    if(!map_root)
+        return dc_path;
     len = compat_str_copy(out, out_size, map_root);
     compat_str_append(out, out_size, len, dc_path);
     return out;

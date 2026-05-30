@@ -25,16 +25,14 @@ extern void go(unsigned int addr);
 /* From exception.S */
 extern void exception_common(void);
 
-static void ps2_quiesce_cop0_timer(void)
-{
+static void ps2_quiesce_cop0_timer(void) {
     uint32_t status = ee_cop0_read_status();
 
     /* The loader polls COP0 Count for timekeeping; it never needs the COP0
      * timer interrupt.  A firmware update can inherit Cause.IP7 from the old
      * EE context, so acknowledge Compare and keep the timer mask down. */
-    ee_cop0_write_status(status & ~(EE_COP0_STATUS_IE |
-                                    EE_COP0_STATUS_INT5_TIMER));
-    ee_cop0_write_compare(0xffffffffu);
+    ee_cop0_write_status(status & ~(EE_COP0_STATUS_IE | EE_COP0_STATUS_INT5_TIMER));
+    ee_cop0_write_compare(0xffffffff);
 }
 
 /* ===== Exception vector installation ===== */
@@ -54,20 +52,19 @@ static void ps2_quiesce_cop0_timer(void)
  *   jr   k0
  *   nop
  */
-static void install_exception_stub(uint32_t vector_addr)
-{
+static void install_exception_stub(uint32_t vector_addr) {
     volatile uint32_t *dst =
-        (volatile uint32_t *)((vector_addr & 0x1fffffffu) | 0xa0000000u);
+        (volatile uint32_t *)((vector_addr & 0x1fffffff) | 0xa0000000);
     uint32_t handler = (uint32_t)exception_common;
     uint16_t hi = (handler >> 16) & 0xFFFF;
     uint16_t lo = handler & 0xFFFF;
 
     /* lui k0, %hi(handler) — k0 = $26 = reg 26 */
-    dst[0] = 0x3C1A0000 | hi;      /* lui $k0, hi */
+    dst[0] = 0x3C1A0000 | hi; /* lui $k0, hi */
     /* ori k0, k0, %lo(handler) */
-    dst[1] = 0x375A0000 | lo;      /* ori $k0, $k0, lo */
+    dst[1] = 0x375A0000 | lo; /* ori $k0, $k0, lo */
     /* jr k0 */
-    dst[2] = 0x03400008;           /* jr $k0 */
+    dst[2] = 0x03400008; /* jr $k0 */
     /* nop (branch delay slot) */
     dst[3] = 0x00000000;
 
@@ -93,7 +90,7 @@ static void install_exception_stub(uint32_t vector_addr)
 extern void progexit(int status);
 
 /* Save area size from exception.S: 416 bytes */
-#define EXC_SAVE_AREA_SIZE  416
+#define EXC_SAVE_AREA_SIZE    416
 
 static volatile uint32_t exception_depth;
 static char exception_first_line[] =
@@ -101,31 +98,28 @@ static char exception_first_line[] =
 static char exception_second_line[] =
     "SP=00000000 RA=00000000 GP=00000000";
 
-static void hex_byte(char *dst, uint32_t value)
-{
+static void hex_byte(char *dst, uint32_t value) {
     static const char hex[] = "0123456789ABCDEF";
 
     dst[0] = hex[(value >> 4) & 0x0f];
     dst[1] = hex[value & 0x0f];
 }
 
-static void hex_word(char *dst, uint32_t value)
-{
+static void hex_word(char *dst, uint32_t value) {
     hex_byte(dst + 0, value >> 24);
     hex_byte(dst + 2, value >> 16);
     hex_byte(dst + 4, value >> 8);
     hex_byte(dst + 6, value);
 }
 
-void exception_handler_c(uint32_t cause, uint32_t epc, uint32_t *save_area)
-{
-    uint32_t excode = (cause >> 2) & 0x1Fu;
+void exception_handler_c(uint32_t cause, uint32_t epc, uint32_t *save_area) {
+    uint32_t excode = (cause >> 2) & 0x1F;
     uint32_t bvaddr = ee_cop0_read_badvaddr();
     uint32_t sp;
     uint32_t ra;
     uint32_t gp;
 
-    if (exception_depth++ != 0u) {
+    if(exception_depth++ != 0) {
         /* Nested fault inside the handler — stop here rather than recurse. */
         for (;;) {}
     }
@@ -157,8 +151,7 @@ void exception_handler_c(uint32_t cause, uint32_t epc, uint32_t *save_area)
 
 /* ===== Exception initialization ===== */
 
-void exception_init(void)
-{
+void exception_init(void) {
     ps2_quiesce_cop0_timer();
 
     /* Install exception stubs at all standard EE vectors */
@@ -171,33 +164,28 @@ void exception_init(void)
 
 /* ===== target_ops implementations ===== */
 
-static int ps2_init(void)
-{
+static int ps2_init(void) {
     ps2_quiesce_cop0_timer();
     ps2_video_init();
     ps2_sif_broker_publish();
     return 0;
 }
 
-static void ps2_draw_string(int x, int y, const char *str, uint32_t color)
-{
+static void ps2_draw_string(int x, int y, const char *str, uint32_t color) {
     ps2_video_draw_string(x, y, str, color);
 }
 
-static void ps2_clear_screen(uint32_t color)
-{
+static void ps2_clear_screen(uint32_t color) {
     ps2_video_clear(color);
 }
 
-static void ps2_setup_video(uint32_t mode, uint32_t bg_color)
-{
+static void ps2_setup_video(uint32_t mode, uint32_t bg_color) {
     (void)mode;
     (void)bg_color;
     /* Video already initialized in ps2_init() */
 }
 
-static void ps2_execute(uint32_t address)
-{
+static void ps2_execute(uint32_t address) {
     (void)ps2_smap_release_pending();
 
     /* Flush caches for the loaded program region */
@@ -205,13 +193,11 @@ static void ps2_execute(uint32_t address)
     go(address);
 }
 
-static void ps2_disable_cache(void)
-{
+static void ps2_disable_cache(void) {
     cache_disable();
 }
 
-static void ps2_reboot(void)
-{
+static void ps2_reboot(void) {
     /* Jump back to kosload entry point */
     cache_disable();
     void (*entry)(void) = (void (*)(void))PS2_INNER_LOADER_BASE;
@@ -219,15 +205,13 @@ static void ps2_reboot(void)
 }
 
 /* Global wrapper for commands.c which calls disable_cache() by name */
-void disable_cache(void)
-{
+void disable_cache(void) {
     cache_disable();
 }
 
-static void ps2_set_console_enabled(bool enabled)
-{
+static void ps2_set_console_enabled(bool enabled) {
     /* Toggle ps2loadmagic (entry+0x08) between 0xdeadbeef and 0xfeedface */
-    if (enabled)
+    if(enabled)
         *(volatile unsigned int *)(PS2_INNER_LOADER_BASE + 8) = 0xdeadbeef;
     else
         *(volatile unsigned int *)(PS2_INNER_LOADER_BASE + 8) = 0xfeedface;
@@ -244,17 +228,15 @@ static void ps2_set_console_enabled(bool enabled)
  * the EE supplied via set_rtc. */
 static uint32_t fallback_rtc = 0;
 
-static void ps2_set_rtc(uint32_t unix_timestamp)
-{
+static void ps2_set_rtc(uint32_t unix_timestamp) {
     fallback_rtc = unix_timestamp;
     (void)ps2_smap_set_rtc(unix_timestamp);
 }
 
-static uint32_t ps2_get_rtc(void)
-{
+static uint32_t ps2_get_rtc(void) {
     uint32_t rtc;
 
-    if (ps2_smap_get_rtc(&rtc) == 0)
+    if(ps2_smap_get_rtc(&rtc) == 0)
         return rtc;
     return fallback_rtc;
 }
@@ -264,8 +246,9 @@ static uint32_t ps2_get_rtc(void)
 /* Expose a low-rate monotonic clock to common code.  The raw EE COP0 Count
  * wraps in roughly 14 seconds at the observed PS2 rate, which is too fast for
  * shared code that multiplies seconds by ticks_per_second in 32-bit math.
- * Scaling by a power of two keeps this cheap and avoids libgcc 64-bit divide. */
-#define PS2_COP0_TICKS_PER_SEC 294912000u
+ * Scaling by a power of two keeps this cheap and avoids libgcc 64-bit divide.
+ */
+#define PS2_COP0_TICKS_PER_SEC 294912000
 #define PS2_TICK_SHIFT         8
 #define PS2_TICKS_PER_SEC      (PS2_COP0_TICKS_PER_SEC >> PS2_TICK_SHIFT)
 
@@ -273,47 +256,40 @@ static uint32_t ps2_get_rtc(void)
 static uint32_t last_count = 0;
 static uint32_t count_hi = 0;
 
-static uint64_t ps2_get_ticks(void)
-{
+static uint64_t ps2_get_ticks(void) {
     uint32_t count;
 
     count = ee_cop0_read_count();
-    if (count < last_count)
+    if(count < last_count)
         count_hi++;
     last_count = count;
 
-    return ((uint64_t)count_hi << (32 - PS2_TICK_SHIFT)) |
-           (count >> PS2_TICK_SHIFT);
+    return ((uint64_t)count_hi << (32 - PS2_TICK_SHIFT)) | (count >> PS2_TICK_SHIFT);
 }
 
-static void ps2_restart_timer(void)
-{
+static void ps2_restart_timer(void) {
     /* Match the Dreamcast lifecycle: after an uploaded program returns, start
      * the loader's monotonic timer from a known point again. */
     ps2_quiesce_cop0_timer();
     ee_cop0_write_count(0);
-    ee_cop0_write_compare(0xffffffffu);
+    ee_cop0_write_compare(0xffffffff);
     last_count = 0;
     count_hi = 0;
 }
 
 /* ===== Screensaver support ===== */
 
-static void ps2_fill_rect(int x, int y, int w, int h, uint32_t color)
-{
+static void ps2_fill_rect(int x, int y, int w, int h, uint32_t color) {
     ps2_video_fill_rect(x, y, w, h, color);
 }
 
-static void ps2_draw_bitmap(int x, int y, int w, int h,
-                             const uint32_t *bits, uint32_t color)
-{
+static void ps2_draw_bitmap(int x, int y, int w, int h, const uint32_t *bits, uint32_t color) {
     ps2_video_draw_bitmap(x, y, w, h, bits, color);
 }
 
 /* ===== Memory detection ===== */
 
-static uint32_t ps2_detect_ram_size(void)
-{
+static uint32_t ps2_detect_ram_size(void) {
     /* All PS2 consoles have 32 MB EE RAM */
     return 32 * 1024 * 1024;
 }
@@ -344,7 +320,6 @@ const target_ops_t playstation2_target_ops = {
     .detect_ram_size = ps2_detect_ram_size,
 };
 
-const target_ops_t *target_get_ops(void)
-{
+const target_ops_t *target_get_ops(void) {
     return &playstation2_target_ops;
 }

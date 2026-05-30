@@ -19,8 +19,7 @@
 #include <kostool/platform.h>
 #include "minilzo.h"
 
-#define HEAP_ALLOC(var, size) \
-    long __LZO_MMODEL var[((size) + (sizeof(long) - 1)) / sizeof(long)]
+#define HEAP_ALLOC(var, size) long __LZO_MMODEL var[((size) + (sizeof(long) - 1)) / sizeof(long)]
 
 static HEAP_ALLOC(wrkmem, LZO1X_1_MEM_COMPRESS);
 
@@ -35,7 +34,7 @@ static int serial_putc(kostool_context_t *ctx, uint8_t ch) {
 
 static int serial_getc(kostool_context_t *ctx, uint8_t *ch) {
     int ret = ctx->serial_ops->read(ctx->serial_handle, ch, 1);
-    if (ret != 1) {
+    if(ret != 1) {
         fprintf(stderr, "serial_getc: read error\n");
         *ch = 0;
         return -1;
@@ -46,9 +45,12 @@ static int serial_getc(kostool_context_t *ctx, uint8_t *ch) {
 /* Blocking read of exactly count bytes */
 static void blread(kostool_context_t *ctx, void *buf, int count) {
     uint8_t *tmp = buf;
-    while (count > 0) {
+    while(count > 0) {
         int ret = ctx->serial_ops->read(ctx->serial_handle, tmp, count);
-        if (ret <= 0) { fprintf(stderr, "blread: read error (%d)\n", ret); return; }
+        if(ret <= 0) {
+            fprintf(stderr, "blread: read error (%d)\n", ret);
+            return;
+        }
         tmp += ret;
         count -= ret;
     }
@@ -58,10 +60,14 @@ static void blread(kostool_context_t *ctx, void *buf, int count) {
 static void send_uint(kostool_context_t *ctx, uint32_t value) {
     uint8_t b;
 
-    b = value & 0xFF;         serial_putc(ctx, b);
-    b = (value >> 8) & 0xFF;  serial_putc(ctx, b);
-    b = (value >> 16) & 0xFF; serial_putc(ctx, b);
-    b = (value >> 24) & 0xFF; serial_putc(ctx, b);
+    b = value & 0xFF;
+    serial_putc(ctx, b);
+    b = (value >> 8) & 0xFF;
+    serial_putc(ctx, b);
+    b = (value >> 16) & 0xFF;
+    serial_putc(ctx, b);
+    b = (value >> 24) & 0xFF;
+    serial_putc(ctx, b);
 
     uint8_t e0, e1, e2, e3;
     serial_getc(ctx, &e0);
@@ -70,7 +76,7 @@ static void send_uint(kostool_context_t *ctx, uint32_t value) {
     serial_getc(ctx, &e3);
     uint32_t echo = e0 | ((uint32_t)e1 << 8) | ((uint32_t)e2 << 16) | ((uint32_t)e3 << 24);
 
-    if (echo != value)
+    if(echo != value)
         fprintf(stderr, "send_uint: echo mismatch (sent 0x%08x, got 0x%08x)\n", value, echo);
 }
 
@@ -91,44 +97,50 @@ static uint32_t recv_uint(kostool_context_t *ctx) {
  * Data is sent in SERIAL_BUFFER_SIZE chunks.
  * Each chunk: type('C'/'U') + size + data + XOR checksum + wait for ack
  */
-static void lzo_send_data(kostool_context_t *ctx, const uint8_t *addr,
-                          uint32_t size, int verbose) {
+static void lzo_send_data(kostool_context_t *ctx, const uint8_t *addr, uint32_t size, int verbose) {
     uint8_t *buffer = malloc(SERIAL_BUFFER_SIZE + SERIAL_BUFFER_SIZE / 64 + 16 + 3);
-    if (!buffer) return;
+    if(!buffer)
+        return;
 
-    if (verbose) {
+    if(verbose) {
         printf("send_data: ");
         fflush(stdout);
     }
 
-    while (size > 0) {
+    while(size > 0) {
         uint32_t sendsize = (size > SERIAL_BUFFER_SIZE) ? SERIAL_BUFFER_SIZE : size;
         lzo_uint csize;
 
         lzo1x_1_compress(addr, sendsize, buffer, &csize, wrkmem);
 
-        if (csize < sendsize) {
+        if(csize < sendsize) {
             /* Send compressed */
-            if (verbose) { printf("C"); fflush(stdout); }
+            if(verbose) {
+                printf("C");
+                fflush(stdout);
+            }
             serial_putc(ctx, SERIAL_DATA_COMPRESSED);
             send_uint(ctx, csize);
             uint8_t ack = SERIAL_DATA_BAD;
-            while (ack != SERIAL_DATA_GOOD) {
+            while(ack != SERIAL_DATA_GOOD) {
                 ctx->serial_ops->write(ctx->serial_handle, buffer, csize);
                 uint8_t sum = 0;
-                for (lzo_uint i = 0; i < csize; i++)
+                for(lzo_uint i = 0; i < csize; i++)
                     sum ^= buffer[i];
                 serial_putc(ctx, sum);
                 blread(ctx, &ack, 1);
             }
         } else {
             /* Send uncompressed */
-            if (verbose) { printf("U"); fflush(stdout); }
+            if(verbose) {
+                printf("U");
+                fflush(stdout);
+            }
             serial_putc(ctx, SERIAL_DATA_UNCOMPRESSED);
             send_uint(ctx, sendsize);
             ctx->serial_ops->write(ctx->serial_handle, addr, sendsize);
             uint8_t sum = 0;
-            for (uint32_t i = 0; i < sendsize; i++)
+            for(uint32_t i = 0; i < sendsize; i++)
                 sum ^= addr[i];
             serial_putc(ctx, sum);
             uint8_t ack;
@@ -139,7 +151,7 @@ static void lzo_send_data(kostool_context_t *ctx, const uint8_t *addr,
         addr += sendsize;
     }
 
-    if (verbose) {
+    if(verbose) {
         printf("\n");
         fflush(stdout);
     }
@@ -151,23 +163,25 @@ static void lzo_send_data(kostool_context_t *ctx, const uint8_t *addr,
  * Receive total bytes from DC with LZO decompression.
  * Each chunk: type('C'/'U') + size + data + checksum + send ack
  */
-static void lzo_recv_data(kostool_context_t *ctx, void *data,
-                          uint32_t total, int verbose) {
-    if (verbose) {
+static void lzo_recv_data(kostool_context_t *ctx, void *data, uint32_t total, int verbose) {
+    if(verbose) {
         printf("recv_data: ");
         fflush(stdout);
     }
 
     uint8_t *out = data;
-    while (total > 0) {
+    while(total > 0) {
         uint8_t type;
         blread(ctx, &type, 1);
 
         uint32_t size = recv_uint(ctx);
 
-        switch (type) {
+        switch(type) {
         case SERIAL_DATA_UNCOMPRESSED: {
-            if (verbose) { printf("U"); fflush(stdout); }
+            if(verbose) {
+                printf("U");
+                fflush(stdout);
+            }
             blread(ctx, out, size);
             uint8_t sum;
             blread(ctx, &sum, 1);
@@ -178,9 +192,12 @@ static void lzo_recv_data(kostool_context_t *ctx, void *data,
             break;
         }
         case SERIAL_DATA_COMPRESSED: {
-            if (verbose) { printf("C"); fflush(stdout); }
+            if(verbose) {
+                printf("C");
+                fflush(stdout);
+            }
             uint8_t *tmp = malloc(size);
-            if (!tmp) {
+            if(!tmp) {
                 fprintf(stderr, "\nlzo_recv_data: malloc(%u) failed\n", size);
                 return;
             }
@@ -188,7 +205,7 @@ static void lzo_recv_data(kostool_context_t *ctx, void *data,
             uint8_t sum;
             blread(ctx, &sum, 1);
             lzo_uint newsize;
-            if (lzo1x_decompress(tmp, size, out, &newsize, 0) == LZO_E_OK) {
+            if(lzo1x_decompress(tmp, size, out, &newsize, 0) == LZO_E_OK) {
                 uint8_t ok = SERIAL_DATA_GOOD;
                 serial_putc(ctx, ok);
                 total -= newsize;
@@ -206,7 +223,7 @@ static void lzo_recv_data(kostool_context_t *ctx, void *data,
         }
     }
 
-    if (verbose) {
+    if(verbose) {
         printf("\n");
         fflush(stdout);
     }
@@ -215,19 +232,19 @@ static void lzo_recv_data(kostool_context_t *ctx, void *data,
 /* ===== Transport interface implementation ===== */
 
 static int serial_init(kostool_context_t *ctx) {
-    if (lzo_init() != LZO_E_OK) {
+    if(lzo_init() != LZO_E_OK) {
         fprintf(stderr, "LZO initialization failed\n");
         return -1;
     }
 
-    if (!ctx->device_name) {
+    if(!ctx->device_name) {
         fprintf(stderr, "No serial device specified (use -t)\n");
         return -1;
     }
 
     /* Open at initial speed (default 57600) */
     ctx->serial_handle = ctx->serial_ops->open(ctx->device_name, SERIAL_DEFAULT_SPEED);
-    if (!ctx->serial_handle) {
+    if(!ctx->serial_handle) {
         fprintf(stderr, "Failed to open serial device %s\n", ctx->device_name);
         return -1;
     }
@@ -235,13 +252,12 @@ static int serial_init(kostool_context_t *ctx) {
     ctx->current_speed = SERIAL_DEFAULT_SPEED;
 
     /* If user requested a different speed, negotiate it */
-    if (ctx->initial_speed != SERIAL_DEFAULT_SPEED) {
-        if (!transport_can_change_speed(ctx->transport)) {
-            fprintf(stderr, "%s transport does not support speed changes\n",
-                    ctx->transport->name);
+    if(ctx->initial_speed != SERIAL_DEFAULT_SPEED) {
+        if(!transport_can_change_speed(ctx->transport)) {
+            fprintf(stderr, "%s transport does not support speed changes\n", ctx->transport->name);
             return -1;
         }
-        if (ctx->transport->change_speed(ctx, ctx->initial_speed) != 0) {
+        if(ctx->transport->change_speed(ctx, ctx->initial_speed) != 0) {
             fprintf(stderr, "Failed to change speed to %u\n", ctx->initial_speed);
             return -1;
         }
@@ -261,8 +277,8 @@ static int serial_init(kostool_context_t *ctx) {
 
         int vi = 0;
         uint8_t ch;
-        while (vi < (int)sizeof(ctx->remote_version_string) - 1) {
-            if (serial_getc(ctx, &ch) != 0 || ch == '\n')
+        while(vi < (int)sizeof(ctx->remote_version_string) - 1) {
+            if(serial_getc(ctx, &ch) != 0 || ch == '\n')
                 break;
             ctx->remote_version_string[vi++] = (char)ch;
         }
@@ -275,14 +291,14 @@ static int serial_init(kostool_context_t *ctx) {
         /* Modern serial loaders can answer a dedicated capability query.
          * Legacy dcload-serial does not support unknown commands, so only
          * probe loaders whose version string identifies them as kosload. */
-        if (serial_remote_supports_capabilities(ctx)) {
+        if(serial_remote_supports_capabilities(ctx)) {
             uint8_t caps_cmd = SERIAL_CMD_CAPABILITIES;
             ctx->serial_ops->write(ctx->serial_handle, &caps_cmd, 1);
             serial_getc(ctx, &echo);
             ctx->remote_capabilities = recv_uint(ctx);
         }
 
-        if (!ctx->quiet_mode)
+        if(!ctx->quiet_mode)
             printf("%s\n", ctx->remote_version_string);
     }
 
@@ -290,15 +306,13 @@ static int serial_init(kostool_context_t *ctx) {
 }
 
 static void serial_shutdown(kostool_context_t *ctx) {
-    int launched_without_console = ctx->program_executed &&
-                                   !ctx->console_enabled &&
-                                   !ctx->dumb_terminal;
+    int launched_without_console = ctx->program_executed && !ctx->console_enabled && !ctx->dumb_terminal;
 
-    if (!ctx->serial_handle) return;
+    if(!ctx->serial_handle)
+        return;
 
     /* Restore initial speed if we changed it */
-    if (ctx->current_speed != SERIAL_DEFAULT_SPEED &&
-        !launched_without_console) {
+    if(ctx->current_speed != SERIAL_DEFAULT_SPEED && !launched_without_console) {
         /* Try to change back - but don't fail if it doesn't work */
         uint8_t c = SERIAL_CMD_SPEED;
         ctx->serial_ops->write(ctx->serial_handle, &c, 1);
@@ -307,12 +321,12 @@ static void serial_shutdown(kostool_context_t *ctx) {
 
         ctx->serial_ops->close(ctx->serial_handle);
         ctx->serial_handle = ctx->serial_ops->open(ctx->device_name, SERIAL_DEFAULT_SPEED);
-        if (ctx->serial_handle) {
+        if(ctx->serial_handle) {
             uint32_t rv = 0xdeadbeef;
             send_uint(ctx, rv);
             recv_uint(ctx);
         }
-    } else if (launched_without_console) {
+    } else if(launched_without_console) {
         /* After EXEC with -n there is no console/progexit loop keeping the
          * loader protocol alive, so waiting for a baud-reset handshake here
          * can block forever. Close the port as-is and let the next session
@@ -320,10 +334,10 @@ static void serial_shutdown(kostool_context_t *ctx) {
     }
 
     /* Close GDB socket if started */
-    if (ctx->gdb_enabled)
+    if(ctx->gdb_enabled)
         gdb_shutdown(ctx);
 
-    if (ctx->serial_handle) {
+    if(ctx->serial_handle) {
         ctx->serial_ops->flush(ctx->serial_handle);
         ctx->serial_ops->close(ctx->serial_handle);
         ctx->serial_handle = NULL;
@@ -334,10 +348,10 @@ static void serial_shutdown(kostool_context_t *ctx) {
 
 /*
  * Send binary data to DC target at dest_addr.
- * Serial protocol: send 'B' command, read ack, send addr, send size, send data w/ LZO.
+ * Serial protocol: send 'B' command, read ack, send addr, send size, send data
+ * w/ LZO.
  */
-static int serial_send_data(kostool_context_t *ctx, const uint8_t *data,
-                            uint32_t dest_addr, uint32_t size) {
+static int serial_send_data(kostool_context_t *ctx, const uint8_t *data, uint32_t dest_addr, uint32_t size) {
     uint8_t c = SERIAL_CMD_LOAD_BEGIN;
     ctx->serial_ops->write(ctx->serial_handle, &c, 1);
     blread(ctx, &c, 1);
@@ -351,21 +365,20 @@ static int serial_send_data(kostool_context_t *ctx, const uint8_t *data,
 
 /*
  * Download data from DC target at src_addr.
- * Serial protocol: send 'F'/'G' command, read ack, send addr/size/wrkmem, recv w/ LZO.
+ * Serial protocol: send 'F'/'G' command, read ack, send addr/size/wrkmem, recv
+ * w/ LZO.
  */
-static int serial_recv_data(kostool_context_t *ctx, uint8_t *data,
-                            uint32_t src_addr, uint32_t size, int quiet) {
+static int serial_recv_data(kostool_context_t *ctx, uint8_t *data, uint32_t src_addr, uint32_t size,
+                            int quiet) {
     uint8_t c = quiet ? SERIAL_CMD_DOWNLOAD_Q : SERIAL_CMD_DOWNLOAD;
     ctx->serial_ops->write(ctx->serial_handle, &c, 1);
     blread(ctx, &c, 1);
 
-    uint32_t wrkmem_addr = ctx->target_big_endian
-        ? GC_LZO_WRKMEM_ADDR : DC_LZO_WRKMEM_ADDR;
+    uint32_t wrkmem_addr = ctx->target_big_endian ? GC_LZO_WRKMEM_ADDR : DC_LZO_WRKMEM_ADDR;
 
     /* If the read range overlaps wrkmem, the console would corrupt the
      * data with LZO hash tables. Send 0 to force uncompressed transfer. */
-    if (src_addr < wrkmem_addr + LZO_WRKMEM_SIZE &&
-        src_addr + size > wrkmem_addr)
+    if(src_addr < wrkmem_addr + LZO_WRKMEM_SIZE && src_addr + size > wrkmem_addr)
         wrkmem_addr = 0;
 
     send_uint(ctx, src_addr);
@@ -380,19 +393,21 @@ static int serial_recv_data(kostool_context_t *ctx, uint8_t *data,
  * Serial protocol doesn't use 4-byte command IDs.
  * This maps the generic interface to single-byte serial commands.
  */
-static int serial_send_command(kostool_context_t *ctx, const char cmd[4],
-                               uint32_t addr, uint32_t size,
+static int serial_send_command(kostool_context_t *ctx, const char cmd[4], uint32_t addr, uint32_t size,
                                const uint8_t *data, uint32_t data_size) {
-    (void)addr; (void)size; (void)data; (void)data_size;
+    (void)addr;
+    (void)size;
+    (void)data;
+    (void)data_size;
 
     /* Map network-style command IDs to serial command bytes */
     uint8_t c;
-    if (memcmp(cmd, NET_CMD_EXECUTE, 4) == 0)
+    if(memcmp(cmd, NET_CMD_EXECUTE, 4) == 0)
         c = SERIAL_CMD_EXECUTE;
-    else if (memcmp(cmd, NET_CMD_LOADBIN, 4) == 0)
+    else if(memcmp(cmd, NET_CMD_LOADBIN, 4) == 0)
         c = SERIAL_CMD_LOAD_BEGIN;
-    else if (memcmp(cmd, NET_CMD_REBOOT, 4) == 0)
-        c = SERIAL_CMD_SPEED;  /* No direct reboot command in serial */
+    else if(memcmp(cmd, NET_CMD_REBOOT, 4) == 0)
+        c = SERIAL_CMD_SPEED; /* No direct reboot command in serial */
     else {
         fprintf(stderr, "serial: unsupported command %.4s\n", cmd);
         return -1;
@@ -402,10 +417,11 @@ static int serial_send_command(kostool_context_t *ctx, const char cmd[4],
     return 0;
 }
 
-static int serial_recv_response(kostool_context_t *ctx, uint8_t *buffer,
-                                size_t buffer_size, uint32_t timeout_usec) {
+static int serial_recv_response(kostool_context_t *ctx, uint8_t *buffer, size_t buffer_size,
+                                uint32_t timeout_usec) {
     (void)timeout_usec;
-    if (buffer_size < 1) return -1;
+    if(buffer_size < 1)
+        return -1;
     blread(ctx, buffer, 1);
     return 1;
 }
@@ -421,21 +437,21 @@ static bool serial_remote_supports_argv(const kostool_context_t *ctx) {
 
 /*
  * Execute at address on DC.
- * Serial protocol: optionally send 'H' for CDFS redir, then send 'A' + addr + console.
+ * Serial protocol: optionally send 'H' for CDFS redir, then send 'A' + addr +
+ * console.
  */
-static int serial_execute(kostool_context_t *ctx, uint32_t addr,
-                          int console_enabled, int cdfs_redir) {
+static int serial_execute(kostool_context_t *ctx, uint32_t addr, int console_enabled, int cdfs_redir) {
     uint8_t c;
     bool send_argv = (ctx->prog_argc > 0) && serial_remote_supports_argv(ctx);
 
-    if (cdfs_redir) {
+    if(cdfs_redir) {
         c = SERIAL_CMD_CDFS_REDIR;
         ctx->serial_ops->write(ctx->serial_handle, &c, 1);
         blread(ctx, &c, 1);
     }
 
     printf("Sending execute command (0x%08x, console=%d)...", addr, console_enabled);
-    if (send_argv)
+    if(send_argv)
         printf("argv(%u, argv0=\"%s\")...", ctx->prog_argc, ctx->prog_argv_data);
 
     c = SERIAL_CMD_EXECUTE;
@@ -450,18 +466,17 @@ static int serial_execute(kostool_context_t *ctx, uint32_t addr,
      * truthy (console enabled) — harmless.  Extra bytes are only sent when
      * args are present, so with no args the protocol is identical to legacy. */
     uint32_t console_flags = (uint32_t)console_enabled;
-    if (send_argv)
+    if(send_argv)
         console_flags |= (1u << 31);
     send_uint(ctx, console_flags);
 
-    if (send_argv) {
+    if(send_argv) {
         send_uint(ctx, ctx->prog_argc);
         uint32_t argv_data_len = 0;
-        for (uint32_t i = 0; i < ctx->prog_argc; i++)
+        for(uint32_t i = 0; i < ctx->prog_argc; i++)
             argv_data_len += (uint32_t)strlen(ctx->prog_argv_data + argv_data_len) + 1;
         send_uint(ctx, argv_data_len);
-        ctx->serial_ops->write(ctx->serial_handle,
-                               (const uint8_t *)ctx->prog_argv_data, argv_data_len);
+        ctx->serial_ops->write(ctx->serial_handle, (const uint8_t *)ctx->prog_argv_data, argv_data_len);
     }
 
     printf("executing\n");
@@ -480,11 +495,11 @@ static int serial_change_speed(kostool_context_t *ctx, uint32_t new_speed) {
 
     /* Apply speedhack or external clock adjustments */
     uint32_t wire_speed = new_speed;
-    if (ctx->speedhack && new_speed == 115200)
-        wire_speed = 111607;  /* N=13 instead of N=12, -3.0% error vs 4.3% */
-    else if (ctx->speedhack && new_speed == 230400)
-        wire_speed = 223214;  /* N=6 instead of N=5, -2.8% error vs 11.5% */
-    else if (ctx->use_extclk)
+    if(ctx->speedhack && new_speed == 115200)
+        wire_speed = 111607; /* N=13 instead of N=12, -3.0% error vs 4.3% */
+    else if(ctx->speedhack && new_speed == 230400)
+        wire_speed = 223214; /* N=6 instead of N=5, -2.8% error vs 11.5% */
+    else if(ctx->use_extclk)
         wire_speed = 0;
 
     send_uint(ctx, wire_speed);
@@ -494,7 +509,7 @@ static int serial_change_speed(kostool_context_t *ctx, uint32_t new_speed) {
     /* Close and reopen at the new speed */
     ctx->serial_ops->close(ctx->serial_handle);
     ctx->serial_handle = ctx->serial_ops->open(ctx->device_name, new_speed);
-    if (!ctx->serial_handle) {
+    if(!ctx->serial_handle) {
         fprintf(stderr, "Failed to reopen serial at %u bps\n", new_speed);
         return -1;
     }
@@ -521,8 +536,7 @@ static int serial_set_rtc(kostool_context_t *ctx, uint32_t timestamp) {
 
 const transport_ops_t serial_transport_ops = {
     .name = "serial",
-    .capabilities = TRANSPORT_CAP_COMPRESS | TRANSPORT_CAP_RTC |
-                    TRANSPORT_CAP_SPEED_CHANGE,
+    .capabilities = TRANSPORT_CAP_COMPRESS | TRANSPORT_CAP_RTC | TRANSPORT_CAP_SPEED_CHANGE,
     .init = serial_init,
     .shutdown = serial_shutdown,
     .send_data = serial_send_data,

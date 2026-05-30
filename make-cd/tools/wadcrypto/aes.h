@@ -22,11 +22,9 @@ void aes128_decrypt_block(const uint8_t rk[176], uint8_t block[AES128_BLOCKLEN])
 
 /* CBC over a buffer whose length must be a multiple of 16. iv is not modified;
  * the operation is in place on buf. */
-void aes128_cbc_encrypt(const uint8_t key[AES128_KEYLEN],
-                        const uint8_t iv[AES128_BLOCKLEN],
-                        uint8_t *buf, size_t len);
-void aes128_cbc_decrypt(const uint8_t key[AES128_KEYLEN],
-                        const uint8_t iv[AES128_BLOCKLEN],
-                        uint8_t *buf, size_t len);
+void aes128_cbc_encrypt(const uint8_t key[AES128_KEYLEN], const uint8_t iv[AES128_BLOCKLEN], uint8_t *buf,
+                        size_t len);
+void aes128_cbc_decrypt(const uint8_t key[AES128_KEYLEN], const uint8_t iv[AES128_BLOCKLEN], uint8_t *buf,
+                        size_t len);
 
 #endif /* KOSTOOL_WADCRYPTO_AES_H */
