@@ -42,7 +42,7 @@ __attribute__((aligned(2))) unsigned char *pkt_buf = &(raw_pkt_buf[2]);
 static void process_broadcast(unsigned char *pkt)  // arp request
 {
     ether_header_t *ether_header = (ether_header_t *)pkt;
-	arp_header_t *arp_header = (arp_header_t *)(pkt + ETHER_H_LEN);
+    arp_header_t *arp_header = (arp_header_t *)(pkt + ETHER_H_LEN);
 
     if(ether_header->type[1] == 0x00)
         process_mine(pkt);
@@ -67,8 +67,8 @@ static void process_broadcast(unsigned char *pkt)  // arp request
         // This is because by the time arp_header->proto_target is manually
         // aligned to 4 bytes, memcmp_16bit_eq would already be done the
         // comparison operation.
-        //		__attribute__((aligned(2))) unsigned int ip = htonl(our_ip);
-        //		if (!memcmp_16bit_eq(arp_header->proto_target, &ip, 4/2)) /* for
+        //      __attribute__((aligned(2))) unsigned int ip = htonl(our_ip);
+        //      if (!memcmp_16bit_eq(arp_header->proto_target, &ip, 4/2)) /* for
         // us */
 
         // Well, with the shift-by-2 trick this field is aligned to 4 bytes now.
@@ -123,9 +123,9 @@ static void process_icmp(ether_header_t *ether, ip_header_t *ip, icmp_header_t *
         memcpy_16bit(ether->dest, ether->src, 6 / 2);
         memcpy_16bit(ether->src, bb->mac, 6 / 2);
         /* swap src and dest ip addresses */
-        //		__attribute__((aligned(4))) unsigned int ip_buf = htonl(our_ip);
-        //		memcpy_16bit(&ip->dest, &ip->src, 4/2);
-        //		memcpy_16bit(&ip->src, &ip_buf, 4/2);
+        //      __attribute__((aligned(4))) unsigned int ip_buf = htonl(our_ip);
+        //      memcpy_16bit(&ip->dest, &ip->src, 4/2);
+        //      memcpy_16bit(&ip->src, &ip_buf, 4/2);
         // ip header is aligned to 4 bytes now with the shift-by-2 trick
         // So at long last we can just do this. Finally.
         ip->dest = ip->src;
@@ -145,7 +145,7 @@ static void process_icmp(ether_header_t *ether, ip_header_t *ip, icmp_header_t *
 
 static void process_udp(ether_header_t *ether, ip_header_t *ip, udp_header_t *udp) {
     ip_udp_pseudo_header_t *pseudo;
-	unsigned short i;
+    unsigned short i;
 
     // UDP length field includes the 8-byte UDP header itself
     unsigned short udp_total = ntohs(udp->length);
@@ -210,7 +210,7 @@ static void process_udp(ether_header_t *ether, ip_header_t *ip, udp_header_t *ud
         // they're all 4-character, non-null-terminated strings. Unfortunately
         // packet headers are 42 bytes, which is NOT a multiple of 4. It is a
         // multiple of 2, though, so we can do this without crashing:
-        //		__attribute__((aligned(4))) unsigned int pkt_match_id =
+        //      __attribute__((aligned(4))) unsigned int pkt_match_id =
         //((unsigned int) *(unsigned short*)&command->id[2] << 16) | (unsigned
         // int) *(unsigned short*)command->id;
 
@@ -319,9 +319,9 @@ static void process_udp(ether_header_t *ether, ip_header_t *ip, udp_header_t *ud
 
 static void process_mine(unsigned char *pkt) {
     ether_header_t *ether_header = (ether_header_t *)pkt;
-	ip_header_t *ip_header = (ip_header_t *)(pkt + ETHER_H_LEN);
-	icmp_header_t *icmp_header;
-	udp_header_t *udp_header;
+    ip_header_t *ip_header = (ip_header_t *)(pkt + ETHER_H_LEN);
+    icmp_header_t *icmp_header;
+    udp_header_t *udp_header;
 
     if(__builtin_expect(ether_header->type[1] != 0x00, 0)) {
         // Sometimes we get a directed ARP packet, like in the case of pings.

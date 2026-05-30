@@ -41,9 +41,9 @@ void make_udp(unsigned short dest, unsigned short src, int length, ip_header_t *
     pseudo->length = udp->length;
     pseudo->checksum = 0;
 
-	udp->checksum = checksum_udp((unsigned short *)pseudo,
-	                             (unsigned short *)udp->data,
-	                             length / 2, length % 2);
-	if(udp->checksum == 0)
+    udp->checksum = checksum_udp((unsigned short *)pseudo,
+                                 (unsigned short *)udp->data,
+                                 length / 2, length % 2);
+    if(udp->checksum == 0)
         udp->checksum = 0xffff;
 }

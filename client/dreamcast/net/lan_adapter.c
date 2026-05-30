@@ -45,8 +45,8 @@ static char uint_string_array[11] = {0};
 
 adapter_t adapter_la = {
     "LAN Adapter (HIT-0300)",
-	{ 0 },		// Mac address
-	{ 0 },		// 2-byte alignment pad
+    { 0 },      // Mac address
+    { 0 },      // 2-byte alignment pad
     la_bb_detect,
     la_bb_init,
     la_bb_start,
@@ -99,8 +99,8 @@ static void net_read_eeprom(uint8 *data) {
     uint8 val, n, bit;
 
     /* Save the current value of the EEPROM registers */
-    //	save16 = REG(16);
-    //	save17 = REG(17);
+    //  save16 = REG(16);
+    //  save17 = REG(17);
 
     /* Read bytes from EEPROM, two per iteration */
     for(n = 0; n < 3; n++) {
@@ -387,7 +387,7 @@ void la_bb_stop(void) {
    at a time for transmission, but this is the simple way. */
 int la_bb_tx(unsigned char *pkt, int len) {
     int i;
-    /*	char buffer[16]; */
+    /*  char buffer[16]; */
 
     DEBUG("bb_tx entered\r\n");
     // transmission CAN still occur if RX is stopped (bb_started == 3)
@@ -483,7 +483,7 @@ int la_bb_tx(unsigned char *pkt, int len) {
     REGW(10) = 0x80 | 1; /* 1 packet, 0x80 = start */
 
     // For stats
-    //	total_pkts_tx++;
+    //  total_pkts_tx++;
     /* if (!running)
         draw_total(); */
 
@@ -579,7 +579,7 @@ static int la_bb_rx(void) {
         process_pkt(copyback_current_pkt);
 
         // For stats
-        //		total_pkts_rx++;
+        //      total_pkts_rx++;
         /* if (!running)
             draw_total(); */
 
@@ -603,10 +603,10 @@ static char reg_agg_temp[9] = {0};
 /* Loop doing something interesting */
 void la_bb_loop(bool is_main_loop) {
     const target_ops_t *t = target_get_ops();
-	int result;
-	int link_change_message = 0;
-	uint64_t last_sec_tick = 0;
-	unsigned int loop_secs_elapsed = 0;
+    int result;
+    int link_change_message = 0;
+    uint64_t last_sec_tick = 0;
+    unsigned int loop_secs_elapsed = 0;
 
     DEBUG("bb_loop entered\r\n");
 
