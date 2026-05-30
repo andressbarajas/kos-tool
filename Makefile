@@ -85,6 +85,7 @@ endef
 # ---------- Targets ----------
 
 .PHONY: all host dc gc wii ps2 dist dist-dc dist-gc dist-wii gc-dol \
+        auto-dc auto-gc auto-wii auto-ps2 \
         dist-auto-dc dist-auto-gc dist-auto-wii clean \
         check-dc-toolchain check-gc-toolchain check-wii-toolchain check-ps2-toolchain
 
@@ -106,7 +107,52 @@ check-ps2-toolchain:
 	$(call require_host_tool,$(PS2_CC),PS2 EE compiler (mips64r5900el-ps2-elf-gcc),PlayStation 2,PS2_EE_TOOLCHAIN)
 	$(call require_host_tool,$(PS2_IOP_CC),PS2 IOP compiler (mipsel-elf-gcc),PlayStation 2,PS2_IOP_TOOLCHAIN)
 
-all: dc gc wii ps2 host
+# `make all` builds every console whose cross-toolchain is installed, skipping
+# the rest with a SKIP notice, then always builds the host tool.  Use the
+# explicit per-console targets (make dc/gc/wii/ps2) for a hard error when a
+# toolchain is missing.  Real compile failures still abort — only a missing
+# toolchain is skipped.
+all: auto-dc auto-gc auto-wii auto-ps2 host
+
+# Skip-if-missing wrappers (mirror dist-auto-*).  Wii uses the GameCube
+# (powerpc-eabi) toolchain; PS2 needs both the EE and IOP compilers.
+auto-dc:
+	@if $(call has_host_tool,$(DC_CC)) && \
+	    $(call has_host_tool,$(DC_AR)) && \
+	    $(call has_host_tool,$(DC_OBJCOPY)) && \
+	    $(call has_host_tool,$(DC_SIZE)); then \
+		$(MAKE) dc; \
+	else \
+		echo "  SKIP    Dreamcast firmware (toolchain not found)"; \
+	fi
+
+auto-gc:
+	@if $(call has_host_tool,$(GC_CC)) && \
+	    $(call has_host_tool,$(GC_AR)) && \
+	    $(call has_host_tool,$(GC_OBJCOPY)) && \
+	    $(call has_host_tool,$(GC_SIZE)); then \
+		$(MAKE) gc; \
+	else \
+		echo "  SKIP    GameCube firmware (toolchain not found)"; \
+	fi
+
+auto-wii:
+	@if $(call has_host_tool,$(GC_CC)) && \
+	    $(call has_host_tool,$(GC_AR)) && \
+	    $(call has_host_tool,$(GC_OBJCOPY)) && \
+	    $(call has_host_tool,$(GC_SIZE)); then \
+		$(MAKE) wii; \
+	else \
+		echo "  SKIP    Wii firmware (toolchain not found)"; \
+	fi
+
+auto-ps2:
+	@if $(call has_host_tool,$(PS2_CC)) && \
+	    $(call has_host_tool,$(PS2_IOP_CC)); then \
+		$(MAKE) ps2; \
+	else \
+		echo "  SKIP    PlayStation 2 firmware (toolchain not found)"; \
+	fi
 
 host: $(VERSION_H) | $(BUILDDIR)
 	$(MAKE) -C host ROOT=$(ROOT)
