@@ -12,14 +12,14 @@
 #   ./build.sh --host-only             # Host only
 #   ./build.sh --dc-only               # DC clients only
 #   ./build.sh --gc-only               # GC clients only
-#   ./build.sh --disc                  # All clients + disc images (CDI/DOL/ISO)
+#   ./build.sh --dist                  # All clients + delivery artifacts (CDI/DOL/ISO/WAD)
 #
 set -e
 
 HOST_ONLY=0
 DC_ONLY=0
 GC_ONLY=0
-DISC=0
+DIST=0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -35,13 +35,13 @@ while [[ $# -gt 0 ]]; do
             GC_ONLY=1
             shift
             ;;
-        --disc)
-            DISC=1
+        --dist)
+            DIST=1
             shift
             ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: $0 [--host-only] [--dc-only] [--gc-only] [--disc]"
+            echo "Usage: $0 [--host-only] [--dc-only] [--gc-only] [--dist]"
             exit 1
             ;;
     esac
@@ -58,10 +58,10 @@ fi
 if [ "$DC_ONLY" -eq 1 ]; then
     echo "=== Building DC clients ==="
     make dc
-    if [ "$DISC" -eq 1 ]; then
+    if [ "$DIST" -eq 1 ]; then
         echo ""
         echo "=== Building DC disc images ==="
-        make disc-dc
+        make dist-dc
     fi
     echo ""
     echo "Done:"
@@ -73,10 +73,10 @@ fi
 if [ "$GC_ONLY" -eq 1 ]; then
     echo "=== Building GC clients ==="
     make gc
-    if [ "$DISC" -eq 1 ]; then
+    if [ "$DIST" -eq 1 ]; then
         echo ""
         echo "=== Building GC disc images ==="
-        make disc-gc
+        make dist-gc
     fi
     echo ""
     echo "Done:"
@@ -85,12 +85,12 @@ if [ "$GC_ONLY" -eq 1 ]; then
     exit 0
 fi
 
-if [ "$DISC" -eq 1 ]; then
-    echo "=== Building all targets + disc images ==="
+if [ "$DIST" -eq 1 ]; then
+    echo "=== Building all targets + delivery artifacts ==="
     make all
     echo ""
-    echo "=== Building disc images ==="
-    make disc
+    echo "=== Building delivery artifacts ==="
+    make dist
     echo ""
     echo "Done:"
     echo "  Host:      host/build/kos-tool"
@@ -98,7 +98,7 @@ if [ "$DISC" -eq 1 ]; then
     echo "  DC IP:     client/dreamcast/build/ip/dc-load-ip.elf"
     echo "  GC serial: client/gamecube/build/serial/gc-load-ser.elf"
     echo "  GC IP:     client/gamecube/build/ip/gc-load-ip.elf"
-    echo "  Disc images: build/*.cdi build/*.dol build/*.iso"
+    echo "  Delivery artifacts: build/*.cdi build/*.dol build/*.iso build/*.wad"
     exit 0
 fi
 

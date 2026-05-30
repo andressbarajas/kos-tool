@@ -1,4 +1,5 @@
-# make-cd/Makefile — Build disc images for Dreamcast (CDI) and GameCube (ISO/DOL)
+# make-dist/Makefile — Build delivery artifacts: Dreamcast (CDI), GameCube (ISO/DOL),
+#                      and the Wii channel WAD
 #
 # Dreamcast: Assembles a 1st_read bootstrap that embeds the kosload firmware,
 #            objcopies it to a boot binary, then creates a repo-local CDI.
@@ -107,7 +108,7 @@ GC_SER_ISO := $(BUILDDIR)/gc-load-ser.iso
 GC_IP_ISO  := $(BUILDDIR)/gc-load-ip.iso
 
 # Wii channel WAD packed around wii-load-ip.dol.  Override on the command line:
-#   make -C make-cd wii WII_WAD_TITLE_ID=KOSL WII_WAD_IOS=58 \
+#   make -C make-dist wii WII_WAD_TITLE_ID=KOSL WII_WAD_IOS=58 \
 #       WII_WAD_NAME="wii-load-ip" WII_WAD_TITLE_VER=2
 WII_WAD           := $(BUILDDIR)/wii-load-ip.wad
 WII_WAD_TITLE_ID  ?= KOSL
@@ -253,12 +254,12 @@ $(MKWAD): tools/mkwad/wad.c tools/mkwad/banner.c tools/mkwad/banner.h tools/mkwa
 # mkwad reads ./common-key.bin from the cwd it was invoked in, so cd into
 # the mkwad source dir before running it -- that's where the user keeps
 # their (gitignored) common-key.bin, alongside the tool that consumes it
-# (mirroring the make-cd/tools/IP.BIN convention).  $(MKWAD), $(WII_IP_DOL),
+# (mirroring the make-dist/tools/IP.BIN convention).  $(MKWAD), $(WII_IP_DOL),
 # and $@ are anchored at absolute paths via $(abspath ...), so the cd
 # doesn't break them.
 $(WII_WAD): $(MKWAD) $(WII_IP_DOL) | $(BUILDDIR)
 	@echo "  WAD     $@"
-	@cd $(ROOT)/make-cd/tools/mkwad && $(abspath $(MKWAD)) --dol $(WII_IP_DOL) \
+	@cd $(ROOT)/make-dist/tools/mkwad && $(abspath $(MKWAD)) --dol $(WII_IP_DOL) \
 	    --title-id $(WII_WAD_TITLE_ID) --ios $(WII_WAD_IOS) \
 	    --title "$(WII_WAD_NAME)" --title-ver $(WII_WAD_TITLE_VER) \
 	    -o $@

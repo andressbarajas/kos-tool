@@ -1,8 +1,8 @@
 # mkwad — Wii channel WAD packer
 
 Packs a Wii boot DOL (typically `wii-load-ip.dol`) into a fakesigned
-installable channel WAD.  Invoked from `make-cd`'s `wii` target, which is
-in turn driven by the top-level `make disc-wii`.
+installable channel WAD.  Invoked from `make-dist`'s `wii` target, which is
+in turn driven by the top-level `make dist-wii`.
 
 ## Required: the Wii common key
 
@@ -11,7 +11,7 @@ Hollywood SoC's OTP fuses.  It's required to wrap the per-title key inside
 the WAD ticket, so without it mkwad refuses to run.  You provide it
 yourself — see the "Where to get the key" section below.
 
-mkwad reads it from `make-cd/tools/mkwad/common-key.bin`.
+mkwad reads it from `make-dist/tools/mkwad/common-key.bin`.
 
 `common-key.bin` is gitignored (covered by the repo-wide `*.bin`).
 
@@ -49,10 +49,10 @@ code running on Starlet.  The canonical path:
    page lays out the full OTP word map and where the common key sits
    inside BootMii's `keys.bin`).
 
-5. Save those 16 bytes into `make-cd/tools/mkwad/common-key.bin`:
+5. Save those 16 bytes into `make-dist/tools/mkwad/common-key.bin`:
 
    ```sh
-   dd if=keys.bin of=make-cd/tools/mkwad/common-key.bin \
+   dd if=keys.bin of=make-dist/tools/mkwad/common-key.bin \
        bs=1 skip=<decimal-offset> count=16
    ```
 
@@ -63,14 +63,14 @@ code running on Starlet.  The canonical path:
 ## Building & invoking
 
 ```sh
-make disc-wii                       # full path: builds firmware + WAD
-make -C make-cd wii                 # WAD only (firmware must exist)
+make dist-wii                       # full path: builds firmware + WAD
+make -C make-dist wii               # WAD only (firmware must exist)
 ```
 
 Override defaults from the top-level Makefile:
 
 ```sh
-make disc-wii WII_WAD_TITLE_ID=KOSL WII_WAD_IOS=58 \
+make dist-wii WII_WAD_TITLE_ID=KOSL WII_WAD_IOS=58 \
     WII_WAD_NAME="wii-load-ip" WII_WAD_TITLE_VER=2
 ```
 

@@ -230,7 +230,7 @@ $(IP_ELF): $(IP_OBJS) $(COMMON_A) $(IP_LD)
 $(IP_BIN): $(IP_ELF)
 	$(OBJCOPY) -O binary $< $@
 
-$(DOLTOOL): $(ROOT)/make-cd/tools/elf2dol.c | $(BUILDDIR)
+$(DOLTOOL): $(ROOT)/make-dist/tools/elf2dol.c | $(BUILDDIR)
 	$(HOST_CC) $< -o $@
 
 # ---- Unified boot stub (System Menu channel + Homebrew Channel) -------

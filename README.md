@@ -51,7 +51,7 @@ via the generated `wii-load-ip.dol`.
 ### Unified Codebase
 * **Single host tool** — `kos-tool` replaces both `dc-tool-ser` and `dc-tool-ip` with one binary that handles serial and network transports across supported consoles
 * **Shared client code** — common client logic (main loop, screensaver, exception handler, CDFS, syscall table) is shared across client firmware variants via a platform abstraction layer (`target_ops_t`)
-* **Unified build system** — one `make` builds everything: DC firmware, GC firmware, PS2 firmware, host tool, examples, and disc images
+* **Unified build system** — one `make` builds everything: DC firmware, GC firmware, PS2 firmware, host tool, examples, and delivery artifacts (CDI/ISO/WAD)
 * **Documented extension points** — see [`docs/architecture.md`](docs/architecture.md) for the console and transport boundaries used by new ports
 
 ### Firmware Update
@@ -74,7 +74,7 @@ via the generated `wii-load-ip.dol`.
 ### Wii Support
 * **Wii network loader** — Ethernet transport over the Wii LAN Adapter (RVL-015) and, experimentally, the internal Wi-Fi, both via the console's IOS network stack
 * **Homebrew Channel launch** — `wii-load-ip` ships as a `.dol` that boots from the Homebrew Channel
-* **Installable System Menu channel** — `make disc-wii` packs the loader into a Wii channel WAD that installs to the System Menu and launches like a retail channel (no Homebrew Channel required)
+* **Installable System Menu channel** — `make dist-wii` packs the loader into a Wii channel WAD that installs to the System Menu and launches like a retail channel (no Homebrew Channel required)
 * **Shared protocol** — Wii uses the same network upload/download command protocol as the other consoles
 * **Lossy-link resilience** — the syscall path adds opt-in request sequencing with host-side reply dedup and bounded retransmit, so a dropped request or reply recovers instead of wedging — important on the experimental Wi-Fi path
 * **DHCP support** — IOS handles address acquisition; the loader displays the current lease
@@ -95,7 +95,7 @@ via the generated `wii-load-ip.dol`.
 
 ### Build System
 * **Simple Makefiles** — no CMake dependency; just `make` with the cross-compiler toolchains in PATH
-* **Disc image generation** — `make disc` produces bootable CDI (Dreamcast) and ISO (GameCube) disc images, plus an installable Wii channel WAD, using in-tree image builders
+* **Delivery artifact generation** — `make dist` produces bootable CDI (Dreamcast) and ISO (GameCube) disc images, plus an installable Wii channel WAD, using in-tree image builders
 * **Example programs** — freestanding test programs (console, rainbow, syscall, CDFS, exception, maple, etc.) built automatically
 
 ## Features
@@ -144,7 +144,7 @@ build/
 ├── gc-load-ip.{elf,bin}      # GameCube network firmware
 ├── ps2-load-ip.elf           # PlayStation 2 network firmware
 ├── wii-load-ip.{elf,bin,dol} # Wii network firmware (.dol boots from Homebrew Channel)
-├── wii-load-ip.wad           # Wii installable channel (built by `make disc-wii`/`make disc`)
+├── wii-load-ip.wad           # Wii installable channel (built by `make dist-wii`/`make dist`)
 └── examples/
     ├── dc/                   # Dreamcast example ELFs
     ├── gc/                   # GameCube example ELFs
@@ -160,10 +160,10 @@ make gc       # GameCube firmware + examples + rebuild kos-tool
 make ps2      # PlayStation 2 firmware + examples + rebuild kos-tool
 make wii      # Wii firmware + examples + rebuild kos-tool
 make host     # Host tool only (embeds whatever firmware bins exist)
-make disc     # Delivery artifacts: CDI (DC), ISO (GC), and Wii channel WAD
-make disc-dc  # Dreamcast-only bootable CDI images
-make disc-gc  # GameCube-only bootable ISO images
-make disc-wii # Wii-only installable channel WAD
+make dist     # Delivery artifacts: CDI (DC), ISO (GC), and Wii channel WAD
+make dist-dc  # Dreamcast-only bootable CDI images
+make dist-gc  # GameCube-only bootable ISO images
+make dist-wii # Wii-only installable channel WAD
 make gc-dol   # GameCube DOL files only (no ISO)
 ```
 
@@ -397,7 +397,7 @@ kos-tool/
 │   ├── src/             # Main, console, upload/download, discovery
 │   └── include/         # Host headers
 ├── include/             # Shared protocol headers
-├── make-cd/             # Disc image tools (CDI, ISO/DOL)
+├── make-dist/           # Delivery artifact tools (CDI, ISO/DOL, WAD)
 ├── third_party/         # minilzo, mingw-libelf
 └── mk/                  # Build configuration
 ```

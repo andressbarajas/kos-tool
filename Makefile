@@ -6,10 +6,10 @@
 #   make gc            Build GameCube firmware
 #   make wii           Build Wii firmware
 #   make ps2           Build PlayStation 2 firmware
-#   make disc          Build all delivery artifacts (CDI + ISO + Wii channel WAD)
-#   make disc-dc       Build Dreamcast CDI images
-#   make disc-gc       Build GameCube ISO images
-#   make disc-wii      Build Wii channel WAD
+#   make dist          Build all delivery artifacts (CDI + ISO + Wii channel WAD)
+#   make dist-dc       Build Dreamcast CDI images
+#   make dist-gc       Build GameCube ISO images
+#   make dist-wii      Build Wii channel WAD
 #   make gc-dol        Build GameCube DOL files only (no ISO)
 #   make clean         Remove all build artifacts
 
@@ -41,13 +41,13 @@ $(BUILDDIR):
 	@mkdir -p $@
 
 # ---------- Wii channel WAD ----------
-# `make disc-wii` packs the kosload Wii client into an installable channel WAD
-# via make-cd's `wii` target (and is rolled into `make disc`).  The WAD defaults
-# (title-id, IOS, name, title-ver) live in make-cd/Makefile; override on the
+# `make dist-wii` packs the kosload Wii client into an installable channel WAD
+# via make-dist's `wii` target (and is rolled into `make dist`).  The WAD defaults
+# (title-id, IOS, name, title-ver) live in make-dist/Makefile; override on the
 # command line, e.g.
-#   make disc-wii WII_WAD_TITLE_ID=KOSL WII_WAD_IOS=58 WII_WAD_NAME="wii-load-ip"
+#   make dist-wii WII_WAD_TITLE_ID=KOSL WII_WAD_IOS=58 WII_WAD_NAME="wii-load-ip"
 # Bump WII_WAD_TITLE_VER to force the System Menu to overwrite an installed
-# copy of the same title-id (e.g. `make disc-wii WII_WAD_TITLE_VER=2`).
+# copy of the same title-id (e.g. `make dist-wii WII_WAD_TITLE_VER=2`).
 
 # ---------- Toolchain checks ----------
 
@@ -86,8 +86,8 @@ endef
 
 # ---------- Targets ----------
 
-.PHONY: all host dc gc wii ps2 disc disc-dc disc-gc disc-wii gc-dol \
-        disc-auto-dc disc-auto-gc disc-auto-wii clean \
+.PHONY: all host dc gc wii ps2 dist dist-dc dist-gc dist-wii gc-dol \
+        dist-auto-dc dist-auto-gc dist-auto-wii clean \
         check-dc-toolchain check-gc-toolchain check-wii-toolchain check-ps2-toolchain
 
 check-dc-toolchain:
@@ -162,59 +162,59 @@ ps2: check-ps2-toolchain $(VERSION_H) | $(BUILDDIR)
 	@echo "  COPY    $(BUILDDIR)/examples/ps2/*.elf"
 	$(MAKE) host
 
-# ---------- Disc image targets ----------
+# ---------- Distribution artifact targets ----------
 
-disc: disc-auto-dc disc-auto-gc disc-auto-wii
+dist: dist-auto-dc dist-auto-gc dist-auto-wii
 
-disc-auto-dc:
+dist-auto-dc:
 	@if $(call has_host_tool,$(DC_CC)) && \
 	    $(call has_host_tool,$(DC_AR)) && \
 	    $(call has_host_tool,$(DC_OBJCOPY)) && \
 	    $(call has_host_tool,$(DC_SIZE)); then \
-		$(MAKE) disc-dc; \
+		$(MAKE) dist-dc; \
 	else \
 		echo "  SKIP    Dreamcast disc images (toolchain not found)"; \
 	fi
 
-disc-auto-gc:
+dist-auto-gc:
 	@if $(call has_host_tool,$(GC_CC)) && \
 	    $(call has_host_tool,$(GC_AR)) && \
 	    $(call has_host_tool,$(GC_OBJCOPY)) && \
 	    $(call has_host_tool,$(GC_SIZE)); then \
-		$(MAKE) disc-gc; \
+		$(MAKE) dist-gc; \
 	else \
 		echo "  SKIP    GameCube disc images (toolchain not found)"; \
 	fi
 
 # Wii uses the GameCube (powerpc-eabi) toolchain — same skip-if-missing logic.
-disc-auto-wii:
+dist-auto-wii:
 	@if $(call has_host_tool,$(GC_CC)) && \
 	    $(call has_host_tool,$(GC_AR)) && \
 	    $(call has_host_tool,$(GC_OBJCOPY)) && \
 	    $(call has_host_tool,$(GC_SIZE)); then \
-		$(MAKE) disc-wii; \
+		$(MAKE) dist-wii; \
 	else \
 		echo "  SKIP    Wii channel WAD (toolchain not found)"; \
 	fi
 
-disc-dc: check-dc-toolchain dc
-	$(MAKE) -C make-cd dc ROOT=$(ROOT)
+dist-dc: check-dc-toolchain dc
+	$(MAKE) -C make-dist dc ROOT=$(ROOT)
 
-disc-gc: check-gc-toolchain gc
-	$(MAKE) -C make-cd gc ROOT=$(ROOT)
+dist-gc: check-gc-toolchain gc
+	$(MAKE) -C make-dist gc ROOT=$(ROOT)
 
-disc-wii: check-wii-toolchain wii
-	$(MAKE) -C make-cd wii ROOT=$(ROOT)
+dist-wii: check-wii-toolchain wii
+	$(MAKE) -C make-dist wii ROOT=$(ROOT)
 
 gc-dol: check-gc-toolchain gc
-	$(MAKE) -C make-cd gc-dol ROOT=$(ROOT)
+	$(MAKE) -C make-dist gc-dol ROOT=$(ROOT)
 
 # ---------- Clean ----------
 
 clean:
 	$(MAKE) -C host ROOT=$(ROOT) clean
 	$(MAKE) -C client ROOT=$(ROOT) clean
-	$(MAKE) -C make-cd clean
+	$(MAKE) -C make-dist clean
 	$(MAKE) -C third_party/minilzo clean
 	rm -f $(VERSION_H)
 	rm -rf $(BUILDDIR)

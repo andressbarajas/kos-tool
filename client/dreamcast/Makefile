@@ -378,13 +378,13 @@ $(EXBUILD)/%.elf: $(EXDIR)/%/main.c $(EXDIR)/dc-example.ld | $(EXBUILD)
 	    -T $(EXDIR)/dc-example.ld $< -o $@
 
 # Host helper for the cdfs-test ISO
-$(MKISO_LITE): $(ROOT)/make-cd/tools/mkiso-lite.c \
-               $(ROOT)/make-cd/tools/iso9660-lite.c \
-               $(ROOT)/make-cd/tools/iso9660-lite.h | $(HOSTDIR)
+$(MKISO_LITE): $(ROOT)/make-dist/tools/mkiso-lite.c \
+               $(ROOT)/make-dist/tools/iso9660-lite.c \
+               $(ROOT)/make-dist/tools/iso9660-lite.h | $(HOSTDIR)
 	@echo "  HOSTCC  $@"
 	@$(HOSTCC) -std=c11 -O2 -Wall -Wextra -o $@ \
-	    $(ROOT)/make-cd/tools/mkiso-lite.c \
-	    $(ROOT)/make-cd/tools/iso9660-lite.c
+	    $(ROOT)/make-dist/tools/mkiso-lite.c \
+	    $(ROOT)/make-dist/tools/iso9660-lite.c
 
 CDFS_TEST_ISO := $(EXBUILD)/cdfs-test.iso
 

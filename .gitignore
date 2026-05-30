@@ -4,8 +4,8 @@ build/
 *.a
 *.elf
 *.bin
-!make-cd/tools/IP.BIN
-# make-cd/tools/mkwad/common-key.bin is the user-provided Wii common key
+!make-dist/tools/IP.BIN
+# make-dist/tools/mkwad/common-key.bin is the user-provided Wii common key
 # consumed by mkwad; already matched by *.bin above but called out so it
 # isn't accidentally whitelisted later.
 *.cdi
@@ -14,7 +14,7 @@ build/
 .DS_Store
 include/kosload/version.h
 client/playstation2/iop/dev9_init_bin.h
-make-cd/tools/elf2dol
+make-dist/tools/elf2dol
 .github/
 .claude/
 
