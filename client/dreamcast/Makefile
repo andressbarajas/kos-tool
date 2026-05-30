@@ -390,7 +390,7 @@ DC_EXAMPLE_ELFS := $(addprefix $(EXBUILD)/,$(addsuffix .elf,$(DC_EXAMPLES)))
 
 $(EXBUILD)/%.elf: $(EXDIR)/%/main.c $(EXDIR)/dc-example.ld | $(EXBUILD)
 	@echo "  CC      $@"
-	@$(CC) $(ARCH_CFLAGS) -O2 -ffreestanding -fno-zero-initialized-in-bss -nostdlib \
+	@$(CC) $(ARCH_CFLAGS) -g -O2 -ffreestanding -fno-zero-initialized-in-bss -nostdlib \
 	    -T $(EXDIR)/dc-example.ld $< -o $@
 
 # Host helper for the cdfs-test ISO

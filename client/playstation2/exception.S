@@ -24,6 +24,9 @@
     .extern _start
     .extern _stack
     .extern _gp
+    .extern go_return
+    .extern __go_save_sp
+    .extern running
 
     .section .text
     .global exception_common
@@ -158,7 +161,29 @@ exception_common:
     jal     exception_handler_c
     nop
 
-    # After handler returns, restart the loader
+    # Resume the loader the way a normally-returning program does: jump to
+    # go_return, which restores go()'s saved loader context (and the saved
+    # COP0 Status, clearing our EXL) and returns into cmd_execute -> the
+    # command loop.  This keeps SMAP and the rest of loader state up.  A full
+    # _start restart re-inits the SMAP, which wedges it (the console drops off
+    # the network).
+    #
+    # Take go_return ONLY when a loaded program was actually executing
+    # (running != 0) AND go() has saved a context (__go_save_sp != 0).  A
+    # fault in loader code itself (running == 0), or before go() ever ran,
+    # takes the clean _start restart instead of resuming a stale context.
+    la      $t0, running
+    lbu     $t0, 0($t0)
+    beqz    $t0, 1f
+    nop
+    la      $t0, __go_save_sp
+    lw      $t0, 0($t0)
+    beqz    $t0, 1f
+    nop
+    la      $t0, go_return
+    jr      $t0
+    nop
+1:
     la      $t0, _start
     jr      $t0
     nop

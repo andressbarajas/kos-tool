@@ -354,7 +354,7 @@ GC_EXAMPLE_ELFS := $(addprefix $(EXBUILD)/,$(addsuffix .elf,$(GC_EXAMPLES)))
 
 $(EXBUILD)/%.elf: $(EXDIR)/%/main.c $(EXDIR)/gc-example.ld | $(EXBUILD)
 	@echo "  CC      $@"
-	@$(CC) $(ARCH_CFLAGS) -O2 -ffreestanding -fno-zero-initialized-in-bss -nostdlib \
+	@$(CC) $(ARCH_CFLAGS) -g -O2 -ffreestanding -fno-zero-initialized-in-bss -nostdlib \
 	    -DGC_KOSLOAD_BASE=$(GC_LOADER_BASE) \
 	    -T $(EXDIR)/gc-example.ld $< -o $@
 

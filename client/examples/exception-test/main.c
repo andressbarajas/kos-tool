@@ -68,8 +68,6 @@ static void print(const char *msg) {
 
 void start(void) __attribute__((section(".text.start")));
 void start(void) {
-    volatile unsigned int *bad_addr;
-
     print("\n");
     print("=== kosload exception handler test ===\n");
     print("\n");
@@ -88,17 +86,24 @@ void start(void) {
      *
      * On PPC (GC): Reading from 0xC0000000 causes a DSI exception
      *              (unmapped virtual address)
+     *
+     * On MIPS (PS2): the R5900 completes the classic misaligned-load
+     *              trick without trapping, so we raise a Breakpoint
+     *              exception directly via `break` — it vectors
+     *              unconditionally through the common handler.
      */
+#if defined(__mips__) || defined(__mips)
+    __asm__ volatile("break");
+#else
+    volatile unsigned int *bad_addr;
 #if defined(__sh__) || defined(__SH4_SINGLE__)
     bad_addr = (volatile unsigned int *)0x8c000002; /* misaligned */
 #elif defined(__PPC__) || defined(__powerpc__)
-    bad_addr = (volatile unsigned int *)0xC0000000;
-#elif defined(__mips__) || defined(__mips)
-    bad_addr = (volatile unsigned int *)0x80000002; /* misaligned 32-bit load → AdEL */
+    bad_addr = (volatile unsigned int *)0xC0000000; /* unmapped */
 #endif
-
     /* This read should trigger the exception */
     (void)*bad_addr;
+#endif
 
     /* Should not reach here if exception handler works */
     print("ERROR: Exception was not caught!\n");

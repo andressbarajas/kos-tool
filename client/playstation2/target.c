@@ -78,21 +78,33 @@ static void install_exception_stub(uint32_t vector_addr) {
 /*
  * C exception handler called from exception.S.
  *
- * For PS2 bring-up, transport is not yet usable when most exceptions
- * fire — the host can't see anything we'd write to it.  Instead we
- * draw the COP0 state to screen so the user can see what fired.
+ * Stages an "EXPT" frame (4-byte tag + the 416-byte exception_save_area,
+ * matching ps2_exception_frame_t on the host) for the host's symbolized,
+ * addr2line-annotated register dump — the same treatment DC/GC/Wii get.
+ * The on-screen COP0 draw is kept as a fallback for cold/no-host boots.
+ *
+ * Crucially the frame is NOT transmitted here: SIF/SMAP I/O from exception
+ * (EXL) context with interrupts masked leaves the transport corrupted (RX
+ * dies after we resume).  Instead we stage it and let ps2_execute() ship it
+ * once go_return restores normal context — see ps2_execute().
  *
  * Save area offsets (see exception.S): GPRs r0..r31 each 8 bytes
  * starting at 0x000; COP0 EPC at 0x100, Status 0x104, Cause 0x108,
  * BadVAddr 0x10C.  We read GPR low halves at +0 within each 8-byte
  * slot (little-endian).
  */
+extern int  write(int fd, const void *buf, unsigned int count);
 extern void progexit(int status);
 
 /* Save area size from exception.S: 416 bytes */
 #define EXC_SAVE_AREA_SIZE    416
 
 static volatile uint32_t exception_depth;
+
+/* Crash frame staged by exception_handler_c (at EXL) and shipped to the host
+ * by ps2_execute() after go_return restores normal context. */
+static uint8_t      ps2_exc_frame[4 + EXC_SAVE_AREA_SIZE];
+static volatile int ps2_exc_pending;
 static char exception_first_line[] =
     "EX C=00000000 E=00 EPC=00000000 BAD=00000000";
 static char exception_second_line[] =
@@ -143,10 +155,20 @@ void exception_handler_c(uint32_t cause, uint32_t epc, uint32_t *save_area) {
     hex_word(exception_second_line + 27, gp);
     ps2_video_draw_string(10, 60, exception_second_line, 0xffffff);
 
-    /* Halt forever so the user can read the screen.  Don't call
-     * progexit() — it's a stub.  Don't return — exception.S would
-     * jump back to _start and erase what we just drew. */
-    for (;;) {}
+    /* Stage the full register frame ("EXPT" tag + raw 416-byte save area,
+     * matching ps2_exception_frame_t host-side).  Do NOT transmit from here
+     * — ps2_execute() ships it once go_return restores normal context. */
+    ps2_exc_frame[0] = 'E';
+    ps2_exc_frame[1] = 'X';
+    ps2_exc_frame[2] = 'P';
+    ps2_exc_frame[3] = 'T';
+    memcpy(ps2_exc_frame + 4, save_area, EXC_SAVE_AREA_SIZE);
+    ps2_exc_pending = 1;
+
+    /* Handling complete — clear the nested-fault guard so the NEXT genuine
+     * exception (a later program crashing) isn't mistaken for recursion and
+     * halted.  The guard only needs to hold from entry until here. */
+    exception_depth = 0;
 }
 
 /* ===== Exception initialization ===== */
@@ -191,6 +213,18 @@ static void ps2_execute(uint32_t address) {
     /* Flush caches for the loaded program region */
     cache_flush_range((const void *)address, 0x01000000);
     go(address);
+
+    /* go() returns here both when a program exits normally and when it
+     * faults (exception.S -> go_return restores this context).  If a crash
+     * frame was staged, ship it now — we're back in normal (non-EXL) context
+     * so SIF/SMAP I/O is reliable.  write() delivers the EXPT frame to the
+     * host's handle_ps2_exception; progexit() reports the program ended. */
+    if(ps2_exc_pending) {
+        ps2_exc_pending = 0;
+        write(1, ps2_exc_frame, sizeof(ps2_exc_frame));
+        progexit(0);
+        (void)ps2_smap_release_pending();
+    }
 }
 
 static void ps2_disable_cache(void) {

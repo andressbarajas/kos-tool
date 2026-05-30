@@ -281,7 +281,7 @@ WII_EXAMPLE_ELFS := $(addprefix $(EXBUILD)/,$(addsuffix .elf,$(WII_EXAMPLES)))
 
 $(EXBUILD)/%.elf: $(EXDIR)/%/main.c $(EXDIR)/wii-example.ld | $(EXBUILD)
 	@echo "  CC      $@"
-	@$(CC) $(ARCH_CFLAGS) -O2 -ffreestanding -fno-zero-initialized-in-bss -nostdlib \
+	@$(CC) $(ARCH_CFLAGS) -g -O2 -ffreestanding -fno-zero-initialized-in-bss -nostdlib \
 	    -DWII_KOSLOAD_BASE=$(WII_LOADER_BASE) \
 	    -T $(EXDIR)/wii-example.ld $< -o $@
 
