@@ -104,7 +104,7 @@
 #define NET_SYSCALL_PROGEXIT  "DC22"
 #define NET_SYSCALL_MKDIR     "DC23"
 
-/* ===== Shared Protocol Tags ===== */
+/* ===== Loader-side capabilities (kosload -> kos-tool) ===== */
 
 #define KOSLOAD_CAP_SERIAL     (1 << 0)
 #define KOSLOAD_CAP_NETWORK    (1 << 1)
@@ -112,6 +112,9 @@
 #define KOSLOAD_CAP_DHCP       (1 << 3)
 #define KOSLOAD_CAP_CDFS_REDIR (1 << 4)
 #define KOSLOAD_CAP_ARGV       (1 << 5)
+
+/* ===== Host-side capabilities (kos-tool -> kosload) */
+#define KOSTOOL_CAP_GDB_ACTIVE (1 << 0) /* kos-tool started with -g */
 
 #define KOSLOAD_EXCEPTION_TAG "EXPT" /* Exception frame marker (both serial and network) */
 

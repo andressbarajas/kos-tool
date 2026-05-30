@@ -303,7 +303,7 @@ static int query_capabilities(kostool_context_t *ctx, uint32_t *capabilities) {
     for(int attempt = 0; attempt < 2; attempt++) {
         uint64_t start = ctx->time_ops->time_usec();
 
-        send_cmd(ctx, NET_CMD_CAPABILITIES, 0, 0, NULL, 0);
+        send_cmd(ctx, NET_CMD_CAPABILITIES, ctx->kostool_capabilities, 0, NULL, 0);
 
         while((ctx->time_ops->time_usec() - start) < NET_PACKET_TIMEOUT_USEC) {
             uint64_t elapsed = ctx->time_ops->time_usec() - start;

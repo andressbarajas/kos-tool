@@ -389,7 +389,8 @@ static void serial_transport_loop(bool is_main_loop)
             break;
         }
 
-        case SERIAL_CMD_CAPABILITIES: /* 'I' - query capability bitmask */
+        case SERIAL_CMD_CAPABILITIES: /* 'I' - exchange capability bitmasks */
+            kosload_info.host_capabilities = get_uint();
             put_uint(kosload_info.capabilities);
             break;
 

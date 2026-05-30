@@ -476,6 +476,9 @@ void cmd_capabilities(ip_header_t *ip, udp_header_t *udp, command_t *command)
 	unsigned char *buffer = pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN;
 	command_t *response = (command_t *)buffer;
 
+	/* Host announces its own capabilities (KOSTOOL_CAP_*) in the addr field. */
+	kosload_info.host_capabilities = ntohl(command->address);
+
 	memcpy(response, command, COMMAND_LEN);
 	response->address = htonl(kosload_info.capabilities);
 	response->size = htonl(0);

@@ -295,6 +295,7 @@ static int serial_init(kostool_context_t *ctx) {
             uint8_t caps_cmd = SERIAL_CMD_CAPABILITIES;
             ctx->serial_ops->write(ctx->serial_handle, &caps_cmd, 1);
             serial_getc(ctx, &echo);
+            send_uint(ctx, ctx->kostool_capabilities);
             ctx->remote_capabilities = recv_uint(ctx);
         }
 
