@@ -12,6 +12,8 @@
 
     .section .text
     .global go
+    .global go_return
+    .global __go_save_sp
 
 go:
     # Save loader context to __go_save_regs
@@ -45,14 +47,21 @@ go:
     sw      $sp, 0($t0)
 
     # Set ra to return trampoline so loaded program's jr $ra comes back
-    la      $ra, .Lgo_return
+    la      $ra, go_return
 
     # Jump to loaded program (address in a0)
     move    $t0, $a0
     jr      $t0
     nop
 
-.Lgo_return:
+# go_return: restore the loader context saved above and return to go()'s
+# caller (ps2_execute -> cmd_execute -> command loop).  Reached two ways:
+#   1. a loaded program returns normally (jr $ra, ra = go_return), or
+#   2. the exception handler jumps here after a fault so a crashed program
+#      resumes the loader the same way — keeping SMAP and the rest of loader
+#      state up, instead of a full _start restart that re-inits (and wedges)
+#      the SMAP.  Restoring the saved COP0 Status also clears the fault's EXL.
+go_return:
     # Loaded program returned from main(). Restore loader context.
 
     # Restore gp first so we can access our symbols

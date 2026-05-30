@@ -33,6 +33,12 @@
 #else
 #define KOSLOAD_BASE 0x817EC000
 #endif
+#elif defined(__mips__) || defined(__mips)
+#ifdef PS2_KOSLOAD_BASE
+#define KOSLOAD_BASE PS2_KOSLOAD_BASE
+#else
+#define KOSLOAD_BASE 0x80000284
+#endif
 #else
 #error "Unsupported architecture"
 #endif
@@ -231,6 +237,61 @@ static void send_gc_frame(void) {
 }
 #endif
 
+#if defined(__mips__) || defined(__mips)
+/*
+ * R5900 (EE) exception frame layout (420 bytes), matching
+ * ps2_exception_frame_t on the host:
+ *   [0]        "EXPT" tag (4 bytes)
+ *   [1..64]    32 GPRs, each 64-bit: low word then high word
+ *   [65]       COP0 EPC
+ *   [66]       COP0 Status
+ *   [67]       COP0 Cause
+ *   [68]       COP0 BadVAddr
+ *   [69..100]  FPU f0-f31 (one word each)
+ *   [101]      FCR31
+ *   [102..104] padding to the 416-byte save area
+ */
+#define PS2_FRAME_WORDS 105
+#define PS2_FRAME_BYTES 420
+
+static void send_ps2_frame(void) {
+    unsigned int   frame[PS2_FRAME_WORDS];
+    unsigned char *tag = (unsigned char *)&frame[0];
+    int i;
+
+    for(i = 0; i < PS2_FRAME_WORDS; i++)
+        frame[i] = 0;
+
+    /* EXPT tag */
+    tag[0] = 'E';
+    tag[1] = 'X';
+    tag[2] = 'P';
+    tag[3] = 'T';
+
+    /* GPRs r0-r31: low word at [1 + i*2], high word at [1 + i*2 + 1]. */
+    for(i = 0; i < 32; i++)
+        frame[1 + i * 2] = 0xAA000000 | (unsigned int)i; /* low 32 bits */
+    frame[1 + 28 * 2] = 0x00001000;          /* gp */
+    frame[1 + 29 * 2] = 0x001FFFF0;          /* sp */
+    frame[1 + 31 * 2] = (unsigned int)&start; /* ra */
+
+    /* COP0: Cause.ExcCode (bits 6:2) = 4 → Address error (load/fetch). */
+    frame[65] = (unsigned int)&crash_site;   /* EPC */
+    frame[66] = 0x00400000;                  /* Status */
+    frame[67] = 4u << 2;                     /* Cause (ExcCode=4) */
+    frame[68] = 0x00000002;                  /* BadVAddr (misaligned) */
+
+    /* FPU f0-f31 + FCR31 patterns */
+    for(i = 0; i < 32; i++)
+        frame[69 + i] = 0xF0000000 | (unsigned int)i;
+    frame[101] = 0x0000000E;                 /* FCR31 */
+
+    print("Sending PS2 exception frame (420 bytes)...\n");
+    kl_write(1, frame, PS2_FRAME_BYTES);
+    print("Done.\n");
+}
+#endif
+
 void start(void) {
     print("\n");
     print("=== kosload exception frame test ===\n");
@@ -243,6 +304,8 @@ void start(void) {
     send_dc_frame();
 #elif defined(__PPC__) || defined(__powerpc__)
     send_gc_frame();
+#elif defined(__mips__) || defined(__mips)
+    send_ps2_frame();
 #endif
 
     print("\n");

@@ -494,11 +494,8 @@ EXDIR   := $(CLIENTDIR)/examples
 EXBUILD := $(BUILDDIR)/examples
 
 PS2_EXAMPLES := \
-    console-test download-test exception-test \
+    console-test download-test exception-test exception-frame-test \
     exit-test file-test gdb-test syscall-test ip-calibrator
-# exception-frame-test is excluded — the host's frame parser
-# (handle_dc_exception / handle_gc_exception in host/src/console.c) has
-# no R5900 case yet, so a synthetic PS2 frame would fail to render.
 
 PS2_EXAMPLE_ELFS := $(addprefix $(EXBUILD)/,$(addsuffix .elf,$(PS2_EXAMPLES)))
 
@@ -515,7 +512,7 @@ PS2_EXAMPLE_ELFS := $(addprefix $(EXBUILD)/,$(addsuffix .elf,$(PS2_EXAMPLES)))
 # unchanged on PS2 — BASE+4 → +8, BASE+8 → +12.
 $(EXBUILD)/%.elf: $(EXDIR)/%/main.c $(EXDIR)/ps2-example.ld | $(EXBUILD)
 	@echo "  CC      $@"
-	@$(CC) $(ARCH_CFLAGS) -O2 -ffreestanding -fno-zero-initialized-in-bss -nostdlib \
+	@$(CC) $(ARCH_CFLAGS) -g -O2 -ffreestanding -fno-zero-initialized-in-bss -nostdlib \
 	    -DPS2_KOSLOAD_BASE=0x80000284 \
 	    -T $(EXDIR)/ps2-example.ld $< -o $@
 
