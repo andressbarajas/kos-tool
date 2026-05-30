@@ -22,10 +22,10 @@
 
 /* IP/UDP pseudo header for checksum computation. */
 typedef struct __attribute__((packed, aligned(4))) {
-	unsigned int src_ip;
-	unsigned int dest_ip;
-	unsigned char zero;
-	unsigned char protocol;
+    unsigned int src_ip;
+    unsigned int dest_ip;
+    unsigned char zero;
+    unsigned char protocol;
     unsigned short udp_length;
     unsigned short src_port;
     unsigned short dest_port;

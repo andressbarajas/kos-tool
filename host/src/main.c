@@ -215,10 +215,10 @@ static void usage(void) {
     printf("  -E           Use external clock\n");
     printf("  -l           Force legacy 1024-byte payloads\n");
     printf("  -f           Fast mode (no FIFO delays)\n");
+    printf("  -F           Enable automatic firmware update\n");
     printf("  -P, --diag   Print performance diagnostics\n");
     printf("  -w           Sync console RTC to host time\n");
     printf("  -U <file>    Update firmware from external file\n");
-    printf("  -F           Enable automatic firmware update\n");
     printf("  -h           Show this help\n\n");
 }
 

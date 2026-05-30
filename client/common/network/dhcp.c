@@ -98,8 +98,8 @@ static unsigned char router_mac[6] = {0};  // BE
 static void build_send_dhcp_packet(unsigned char kind) {
     // Keep these local please.
     ether_header_t *dhcp_ether_header = (ether_header_t *)dhcp_pkt_buf;
-	ip_header_t *dhcp_ip_header = (ip_header_t *)(dhcp_pkt_buf + ETHER_H_LEN);
-	udp_header_t *dhcp_udp_header = (udp_header_t *)(dhcp_pkt_buf + ETHER_H_LEN + IP_H_LEN);
+    ip_header_t *dhcp_ip_header = (ip_header_t *)(dhcp_pkt_buf + ETHER_H_LEN);
+    udp_header_t *dhcp_udp_header = (udp_header_t *)(dhcp_pkt_buf + ETHER_H_LEN + IP_H_LEN);
 
     unsigned char *dhcp_out_pkt = dhcp_pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN;
     unsigned char *dhcp_out_mac =

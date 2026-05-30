@@ -35,7 +35,7 @@ __attribute__((aligned(2))) unsigned char *pkt_buf = &(raw_pkt_buf[2]);
 
 static void process_broadcast(unsigned char *pkt) {
     ether_header_t *ether_header = (ether_header_t *)pkt;
-	arp_header_t *arp_header = (arp_header_t *)(pkt + ETHER_H_LEN);
+    arp_header_t *arp_header = (arp_header_t *)(pkt + ETHER_H_LEN);
 
     if(ether_header->type[1] == 0x00)
         process_mine(pkt);
@@ -101,7 +101,7 @@ static void process_icmp(ether_header_t *ether, ip_header_t *ip, icmp_header_t *
 
 static void process_udp(ether_header_t *ether, ip_header_t *ip, udp_header_t *udp) {
     ip_udp_pseudo_header_t *pseudo;
-	unsigned short i;
+    unsigned short i;
 
     // UDP length field includes the 8-byte UDP header itself
     unsigned short udp_total = ntohs(udp->length);
@@ -221,9 +221,9 @@ static void process_udp(ether_header_t *ether, ip_header_t *ip, udp_header_t *ud
 
 static void process_mine(unsigned char *pkt) {
     ether_header_t *ether_header = (ether_header_t *)pkt;
-	ip_header_t *ip_header = (ip_header_t *)(pkt + ETHER_H_LEN);
-	icmp_header_t *icmp_header;
-	udp_header_t *udp_header;
+    ip_header_t *ip_header = (ip_header_t *)(pkt + ETHER_H_LEN);
+    icmp_header_t *icmp_header;
+    udp_header_t *udp_header;
 
     if(__builtin_expect(ether_header->type[1] != 0x00, 0)) {
         if(ether_header->type[1] == 0x06)

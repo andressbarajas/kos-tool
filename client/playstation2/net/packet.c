@@ -38,7 +38,7 @@ unsigned short checksum(unsigned short *buf, int count, bool is_odd) {
 unsigned short checksum_udp(unsigned short *buf_pseudo, unsigned short *buf_data, int datacount,
                             bool is_odd) {
     unsigned long sum = 0;
-	int pseudocount = PSEUDO_H_LEN/2;
+    int pseudocount = PSEUDO_H_LEN/2;
 
     while(pseudocount--) {
         sum += *buf_pseudo++;

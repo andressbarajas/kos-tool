@@ -37,8 +37,8 @@ static char uint_string_array[11] = {0};
 // Pull together all the goodies
 adapter_t adapter_bba = {
     "Broadband Adapter (HIT-0400)",
-	{ 0 },		// Mac address
-	{ 0 },		// 2-byte alignment pad
+    { 0 },      // Mac address
+    { 0 },      // 2-byte alignment pad
     rtl_bb_detect,
     rtl_bb_init,
     rtl_bb_start,
@@ -178,25 +178,25 @@ static int rtl_init(void) {
     nic8[RT_CHIPCMD] = RT_CMD_RX_ENABLE | RT_CMD_TX_ENABLE;
 
     /* Set Rx FIFO threshold to 1K, Rx size to 16k+16, 1024 byte DMA burst */
-    //	nic32[RT_RXCONFIG/4] = 0x00000e00; // (1<<7 = 0x80) for nowrap or bit 7
+    //  nic32[RT_RXCONFIG/4] = 0x00000e00; // (1<<7 = 0x80) for nowrap or bit 7
     //= 0 for wrap, 1024 byte dma burst (6<<8 = 0x600)
     // Why only 16k + 16? let's do 32k + 16.
     nic32[RT_RXCONFIG / 4] = RTL_RX_CONFIG_DEFAULT;  // nowrap, 16k + 16, 1024 byte DMA burst, 1K Rx
                                                      // threshold, Early Rx: none
-    //	nic32[RT_RXCONFIG/4] = 0x00002980; // nowrap, 16k + 16, 32 byte DMA
-    // burst, 32 byte Rx threshold, Early Rx: none 	nic32[RT_RXCONFIG/4] =
+    //  nic32[RT_RXCONFIG/4] = 0x00002980; // nowrap, 16k + 16, 32 byte DMA
+    // burst, 32 byte Rx threshold, Early Rx: none  nic32[RT_RXCONFIG/4] =
     // 0x00005180; // nowrap, 32k + 16, 32 byte DMA burst, 64 byte Rx threshold,
     // Early Rx: none
 
-    //	nic32[RT_RXCONFIG/4] = 0x00005100; // wrap, 32k + 16, 32 byte DMA burst,
-    // 64 byte Rx threshold, Early Rx: none 	nic32[RT_RXCONFIG/4] = 0x00004900; //
+    //  nic32[RT_RXCONFIG/4] = 0x00005100; // wrap, 32k + 16, 32 byte DMA burst,
+    // 64 byte Rx threshold, Early Rx: none     nic32[RT_RXCONFIG/4] = 0x00004900; //
     // wrap, 16k + 16, 32 byte DMA burst, 64 byte Rx threshold, Early Rx: none
 
     /* Set Tx IFG and keep the current 32 byte DMA burst baseline */
     // Found a bug: this was 00000600 before. 1024 byte DMA burst is 0x600
     // (hex), not 600 (dec). See pgs. 20-21 of RTL8139 datasheet:
     // http://realtek.info/pdf/rtl8139cp.pdf
-    //>	nic32[RT_TXCONFIG/4] = 0x03000600; // Set IFG to NOT violate 802.3
+    //> nic32[RT_TXCONFIG/4] = 0x03000600; // Set IFG to NOT violate 802.3
     // standard, 1024 byte DMA burst
     nic32[RT_TXCONFIG / 4] = RTL_TX_CONFIG_DEFAULT;  // Set IFG to NOT violate 802.3 standard, 32
                                                      // byte DMA burst
@@ -533,14 +533,14 @@ int rtl_bb_tx(unsigned char *pkt,
             // reason. So, for reference, the above assembly just does this
             // (except each loop takes only 2 cycles per iteration):
             //
-            //			unsigned int zero_remain = (64 -
-            // copyback_pkt_extras_end) / 4; 			unsigned int * zeroing_base =
+            //          unsigned int zero_remain = (64 -
+            // copyback_pkt_extras_end) / 4;            unsigned int * zeroing_base =
             //(unsigned int*)(copyback_pkt_base + copyback_pkt_extras_end);
             //
-            //			while(zero_remain--)
-            //			{
-            //				*zeroing_base++ = 0;
-            //			}
+            //          while(zero_remain--)
+            //          {
+            //              *zeroing_base++ = 0;
+            //          }
             //
             // See DreamHAL for a complete set of similarly highly-optimized SH4
             // functions
@@ -584,7 +584,7 @@ int rtl_bb_tx(unsigned char *pkt,
     nic32[RT_TXSTATUS0 / 4 + rtl.cur_tx] = len | RT_TX_ERTXTH_64;  // Set Early TX to 64 bytes
     // nic32[RT_TXSTATUS0/4 + rtl.cur_tx] = len | 0x10000; // Set Early TX to 32
     // bytes
-    //	nic32[RT_TXSTATUS0/4 + rtl.cur_tx] = len;
+    //  nic32[RT_TXSTATUS0/4 + rtl.cur_tx] = len;
 
     rtl.cur_tx = (rtl.cur_tx + 1) % RTL_TX_BUFFER_COUNT;  // Move to next txdesc buffer
 
@@ -604,13 +604,13 @@ static void pktcpy(unsigned char *dest, unsigned char *src,
         ;
 
     // Set GAPS DMA image offset pointer to relevant RX region
-    //--	g232[0x142c/4] = (unsigned int)src;
+    //--    g232[0x142c/4] = (unsigned int)src;
     g232[0x142c / 4] = (unsigned int)src - 2;  // Yup, this works. So we can just use memcpy_32bit()
 
     // NOWRAP
     // Note: the +3 may mean we read some of the CRC for not-byte-multiple
     // packets. That's fine: it doesn't cause us any problems.
-    //--	SH4_pkt_to_mem_X_movca_32(dest, (unsigned char*)0x01848000, n); //
+    //--    SH4_pkt_to_mem_X_movca_32(dest, (unsigned char*)0x01848000, n); //
     // This takes full n now SH4_pkt_to_mem_X_movca_32_linear(dest, (unsigned
     // char*)0x01848000, n + 2); // This takes full n now
     memcpy_32bit(dest, (unsigned char *)0x81848000,
@@ -621,9 +621,9 @@ static void pktcpy(unsigned char *dest, unsigned char *src,
 }
 
 static int rtl_bb_rx() {
-	int processed;
-	unsigned int rx_status;
-	unsigned int rx_size, pkt_size, ring_offset;
+    int processed;
+    unsigned int rx_status;
+    unsigned int rx_size, pkt_size, ring_offset;
     unsigned char *pkt;
 
     processed = 0;
@@ -765,9 +765,9 @@ static int rtl_bb_rx() {
 
 void rtl_bb_loop(bool is_main_loop) {
     const target_ops_t *t = target_get_ops();
-	unsigned int intr = 0;
-	uint64_t last_sec_tick = 0;
-	unsigned int loop_secs_elapsed = 0;
+    unsigned int intr = 0;
+    uint64_t last_sec_tick = 0;
+    unsigned int loop_secs_elapsed = 0;
 
     if(is_main_loop) {
         if(!(booted || running)) {
