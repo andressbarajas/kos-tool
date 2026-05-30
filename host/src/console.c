@@ -468,6 +468,44 @@ static const char *gc_exception_code_to_string(uint32_t code) {
     }
 }
 
+/* MIPS R5900 (EE) Cause.ExcCode (bits 6:2) to string */
+static const char *ps2_exception_code_to_string(uint32_t excode) {
+    switch(excode) {
+    case 0:
+        return "Interrupt";
+    case 1:
+        return "TLB modification";
+    case 2:
+        return "TLB miss (load/fetch)";
+    case 3:
+        return "TLB miss (store)";
+    case 4:
+        return "Address error (load/fetch)";
+    case 5:
+        return "Address error (store)";
+    case 6:
+        return "Bus error (instruction)";
+    case 7:
+        return "Bus error (data)";
+    case 8:
+        return "Syscall";
+    case 9:
+        return "Breakpoint";
+    case 10:
+        return "Reserved instruction";
+    case 11:
+        return "Coprocessor unusable";
+    case 12:
+        return "Arithmetic overflow";
+    case 13:
+        return "Trap";
+    case 15:
+        return "Floating-point exception";
+    default:
+        return "Unknown exception";
+    }
+}
+
 static const char *dc_register_names[66] = {
     "PC", "PR", "SR", "GBR", "VBR", "DBR", "MACH", "MACL",
     "R0B0", "R1B0", "R2B0", "R3B0", "R4B0", "R5B0", "R6B0", "R7B0",
@@ -495,6 +533,15 @@ static const char *gc_fpr_names[32] = {
     "F8",  "F9",  "F10", "F11", "F12", "F13", "F14", "F15",
     "F16", "F17", "F18", "F19", "F20", "F21", "F22", "F23",
     "F24", "F25", "F26", "F27", "F28", "F29", "F30", "F31",
+};
+
+/* MIPS R5900 GPR names, n32/n64 ABI (this toolchain aliases r8-r11 as a4-a7
+ * and r12-r15 as t0-t3 — see client/playstation2/exception.S). */
+static const char *ps2_register_names[32] = {
+    "zero", "at", "v0", "v1", "a0", "a1", "a2", "a3",
+    "a4",   "a5", "a6", "a7", "t0", "t1", "t2", "t3",
+    "s0",   "s1", "s2", "s3", "s4", "s5", "s6", "s7",
+    "t8",   "t9", "k0", "k1", "gp", "sp", "fp", "ra",
 };
 
 /* Swap bytes of a uint32 from little-endian to host order */
@@ -545,6 +592,21 @@ static void print_gc_registers(FILE *fp, const uint32_t *regs, const uint8_t *da
     }
 }
 
+/* All registers already byte-swapped to host order by the caller. */
+static void print_ps2_registers(FILE *fp, const uint32_t *gpr_lo, uint32_t epc, uint32_t status,
+                                uint32_t cause, uint32_t badvaddr, const uint32_t *fpr,
+                                uint32_t fcr31) {
+    for(int i = 0; i < 32; i++)
+        fprintf(fp, "  %-6s 0x%08x\n", ps2_register_names[i], gpr_lo[i]);
+    fprintf(fp, "  %-6s 0x%08x\n", "EPC", epc);
+    fprintf(fp, "  %-6s 0x%08x\n", "Status", status);
+    fprintf(fp, "  %-6s 0x%08x\n", "Cause", cause);
+    fprintf(fp, "  %-6s 0x%08x\n", "BadV", badvaddr);
+    for(int i = 0; i < 32; i++)
+        fprintf(fp, "  f%-5d 0x%08x\n", i, fpr[i]);
+    fprintf(fp, "  %-6s 0x%08x\n", "FCR31", fcr31);
+}
+
 static void handle_dc_exception(kostool_context_t *ctx, const uint8_t *data, uint32_t count) {
     if(count < sizeof(sh4_exception_frame_t)) {
         fprintf(stderr, "\nIncomplete DC exception frame (%u bytes)\n", count);
@@ -572,15 +634,15 @@ static void handle_dc_exception(kostool_context_t *ctx, const uint8_t *data, uin
     fprintf(stderr, "  %-6s 0x%08x\n", "SR", regs[2]);
     fprintf(stderr, "  %-6s 0x%08x\n", "R15", regs[31]);
 
+    const char *a2l = addr2line_for_console(ctx);
+
     /* addr2line on valid addresses, or fall back to full register dump */
     if(addr2line_available < 0) {
-        addr2line_available = ctx->loaded_binary_path &&
-                              ctx->sh4_addr2line[0] &&
-                              access(ctx->sh4_addr2line, X_OK) == 0 &&
+        addr2line_available = ctx->loaded_binary_path && a2l[0] && access(a2l, X_OK) == 0 &&
                               is_elf_file(ctx->loaded_binary_path);
 #ifndef _WIN32
         if(addr2line_available)
-            start_addr2line_process(ctx->sh4_addr2line, ctx->loaded_binary_path);
+            start_addr2line_process(a2l, ctx->loaded_binary_path);
 #endif
     }
 
@@ -588,8 +650,7 @@ static void handle_dc_exception(kostool_context_t *ctx, const uint8_t *data, uin
         for(int i = 0; i < 66; i++) {
             if(regs[i] >= DC_DEFAULT_LOAD_ADDR && regs[i] < DC_RAM_TOP) {
                 char decoded[256];
-                decode_address(ctx->sh4_addr2line, ctx->loaded_binary_path, regs[i], decoded,
-                               sizeof(decoded));
+                decode_address(a2l, ctx->loaded_binary_path, regs[i], decoded, sizeof(decoded));
                 if(decoded[0] && decoded[0] != '?')
                     fprintf(stderr, "  %-6s -> %s\n", dc_register_names[i], decoded);
             }
@@ -611,8 +672,7 @@ static void handle_dc_exception(kostool_context_t *ctx, const uint8_t *data, uin
             for(int i = 0; i < 66; i++) {
                 if(regs[i] >= DC_DEFAULT_LOAD_ADDR && regs[i] < DC_RAM_TOP) {
                     char decoded[256];
-                    decode_address(ctx->sh4_addr2line, ctx->loaded_binary_path, regs[i], decoded,
-                                   sizeof(decoded));
+                    decode_address(a2l, ctx->loaded_binary_path, regs[i], decoded, sizeof(decoded));
                     if(decoded[0] && decoded[0] != '?')
                         fprintf(dump, "  %-6s -> %s\n", dc_register_names[i], decoded);
                 }
@@ -648,7 +708,7 @@ static void handle_gc_exception(kostool_context_t *ctx, const uint8_t *data, uin
     /* Always print key registers */
     fprintf(stderr, "  %-6s 0x%08x\n", "SRR0", regs[0]);
     fprintf(stderr, "  %-6s 0x%08x\n", "SRR1", regs[1]);
-    fprintf(stderr, "  %-6s 0x%08x\n", "R1", regs[4]);
+    fprintf(stderr, "  %-6s 0x%08x\n", "R1", regs[3]);
     fprintf(stderr, "  %-6s 0x%08x\n", "LR", regs[34]);
 
     /* For DSI/ISI exceptions, show the faulting address */
@@ -657,13 +717,15 @@ static void handle_gc_exception(kostool_context_t *ctx, const uint8_t *data, uin
         fprintf(stderr, "  %-6s 0x%08x\n", "DSISR", regs[38]);
     }
 
+    const char *a2l = addr2line_for_console(ctx);
+
     /* addr2line on valid addresses, or fall back to full register dump */
     if(addr2line_available < 0) {
-        addr2line_available = ctx->loaded_binary_path && ctx->ppc_addr2line[0] &&
-                              access(ctx->ppc_addr2line, X_OK) == 0 && is_elf_file(ctx->loaded_binary_path);
+        addr2line_available = ctx->loaded_binary_path && a2l[0] && access(a2l, X_OK) == 0 &&
+                              is_elf_file(ctx->loaded_binary_path);
 #ifndef _WIN32
         if(addr2line_available)
-            start_addr2line_process(ctx->ppc_addr2line, ctx->loaded_binary_path);
+            start_addr2line_process(a2l, ctx->loaded_binary_path);
 #endif
     }
 
@@ -671,8 +733,7 @@ static void handle_gc_exception(kostool_context_t *ctx, const uint8_t *data, uin
         for(int i = 0; i < 40; i++) {
             if(regs[i] >= GC_DEFAULT_LOAD_ADDR && regs[i] < GC_RAM_TOP) {
                 char decoded[256];
-                decode_address(ctx->ppc_addr2line, ctx->loaded_binary_path, regs[i], decoded,
-                               sizeof(decoded));
+                decode_address(a2l, ctx->loaded_binary_path, regs[i], decoded, sizeof(decoded));
                 if(decoded[0] && decoded[0] != '?')
                     fprintf(stderr, "  %-6s -> %s\n", gc_register_names[i], decoded);
             }
@@ -694,10 +755,104 @@ static void handle_gc_exception(kostool_context_t *ctx, const uint8_t *data, uin
             for(int i = 0; i < 40; i++) {
                 if(regs[i] >= GC_DEFAULT_LOAD_ADDR && regs[i] < GC_RAM_TOP) {
                     char decoded[256];
-                    decode_address(ctx->ppc_addr2line, ctx->loaded_binary_path, regs[i], decoded,
-                                   sizeof(decoded));
+                    decode_address(a2l, ctx->loaded_binary_path, regs[i], decoded, sizeof(decoded));
                     if(decoded[0] && decoded[0] != '?')
                         fprintf(dump, "  %-6s -> %s\n", gc_register_names[i], decoded);
+                }
+            }
+        }
+        fclose(dump);
+        fprintf(stderr, "  Saved to %s\n", filename);
+    }
+}
+
+static void handle_ps2_exception(kostool_context_t *ctx, const uint8_t *data, uint32_t count) {
+    if(count < sizeof(ps2_exception_frame_t)) {
+        fprintf(stderr, "\nIncomplete PS2 exception frame (%u bytes)\n", count);
+        return;
+    }
+
+    /* Byte-swap from EE (little-endian) to host order.  GPRs are saved 64-bit;
+     * take the low 32 bits (first word of each 8-byte slot). */
+    const ps2_exception_frame_t *f = (const ps2_exception_frame_t *)data;
+    uint32_t gpr_lo[32];
+    for(int i = 0; i < 32; i++)
+        gpr_lo[i] = le32_to_host(f->gpr[i][0]);
+    uint32_t epc      = le32_to_host(f->epc);
+    uint32_t status   = le32_to_host(f->status);
+    uint32_t cause    = le32_to_host(f->cause);
+    uint32_t badvaddr = le32_to_host(f->badvaddr);
+    uint32_t fpr[32];
+    for(int i = 0; i < 32; i++)
+        fpr[i] = le32_to_host(f->fpr[i]);
+    uint32_t fcr31 = le32_to_host(f->fcr31);
+
+    uint32_t excode = (cause >> 2) & 0x1f;
+    const char *expt_str = ps2_exception_code_to_string(excode);
+
+    fprintf(stderr, "\n=== PlayStation 2 Exception: %s (ExcCode %u) ===\n", expt_str, excode);
+
+    /* Always print key registers */
+    fprintf(stderr, "  %-6s 0x%08x\n", "EPC", epc);
+    fprintf(stderr, "  %-6s 0x%08x\n", "Cause", cause);
+    fprintf(stderr, "  %-6s 0x%08x\n", "Status", status);
+    fprintf(stderr, "  %-6s 0x%08x\n", "BadV", badvaddr);
+    fprintf(stderr, "  %-6s 0x%08x\n", "sp", gpr_lo[29]);
+    fprintf(stderr, "  %-6s 0x%08x\n", "ra", gpr_lo[31]);
+
+    const char *a2l = addr2line_for_console(ctx);
+
+    /* addr2line on valid addresses, or fall back to full register dump */
+    if(addr2line_available < 0) {
+        addr2line_available = ctx->loaded_binary_path && a2l[0] && access(a2l, X_OK) == 0 &&
+                              is_elf_file(ctx->loaded_binary_path);
+#ifndef _WIN32
+        if(addr2line_available)
+            start_addr2line_process(a2l, ctx->loaded_binary_path);
+#endif
+    }
+
+    if(addr2line_available) {
+        if(epc >= PS2_DEFAULT_LOAD_ADDR && epc < PS2_RAM_TOP) {
+            char decoded[256];
+            decode_address(a2l, ctx->loaded_binary_path, epc, decoded, sizeof(decoded));
+            if(decoded[0] && decoded[0] != '?')
+                fprintf(stderr, "  %-6s -> %s\n", "EPC", decoded);
+        }
+        for(int i = 0; i < 32; i++) {
+            if(gpr_lo[i] >= PS2_DEFAULT_LOAD_ADDR && gpr_lo[i] < PS2_RAM_TOP) {
+                char decoded[256];
+                decode_address(a2l, ctx->loaded_binary_path, gpr_lo[i], decoded, sizeof(decoded));
+                if(decoded[0] && decoded[0] != '?')
+                    fprintf(stderr, "  %-6s -> %s\n", ps2_register_names[i], decoded);
+            }
+        }
+    } else {
+        print_ps2_registers(stderr, gpr_lo, epc, status, cause, badvaddr, fpr, fcr31);
+    }
+
+    /* Save full register dump to text file */
+    char filename[128];
+    make_dump_filename("ps2", filename, sizeof(filename));
+    FILE *dump = fopen(filename, "w");
+    if(dump) {
+        fprintf(dump, "=== PlayStation 2 Exception: %s (ExcCode %u) ===\n\n", expt_str, excode);
+        fprintf(dump, "Registers:\n");
+        print_ps2_registers(dump, gpr_lo, epc, status, cause, badvaddr, fpr, fcr31);
+        if(addr2line_available) {
+            fprintf(dump, "\nSymbols:\n");
+            if(epc >= PS2_DEFAULT_LOAD_ADDR && epc < PS2_RAM_TOP) {
+                char decoded[256];
+                decode_address(a2l, ctx->loaded_binary_path, epc, decoded, sizeof(decoded));
+                if(decoded[0] && decoded[0] != '?')
+                    fprintf(dump, "  %-6s -> %s\n", "EPC", decoded);
+            }
+            for(int i = 0; i < 32; i++) {
+                if(gpr_lo[i] >= PS2_DEFAULT_LOAD_ADDR && gpr_lo[i] < PS2_RAM_TOP) {
+                    char decoded[256];
+                    decode_address(a2l, ctx->loaded_binary_path, gpr_lo[i], decoded, sizeof(decoded));
+                    if(decoded[0] && decoded[0] != '?')
+                        fprintf(dump, "  %-6s -> %s\n", ps2_register_names[i], decoded);
                 }
             }
         }
@@ -994,10 +1149,19 @@ static void ser_syscall_write(kostool_context_t *ctx) {
     if(fd != STDOUT_FILENO && fd != STDERR_FILENO) {
         ret = count ? write_full(fd, data, count) : 0;
     } else if(count >= 8 && !memcmp(data, KOSLOAD_EXCEPTION_TAG, 4)) {
-        if(ctx->target_big_endian)
-            handle_gc_exception(ctx, data, count);
-        else
-            handle_dc_exception(ctx, data, count);
+        switch(ctx->console_type) {
+            case CONSOLE_PS2:
+                handle_ps2_exception(ctx, data, count);
+                break;
+            case CONSOLE_GC:
+            case CONSOLE_WII:
+                handle_gc_exception(ctx, data, count);
+                break;
+            case CONSOLE_DC:
+            default:
+                handle_dc_exception(ctx, data, count);
+                break;
+        }
         ret = (int)count;
     } else {
         ret = console_write(ctx, fd, data, count);
@@ -1618,10 +1782,19 @@ static void net_syscall_write(kostool_context_t *ctx, uint8_t *pkt, int pkt_len)
     if(fd != STDOUT_FILENO && fd != STDERR_FILENO) {
         ret = count ? write_full(fd, data, count) : 0;
     } else if(count >= 8 && !memcmp(data, KOSLOAD_EXCEPTION_TAG, 4)) {
-        if(ctx->target_big_endian)
-            handle_gc_exception(ctx, data, count);
-        else
-            handle_dc_exception(ctx, data, count);
+        switch(ctx->console_type) {
+            case CONSOLE_PS2:
+                handle_ps2_exception(ctx, data, count);
+                break;
+            case CONSOLE_GC:
+            case CONSOLE_WII:
+                handle_gc_exception(ctx, data, count);
+                break;
+            case CONSOLE_DC:
+            default:
+                handle_dc_exception(ctx, data, count);
+                break;
+        }
         ret = (int)count;
     } else {
         ret = console_write(ctx, fd, data, count);

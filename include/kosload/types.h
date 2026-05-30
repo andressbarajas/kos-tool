@@ -91,6 +91,24 @@ typedef struct {
     uint32_t f28_hi, f28_lo, f29_hi, f29_lo, f30_hi, f30_lo, f31_hi, f31_lo;
 } __attribute__((packed)) gc_exception_frame_t;
 
+/* PS2 R5900 (EE) exception frame (for exception reporting).
+ * Layout: 4-byte "EXPT" header + 416-byte exception_save_area from
+ * client/playstation2/exception.S.  Unlike DC/GC there is no separate
+ * expt_code field — the exception class is derived from COP0 Cause.ExcCode.
+ * GPRs are saved 64-bit (sd); the host decodes the low 32 bits.  On the
+ * little-endian EE the low half is the first word of each 8-byte slot. */
+typedef struct {
+    uint8_t  id[4];      /* "EXPT" */
+    uint32_t gpr[32][2]; /* r0-r31, [0] = low 32 bits, [1] = high 32 bits */
+    uint32_t epc;        /* COP0 EPC ($14) */
+    uint32_t status;     /* COP0 Status ($12) */
+    uint32_t cause;      /* COP0 Cause ($13) */
+    uint32_t badvaddr;   /* COP0 BadVAddr ($8) */
+    uint32_t fpr[32];    /* FPU f0-f31 (32-bit via swc1) */
+    uint32_t fcr31;      /* FPU control/status register */
+    uint32_t pad[3];     /* padding to the 416-byte save area */
+} __attribute__((packed)) ps2_exception_frame_t;
+
 /* Dirent offset used by KOS (anything under 100 is treated as invalid) */
 #define DIRENT_OFFSET   1337
 
