@@ -48,7 +48,7 @@ handler_k:
 expevt:
 	.long 0xff000024
 entry_addr:
-	.long 0x8c004000
+	.long DC_LOADER_BASE	/* loader base (P1 cached); from mk/memory.mk */
 
 regdump:
 ! save registers into the static save area (exc_save_area).

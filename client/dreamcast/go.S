@@ -45,14 +45,14 @@ _go:
 stack_addr_k:
 	.long	stack_addr
 stack_addr:
-	.long	0x8c00f400
+	.long	(DC_LOADER_BASE + DC_LOADER_SIZE)	/* top of loader region */
 entry_addr_k:
 	.long	entry_addr
 entry_addr:
 #ifdef KOSLOAD_SERIAL_TRANSPORT
-	.long	0x8c004000	/* P1 (cached) — matches original dcload-serial */
+	.long	DC_LOADER_BASE			/* P1 (cached) — matches original dcload-serial */
 #else
-	.long	0xac004000	/* P2 (uncached) — matches original dcload-ip */
+	.long	(DC_LOADER_BASE + 0x20000000)	/* P2 (uncached) — matches original dcload-ip */
 #endif
 sr_data_k:
 	.long	sr_data
@@ -61,7 +61,7 @@ sr_data:
 vbr_data_k:
 	.long	vbr_data
 vbr_data:
-	.long	0x8c00f400
+	.long	(DC_LOADER_BASE + DC_LOADER_SIZE)	/* VBR at top of loader region */
 fpscr_data_k:
 	.long	fpscr_data
 fpscr_data:

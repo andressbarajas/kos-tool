@@ -7,8 +7,8 @@ ENTRY(_start)
 MEMORY
 {
   /* This template is used twice:
-   *   - inner loader: ORIGIN = PS2_INNER_LOADER_BASE (0x80000280)
-   *   - outer ELF:    ORIGIN = PS2_LOADER_BASE       (0x00100000)
+   *   - inner loader: ORIGIN = PS2_LOADER_BASE    (0x80000280)
+   *   - outer ELF:    ORIGIN = PS2_BOOTSTRAP_BASE (0x00100000)
    *
    * The outer ELF is what the PS2 launcher loads.  It embeds the inner
    * loader, copies it to physical 0x280, then jumps to the cached KSEG0

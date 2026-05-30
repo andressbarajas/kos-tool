@@ -19,7 +19,6 @@ COMMONDIR := $(BUILDDIR)/common
 IPDIR     := $(BUILDDIR)/ip
 DOLTOOL   := $(BUILDDIR)/elf2dol
 
-WII_LOADER_BASE := $(shell printf '0x%08x' $$(($(WII_MEM1_TOP) - $(WII_LOADER_SIZE))))
 WII_USE_MEM2_IPC_ARENA ?= 0
 
 ARCH_CFLAGS  := -mcpu=750 -meabi -mhard-float -O2 -fno-builtin -nostdlib -nostartfiles -Wall -Wextra
@@ -108,6 +107,8 @@ $(IP_LD): wii-load-ip.ld.in $(ROOT)/mk/memory.mk | $(IPDIR)
 $(BOOTSTRAP_LD): bootstrap.ld.in $(ROOT)/mk/memory.mk | $(IPDIR)
 	@sed -e 's/@WII_LOADER_BASE@/$(WII_LOADER_BASE)/g' \
 	     -e 's/@WII_LOADER_SIZE@/$(WII_LOADER_SIZE)/g' \
+	     -e 's/@WII_BOOTSTRAP_BASE@/$(WII_BOOTSTRAP_BASE)/g' \
+	     -e 's/@WII_HBC_BASE@/$(WII_HBC_BASE)/g' \
 	     $< > $@
 	@echo "  GEN     $@"
 
@@ -263,7 +264,7 @@ $(IP_DOL): $(BOOTSTRAP_ELF) $(DOLTOOL)
 # ---- Wii example guests -----------------------------------------------
 # Same client/examples/*/main.c sources as the other consoles, but linked
 # at the Wii guest base (0x80004000 via wii-example.ld) and told the
-# loader/syscall base is the *Wii* one (WII_LOADER_BASE 0x817c0000, NOT
+# loader/syscall base is the *Wii* one (WII_LOADER_BASE 0x81330000, NOT
 # GC's 0x817ec000) through -DWII_KOSLOAD_BASE.  These give wii-load-ip
 # something known-good to `-x` for exercising the LOADBIN/PARTBIN path.
 EXDIR   := $(CLIENTDIR)/examples

@@ -35,12 +35,12 @@ PHDRS
 
 SECTIONS
 {
-  . = 0x80003400;
+  . = @WII_BOOTSTRAP_BASE@;
   .stub : {
     KEEP(*(.text.stub))
   } :stub
 
-  . = 0x80004000;
+  . = @WII_HBC_BASE@;
   .blob : {
     KEEP(*(.blob))
   } :blob

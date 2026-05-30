@@ -3,6 +3,7 @@
 ROOT ?= $(CURDIR)/..
 include $(ROOT)/mk/version.mk
 include $(ROOT)/mk/toolchains.mk
+include $(ROOT)/mk/memory.mk
 
 BUILDDIR    := build
 MINILZO_DIR := $(ROOT)/third_party/minilzo
@@ -77,6 +78,13 @@ CFLAGS  += -DDEFAULT_SH4_ADDR2LINE=\"$(DC_TOOLCHAIN)/$(DC_PREFIX)addr2line\" \
            -DSH4_TOOL_PREFIX=\"$(DC_PREFIX)\" \
            -DPPC_TOOL_PREFIX=\"$(GC_PREFIX)\" \
            -DMIPS_TOOL_PREFIX=\"$(PS2_PREFIX)\"
+
+# Loader base/load addresses for the firmware-update trampolines, from
+# mk/memory.mk (the source of truth).  These override the protocol.h fallbacks.
+CFLAGS  += -DDC_LOADER_BASE=$(DC_LOADER_BASE) \
+           -DGC_LOADER_BASE=$(GC_LOADER_BASE) \
+           -DWII_LOADER_BASE=$(WII_LOADER_BASE) \
+           -DPS2_LOADER_BASE=$(PS2_LOADER_BASE)
 
 LDFLAGS := $(LIBELF_LDFLAGS) $(EXTRA_LDLIBS)
 

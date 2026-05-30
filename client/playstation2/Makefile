@@ -93,7 +93,6 @@ INCLUDES := -I$(ROOT)/include -I$(CLIENTDIR)/include -I$(CURDIR) -I$(CURDIR)/net
 # ---------- Memory layout defines (passed to C and ASM) ----------
 
 MEMORY_DEFS := -DPS2_LOADER_BASE=$(PS2_LOADER_BASE) \
-               -DPS2_INNER_LOADER_BASE=$(PS2_INNER_LOADER_BASE) \
                -DPS2_RAM_TOP=$(PS2_RAM_TOP) \
                -DPS2_LOADER_SIZE=$(PS2_LOADER_SIZE)
 
@@ -137,20 +136,20 @@ IP_LD     := $(IPDIR)/kosload-inner.ld
 PROBE_LD  := $(IPDIR)/kosload-probe.ld
 
 # Linker script for the real loader.  It is linked at the address where
-# bootstrap_main.c will copy it and jump: PS2_INNER_LOADER_BASE
+# bootstrap_main.c will copy it and jump: PS2_LOADER_BASE
 # (currently KSEG0 0x80000280).
 $(IP_LD): kosload-ip.ld.in $(ROOT)/mk/memory.mk | $(IPDIR)
-	@sed -e 's/@PS2_LOADER_BASE@/$(PS2_INNER_LOADER_BASE)/g' \
-	     -e 's/@PS2_LOADER_SIZE@/$(PS2_INNER_LOADER_SIZE)/g' \
+	@sed -e 's/@PS2_LOADER_BASE@/$(PS2_LOADER_BASE)/g' \
+	     -e 's/@PS2_LOADER_SIZE@/$(PS2_LOADER_SIZE)/g' \
 	     -e 's/@PS2_RAM_TOP@/$(PS2_RAM_TOP)/g' \
 	     $< > $@
 	@echo "  GEN     $@"
 
 # Linker script for the outer ELF.  This one is linked at the address
-# normal PS2 launchers use: PS2_LOADER_BASE = 0x00100000.
+# normal PS2 launchers use: PS2_BOOTSTRAP_BASE = 0x00100000.
 $(PROBE_LD): kosload-ip.ld.in $(ROOT)/mk/memory.mk | $(IPDIR)
-	@sed -e 's/@PS2_LOADER_BASE@/$(PS2_LOADER_BASE)/g' \
-	     -e 's/@PS2_LOADER_SIZE@/$(PS2_LOADER_SIZE)/g' \
+	@sed -e 's/@PS2_LOADER_BASE@/$(PS2_BOOTSTRAP_BASE)/g' \
+	     -e 's/@PS2_LOADER_SIZE@/$(PS2_BOOTSTRAP_SIZE)/g' \
 	     -e 's/@PS2_RAM_TOP@/$(PS2_RAM_TOP)/g' \
 	     $< > $@
 	@echo "  GEN     $@"
@@ -395,7 +394,7 @@ IP_OBJS := \
     $(IP_NETWORK_STACK_OBJS)
 
 # Two-stage outputs:
-#   IP_LOADER_IMAGE_ELF    -> inner loader, linked at PS2_INNER_LOADER_BASE
+#   IP_LOADER_IMAGE_ELF    -> inner loader, linked at PS2_LOADER_BASE
 #   IP_LOADER_IMAGE_BIN    -> raw binary of the inner loader
 #   IP_LOADER_BLOB_O       -> the .bin wrapped as an .o for linking
 #   IP_BOOTSTRAP_MAIN_OBJ  -> bootstrap_main.c compiled
@@ -450,7 +449,7 @@ $(IPDIR)/packet_helpers.o: $(CLIENTDIR)/common/network/packet_helpers.c $(VERSIO
 $(IPDIR)/dhcp.o: $(CLIENTDIR)/common/network/dhcp.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
-# Stage 1: link the real loader at PS2_INNER_LOADER_BASE.
+# Stage 1: link the real loader at PS2_LOADER_BASE.
 $(IP_LOADER_IMAGE_ELF): $(IP_OBJS) $(COMMON_A) $(IP_LD)
 	$(CC) $(ARCH_CFLAGS) $(PS2_IP_LDFLAGS) -T $(IP_LD) \
 	    $(IP_OBJS) -Wl,--start-group $(COMMON_A) -lgcc -Wl,--end-group \
@@ -469,13 +468,13 @@ $(IP_LOADER_BLOB_O): $(IP_LOADER_IMAGE_BIN) loader_blob.S
 	@echo "  BLOB    $@"
 
 # Stage 2: compile bootstrap_main.c, the tiny outer program that copies
-# the embedded inner loader to PS2_INNER_LOADER_BASE.
+# the embedded inner loader to PS2_LOADER_BASE.
 $(IP_BOOTSTRAP_MAIN_OBJ): bootstrap_main.c cache.h $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
 # Stage 3: build the final launchable ELF.  PS2 launchers load this at
 # 0x00100000.  It copies the embedded inner loader to physical 0x280 and
-# jumps to the cached address PS2_INNER_LOADER_BASE (0x80000280).
+# jumps to the cached address PS2_LOADER_BASE (0x80000280).
 $(IP_ELF): $(IP_BOOTSTRAP_MAIN_OBJ) $(IP_LOADER_BLOB_O) $(COMMON_A) $(PROBE_LD)
 	$(CC) $(ARCH_CFLAGS) $(PS2_IP_LDFLAGS) -T $(PROBE_LD) \
 	    $(IP_BOOTSTRAP_MAIN_OBJ) $(IP_LOADER_BLOB_O) \
@@ -505,12 +504,12 @@ PS2_EXAMPLE_ELFS := $(addprefix $(EXBUILD)/,$(addsuffix .elf,$(PS2_EXAMPLES)))
 
 # PS2_KOSLOAD_BASE points at the start of the *header* fields the
 # example reads (magic at +4, syscall ptr at +8), NOT the actual
-# entry-instruction at PS2_INNER_LOADER_BASE.  MIPS forces a delay
+# entry-instruction at PS2_LOADER_BASE.  MIPS forces a delay
 # slot after the leading `j realstart`, so the layout is:
-#   PS2_INNER_LOADER_BASE+0: j realstart
-#   PS2_INNER_LOADER_BASE+4: nop (delay slot)
-#   PS2_INNER_LOADER_BASE+8: 0xdeadbeef magic
-#   PS2_INNER_LOADER_BASE+12: kosloadsyscall ptr
+#   PS2_LOADER_BASE+0: j realstart
+#   PS2_LOADER_BASE+4: nop (delay slot)
+#   PS2_LOADER_BASE+8: 0xdeadbeef magic
+#   PS2_LOADER_BASE+12: kosloadsyscall ptr
 # Pretending KOSLOAD_BASE is +4 from the real entry lets the shared
 # DC/GC example pattern (BASE+4 = magic, BASE+8 = syscall) work
 # unchanged on PS2 — BASE+4 → +8, BASE+8 → +12.

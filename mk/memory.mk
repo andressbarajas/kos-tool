@@ -1,5 +1,12 @@
 # mk/memory.mk — loader memory reservations
 #
+# Dreamcast: the loader lives at a fixed low address, just above the 16 KB
+# reserved at the bottom of SH4 RAM (IP.BIN / boot area). Both dc-load-serial
+# and dc-load-ip must fit within DC_LOADER_SIZE (code + data + BSS + stack).
+# The stack top is derived in the linker script as ORIGIN(ram) + LENGTH(ram).
+DC_LOADER_BASE := 0x8c004000
+DC_LOADER_SIZE := 0xb400        # ~45 KB
+#
 # GameCube: the loader lives at the top of MEM1. Adjust GC_LOADER_SIZE to
 # resize the reservation. Both gc-load-serial and gc-load-ip must fit within
 # this region (code + data + BSS + stack).
@@ -8,7 +15,8 @@
 # guest-side heap allocators stay below the loader.
 
 GC_MEM1_TOP    := 0x81800000
-GC_LOADER_SIZE := 0x14000    # 80 KB
+GC_LOADER_SIZE := 0x14000      # 80 KB
+GC_LOADER_BASE := 0x817ec000   # = GC_MEM1_TOP - GC_LOADER_SIZE
 
 # Wii mode has the same 24 MB MEM1 window as GameCube plus MEM2.  Keep the
 # initial clean-room loader in high MEM1 so uploaded Wii DOLs can use the usual
@@ -20,35 +28,37 @@ GC_LOADER_SIZE := 0x14000    # 80 KB
 # faults with an ISI). Retail channel executables run their payload at
 # 0x81330000, so we put the loader there. This stays well clear of HBC's top
 # reservation too, so the same base works for both HBC and channel boot.
-WII_MEM1_TOP     := 0x81370000  # channel-safe usable top (loader base 0x81330000)
-WII_LOADER_SIZE  := 0x40000    # 256 KB
+WII_MEM1_TOP     := 0x81370000  # channel-safe usable top
+WII_LOADER_SIZE  := 0x40000     # 256 KB
+WII_LOADER_BASE  := 0x81330000  # = WII_MEM1_TOP - WII_LOADER_SIZE
 
-# HBC will only launch a DOL whose load addresses sit in the standard
-# homebrew area of low MEM1 (it reserves the top of MEM1 for itself + the
-# XFB).  So the DOL handed to HBC is a tiny stub linked here; it relocates
-# the real loader up to WII_LOADER_BASE and jumps (cf. PS2 -F trampoline).
-WII_HBC_BASE     := 0x80004000  # canonical devkitPPC/HBC homebrew base
+# HBC/System-Menu will only launch a DOL whose load addresses sit in the
+# standard homebrew area of low MEM1 (the top of MEM1 is reserved for HBC + the
+# XFB).  The DOL has two low PT_LOAD segments: a tiny stub at WII_BOOTSTRAP_BASE
+# (the fixed DOL entry) and the embedded loader blob at WII_HBC_BASE.  The stub
+# relocates that loader up to WII_LOADER_BASE and jumps (cf. PS2 -F trampoline).
+WII_BOOTSTRAP_BASE := 0x80003400  # fixed ES_LaunchTitle/HBC channel DOL entry (.stub)
+WII_HBC_BASE       := 0x80004000  # canonical devkitPPC/HBC homebrew base (.blob)
 
 # PS2 EE memory layout.  If you change these values, keep the matching
 # constants in include/kosload/protocol.h and the PS2 linker templates in sync.
 #
-# The file users launch is a small outer ELF at PS2_LOADER_BASE because common
-# PS2 launchers expect an ELF at 0x00100000.  It copies the real loader down
-# to PS2_INNER_LOADER_BASE, flushes caches, and jumps there.  After that
-# handoff, the original 0x00100000 launcher region is no longer used by
-# kosload and is the default load address for programs.
+# The file users launch is a small outer/bootstrap ELF at PS2_BOOTSTRAP_BASE
+# because common PS2 launchers expect an ELF at 0x00100000.  It copies the real
+# loader down to PS2_LOADER_BASE (where the loader runs), flushes caches, and
+# jumps there.  After that handoff, the original 0x00100000 launcher region is
+# no longer used by kosload and is the default program load area
+# (PS2_DEFAULT_LOAD_ADDR).
 #
 # Physical layout:
 #   phys 0x000000..0x00027F  EE exception vectors + low globals
-#   phys 0x000280..0x0FFFFF  inner loader
-#   phys 0x100000..0x1FFFFF  outer/bootstrap ELF landing zone
+#   phys 0x000280..0x0FFFFF  inner loader        (PS2_LOADER_BASE, cached 0x80000280)
+#   phys 0x100000..0x1FFFFF  outer/bootstrap ELF (PS2_BOOTSTRAP_BASE)
 #                             reused as the default program load area
 #   phys 0x200000..0x7FFFFF  continuation of program RAM
 #   phys 0x800000..          remainder of 32 MB RAM
-PS2_RAM_TOP              := 0x02000000
-PS2_LOADER_SIZE          := 0x100000    # 1 MB landing zone
-PS2_LOADER_BASE          := 0x00100000  # where the launcher loads the outer ELF
-PS2_INNER_LOADER_SIZE    := 0xFFD80     # 1 MB minus the 0x280 vector area
-PS2_INNER_LOADER_BASE    := 0x80000280  # cached view of physical 0x280
-PS2_BOOTSTRAP_BASE       := 0x00100000  # alias of PS2_LOADER_BASE
-PS2_BOOTSTRAP_SIZE       := 0x100000
+PS2_RAM_TOP        := 0x02000000
+PS2_BOOTSTRAP_BASE := 0x00100000  # outer ELF landing zone (= PS2_DEFAULT_LOAD_ADDR)
+PS2_BOOTSTRAP_SIZE := 0x100000    # 1 MB landing zone
+PS2_LOADER_BASE    := 0x80000280  # where the real loader runs (cached phys 0x280)
+PS2_LOADER_SIZE    := 0xFFD80     # 1 MB minus the 0x280 vector area

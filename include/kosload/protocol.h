@@ -231,7 +231,7 @@ typedef struct {
 
 /* ===== Adapter Type Constants ===== */
 
-#define ADAPTER_NONE         0x0000
+#define ADAPTER_NONE            0x0000
 #define ADAPTER_DC_BBA          0x0400 /* Dreamcast Broadband Adapter (RTL8139C) */
 #define ADAPTER_DC_LAN          0x0300 /* Dreamcast LAN Adapter */
 #define ADAPTER_DC_W5500        0x5500 /* Dreamcast W5500 (SCIF-SPI) */
@@ -261,11 +261,20 @@ typedef struct {
 #define GC_RAM_TOP     0x81800000 /* 24 MB MEM1 */
 #define PS2_RAM_TOP    0x02000000 /* 32 MB EE RAM */
 
+/* Loader bases.  These are fallbacks: the build passes the authoritative
+ * values from mk/memory.mk via -D (see host/Makefile and the client
+ * Makefiles), so these #ifndef defaults only apply to ad-hoc builds. */
+#ifndef DC_LOADER_BASE
+#define DC_LOADER_BASE         0x8c004000
+#endif
 #ifndef GC_LOADER_BASE
-#define GC_LOADER_BASE     0x817EC000 /* keep in sync with mk/memory.mk */
+#define GC_LOADER_BASE         0x817EC000
+#endif
+#ifndef WII_LOADER_BASE
+#define WII_LOADER_BASE        0x81330000 /* channel-safe base; see mk/memory.mk */
 #endif
 #ifndef PS2_LOADER_BASE
-#define PS2_LOADER_BASE    0x00100000 /* keep in sync with mk/memory.mk */
+#define PS2_LOADER_BASE        0x80000280
 #endif
 
 #define LZO_WRKMEM_SIZE    0x10000 /* 64 KB — LZO1X_1_MEM_COMPRESS */

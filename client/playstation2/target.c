@@ -200,7 +200,7 @@ static void ps2_disable_cache(void) {
 static void ps2_reboot(void) {
     /* Jump back to kosload entry point */
     cache_disable();
-    void (*entry)(void) = (void (*)(void))PS2_INNER_LOADER_BASE;
+    void (*entry)(void) = (void (*)(void))PS2_LOADER_BASE;
     entry();
 }
 
@@ -212,9 +212,9 @@ void disable_cache(void) {
 static void ps2_set_console_enabled(bool enabled) {
     /* Toggle ps2loadmagic (entry+0x08) between 0xdeadbeef and 0xfeedface */
     if(enabled)
-        *(volatile unsigned int *)(PS2_INNER_LOADER_BASE + 8) = 0xdeadbeef;
+        *(volatile unsigned int *)(PS2_LOADER_BASE + 8) = 0xdeadbeef;
     else
-        *(volatile unsigned int *)(PS2_INNER_LOADER_BASE + 8) = 0xfeedface;
+        *(volatile unsigned int *)(PS2_LOADER_BASE + 8) = 0xfeedface;
 }
 
 /* PS2 RTC access is mediated by CDVDMAN on the IOP.  The SMAP IRX owns

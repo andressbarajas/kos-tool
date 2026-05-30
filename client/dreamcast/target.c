@@ -13,7 +13,9 @@
 #include <kosload/target.h>
 #include <kosload/protocol.h>
 
-#define DC_LOADER_BASE 0x8c004000
+#ifndef DC_LOADER_BASE
+#define DC_LOADER_BASE 0x8c004000 /* fallback; normally -D'd from mk/memory.mk */
+#endif
 
 /* From video.S (compiler prepends _ to C symbols on SH-ELF) */
 extern void draw_string(int x, int y, const char *str, int color);
