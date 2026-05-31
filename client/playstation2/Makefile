@@ -495,7 +495,7 @@ EXBUILD := $(BUILDDIR)/examples
 
 PS2_EXAMPLES := \
     console-test download-test exception-test exception-frame-test \
-    exit-test file-test gdb-test syscall-test ip-calibrator
+    exit-test file-test gdb-test syscall-test ip-calibrator font-test
 
 PS2_EXAMPLE_ELFS := $(addprefix $(EXBUILD)/,$(addsuffix .elf,$(PS2_EXAMPLES)))
 
