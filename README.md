@@ -55,8 +55,8 @@ via the generated `wii-load-ip.dol`.
 * **Documented extension points** — see [`docs/architecture.md`](docs/architecture.md) for the console and transport boundaries used by new ports
 
 ### Firmware Update
-* **Embedded firmware** — Dreamcast and GameCube client firmware binaries (DC serial, DC IP, GC serial, GC IP) are embedded directly in the `kos-tool` host binary
-* **Opt-in auto-update** — with `-F`, when `kos-tool` connects to a console running an older (or legacy dcload) firmware, it uploads and installs the new firmware via architecture-specific trampolines (SH4 and PPC)
+* **Embedded firmware** — all client firmware binaries (DC serial, DC IP, GC serial, GC IP, PS2 IP, Wii IP) are embedded directly in the `kos-tool` host binary
+* **Opt-in auto-update** — with `-F`, when `kos-tool` connects to a console running an older (or legacy dcload) firmware, it uploads and installs the new firmware via architecture-specific trampolines (SH4, PPC, and MIPS R5900)
 * **IP config preservation** — during network firmware updates, DHCP/static IP settings are detected and patched into the new firmware so the console stays reachable
 * **Legacy dcload compatibility** — auto-update works on consoles still running the original `dcload-serial` or `dcload-ip`, upgrading them in-place
 * **Manual update** — `-U <file>` flag for updating from an external firmware binary
