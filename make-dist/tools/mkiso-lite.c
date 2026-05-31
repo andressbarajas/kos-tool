@@ -98,7 +98,7 @@ static const char *mkiso_path_basename(const char *path) {
 static void mkiso_usage(const char *program) {
     fprintf(stderr,
             "Usage: %s --output <image.iso> --source-dir <dir>\n"
-            "          [--volume-id <label>] [--system-area <file>]\n"
+            "          [--volume-id <label>] [--system-id <id>] [--system-area <file>]\n"
             "          [--eltorito-boot <file>] [--start-lba <lba>] [--quiet]\n",
             program);
 }
@@ -282,6 +282,7 @@ int main(int argc, char **argv) {
     const char *output_path = NULL;
     const char *source_dir = NULL;
     const char *volume_id = NULL;
+    const char *system_id = NULL;
     const char *system_area_path = NULL;
     const char *boot_path = NULL;
     char boot_name[ISO_LITE_FILE_NAME_SIZE];
@@ -310,6 +311,8 @@ int main(int argc, char **argv) {
             source_dir = argv[++i];
         else if(!strcmp(argv[i], "--volume-id") && i + 1 < (size_t)argc)
             volume_id = argv[++i];
+        else if(!strcmp(argv[i], "--system-id") && i + 1 < (size_t)argc)
+            system_id = argv[++i];
         else if(!strcmp(argv[i], "--system-area") && i + 1 < (size_t)argc)
             system_area_path = argv[++i];
         else if(!strcmp(argv[i], "--eltorito-boot") && i + 1 < (size_t)argc)
@@ -355,6 +358,7 @@ int main(int argc, char **argv) {
     }
 
     config.volume_id = volume_id;
+    config.system_id = system_id;
     config.system_area = (const uint8_t *)system_area;
     config.system_area_size = system_area_size;
     config.start_lba = start_lba;

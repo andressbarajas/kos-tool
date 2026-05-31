@@ -18,6 +18,9 @@ typedef struct {
 
 typedef struct {
     const char *volume_id;
+    /* PVD System Identifier (offset 8, 32 bytes).  NULL keeps the default
+     * "KOS-TOOL".  PS2 discs must set this to "PLAYSTATION". */
+    const char *system_id;
     const uint8_t *system_area;
     size_t system_area_size;
     uint32_t start_lba;

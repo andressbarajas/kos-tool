@@ -1,5 +1,5 @@
 # make-dist/Makefile — Build delivery artifacts: Dreamcast (CDI), GameCube (ISO/DOL),
-#                      and the Wii channel WAD
+#                      the Wii channel WAD, and the PlayStation 2 ISO
 #
 # Dreamcast: Assembles a 1st_read bootstrap that embeds the kosload firmware,
 #            objcopies it to a boot binary, then creates a repo-local CDI.
@@ -9,16 +9,24 @@
 #            The bootstrap loads at 0x80003100 (valid for apploader)
 #            and copies the firmware to GC_LOADER_BASE at top of MEM1.
 #
+# PlayStation 2: Stages SYSTEM.CNF (generated from system.cnf.in, with the
+#            kosload version substituted) plus the ps2-load-ip ELF (as
+#            KOSLOAD.ELF) into a disc tree and runs mkiso-lite to produce a
+#            plain bootable ISO 9660 image (2048-byte sectors).  The PS2 BIOS
+#            reads SYSTEM.CNF's BOOT2 key to launch the ELF.
+#
 # Usage:
 #   make dc          Build Dreamcast 1st_read ELFs/BINs + CDIs
 #   make gc          Build GameCube DOLs + ISOs
-#   make all         Build both
+#   make ps2         Build PlayStation 2 ISO
+#   make all         Build dc + gc + ps2
 #   make clean       Remove all build artifacts
 
 ROOT ?= $(CURDIR)/..
 
 include $(ROOT)/mk/memory.mk
 include $(ROOT)/mk/toolchains.mk
+include $(ROOT)/mk/version.mk
 
 UNAME_S := $(shell uname -s)
 HOST_CC_DEFAULT := cc
@@ -77,6 +85,7 @@ DC_IP_BIN  := $(BUILDDIR)/dc-load-ip.bin
 GC_SER_BIN := $(BUILDDIR)/gc-load-ser.bin
 GC_IP_BIN  := $(BUILDDIR)/gc-load-ip.bin
 WII_IP_DOL := $(BUILDDIR)/wii-load-ip.dol
+PS2_IP_ELF := $(BUILDDIR)/ps2-load-ip.elf
 
 # ---------- Intermediate outputs ----------
 
@@ -106,6 +115,28 @@ GC_IP_DOL  := $(BUILDDIR)/gc-load-ip.dol
 GC_SER_ISO := $(BUILDDIR)/gc-load-ser.iso
 GC_IP_ISO  := $(BUILDDIR)/gc-load-ip.iso
 
+PS2_IP_ISO := $(BUILDDIR)/ps2-load-ip-$(KOSLOAD_VERSION).iso
+
+# PlayStation 2 SYSTEM.CNF is generated from this template with the kosload
+# version (@KOSLOAD_VERSION@) and the boot executable name (@PS2_BOOT_NAME@)
+# substituted in.
+PS2_SYSTEM_CNF_IN := playstation2/system.cnf.in
+
+# On-disc name of the loader executable.  PCSX2 (and the real PS2 launcher)
+# derive the region flag from this serial's prefix, NOT from VMODE:
+#   SLUS / SCUS  -> NTSC-U (Americas)   SLES / SCES -> PAL (Europe)
+#   SLPM / SLPS / SCPS / SCAJ -> NTSC-J (Japan/Asia)
+# The default is a US serial outside the real assigned range (real SLUS titles
+# top out in the SLUS-21xxx band), so PCSX2's game database won't match it and
+# apply unintended per-game patches.  It must fit ISO 9660 8.3 (8-char base,
+# 3-char ext): "SLUS_900" + "." + "00".  Override for PAL/JP discs, e.g.
+#   make dist-ps2 PS2_BOOT_NAME=SLES_900.00
+PS2_BOOT_NAME ?= SLUS_900.00
+
+PS2_DISC_DIR := $(LOCALDIR)/ps2-ip-disc
+PS2_DISC_CNF := $(PS2_DISC_DIR)/SYSTEM.CNF
+PS2_DISC_ELF := $(PS2_DISC_DIR)/$(PS2_BOOT_NAME)
+
 # Wii channel WAD packed around wii-load-ip.dol.  Override on the command line:
 #   make -C make-dist wii WII_WAD_TITLE_ID=KOSL WII_WAD_IOS=58 \
 #       WII_WAD_NAME="wii-load-ip" WII_WAD_TITLE_VER=2
@@ -120,9 +151,9 @@ WII_WAD_TITLE_VER ?= 1
 # ============================================================
 
 .DEFAULT_GOAL := all
-.PHONY: all dc gc wii dc-serial dc-ip gc-serial gc-ip gc-dol mkwad clean
+.PHONY: all dc gc wii ps2 dc-serial dc-ip gc-serial gc-ip gc-dol mkwad clean
 
-all: dc gc
+all: dc gc ps2
 
 dc: dc-serial dc-ip
 
@@ -345,6 +376,46 @@ gc-ip: $(MKISO_LITE) $(LOCALDIR)/gc-ip-disc/bootldr.dol $(GBI_HDR) | $(BUILDDIR)
 	    --volume-id KOSLOAD_IP
 
 # ============================================================
+# PlayStation 2: bootable ISO
+#
+# A PS2 disc is a plain ISO 9660 image (2048-byte sectors -- the default for
+# mkiso-lite).  The PS2 BIOS reads SYSTEM.CNF from the root and launches the
+# ELF named by its BOOT2 key.  We stage two files into a disc tree:
+#
+#   SYSTEM.CNF      generated from system.cnf.in (VER + BOOT2 substituted)
+#   $(PS2_BOOT_NAME) the ps2-load-ip loader ELF (region serial; see above)
+#
+# Both names survive ISO 9660 8.3 mangling unchanged, so BOOT2's
+# "cdrom0:\$(PS2_BOOT_NAME);1" path matches the on-disc name.  No custom system
+# area or El Torito catalog is used (those are GameCube-only).
+#
+# Note: changing PS2_BOOT_NAME between builds leaves the previous serial staged
+# in the disc tree; run `make -C make-dist clean` (or top-level `make clean`)
+# so the stale executable isn't also folded into the ISO.
+# ============================================================
+
+$(PS2_DISC_DIR):
+	@mkdir -p $@
+
+# Generate SYSTEM.CNF from the template, substituting the kosload version and
+# the boot executable name.
+$(PS2_DISC_CNF): $(PS2_SYSTEM_CNF_IN) $(ROOT)/mk/version.mk | $(PS2_DISC_DIR)
+	@echo "  GEN     $@"
+	@sed -e 's/@KOSLOAD_VERSION@/$(KOSLOAD_VERSION)/g' \
+	     -e 's/@PS2_BOOT_NAME@/$(PS2_BOOT_NAME)/g' $< > $@
+
+# Stage the loader ELF under its region serial name.
+$(PS2_DISC_ELF): $(PS2_IP_ELF) | $(PS2_DISC_DIR)
+	@cp $< $@
+
+ps2: $(MKISO_LITE) $(PS2_DISC_CNF) $(PS2_DISC_ELF) | $(BUILDDIR)
+	@echo "  ISO     $(PS2_IP_ISO)"
+	@$(MKISO_LITE) --quiet --output $(PS2_IP_ISO) \
+	    --source-dir $(PS2_DISC_DIR) \
+	    --system-id PLAYSTATION \
+	    --volume-id KOSLOAD_PS2
+
+# ============================================================
 # Clean
 # ============================================================
 
@@ -353,3 +424,4 @@ clean:
 	rm -f $(DC_SER_CDI) $(DC_IP_CDI)
 	rm -f $(GC_SER_DOL) $(GC_IP_DOL)
 	rm -f $(GC_SER_ISO) $(GC_IP_ISO)
+	rm -f $(PS2_IP_ISO)

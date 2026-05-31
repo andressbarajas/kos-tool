@@ -437,7 +437,7 @@ int iso_lite_write_stream(FILE *output, const iso_lite_config_t *config, const i
     pvd[0] = 0x01;
     memcpy(pvd + 1, "CD001", 5);
     pvd[6] = 0x01;
-    iso_lite_write_padded_field(pvd + 8, 32, "KOS-TOOL");
+    iso_lite_write_padded_field(pvd + 8, 32, config->system_id ? config->system_id : "KOS-TOOL");
     iso_lite_write_padded_field(pvd + 40, 32, volume_id);
     iso_lite_write_both32(pvd + 80, total_sectors);
     iso_lite_write_both16(pvd + 120, 1);

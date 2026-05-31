@@ -6,10 +6,11 @@
 #   make gc            Build GameCube firmware
 #   make wii           Build Wii firmware
 #   make ps2           Build PlayStation 2 firmware
-#   make dist          Build all delivery artifacts (CDI + ISO + Wii channel WAD)
+#   make dist          Build all delivery artifacts (CDI + ISO + Wii channel WAD + PS2 ISO)
 #   make dist-dc       Build Dreamcast CDI images
 #   make dist-gc       Build GameCube ISO images
 #   make dist-wii      Build Wii channel WAD
+#   make dist-ps2      Build PlayStation 2 ISO
 #   make gc-dol        Build GameCube DOL files only (no ISO)
 #   make clean         Remove all build artifacts
 
@@ -84,9 +85,9 @@ endef
 
 # ---------- Targets ----------
 
-.PHONY: all host dc gc wii ps2 dist dist-dc dist-gc dist-wii gc-dol \
+.PHONY: all host dc gc wii ps2 dist dist-dc dist-gc dist-wii dist-ps2 gc-dol \
         auto-dc auto-gc auto-wii auto-ps2 \
-        dist-auto-dc dist-auto-gc dist-auto-wii clean \
+        dist-auto-dc dist-auto-gc dist-auto-wii dist-auto-ps2 clean \
         check-dc-toolchain check-gc-toolchain check-wii-toolchain check-ps2-toolchain
 
 check-dc-toolchain:
@@ -208,7 +209,7 @@ ps2: check-ps2-toolchain $(VERSION_H) | $(BUILDDIR)
 
 # ---------- Distribution artifact targets ----------
 
-dist: dist-auto-dc dist-auto-gc dist-auto-wii
+dist: dist-auto-dc dist-auto-gc dist-auto-wii dist-auto-ps2
 
 dist-auto-dc:
 	@if $(call has_host_tool,$(DC_CC)) && \
@@ -241,6 +242,15 @@ dist-auto-wii:
 		echo "  SKIP    Wii channel WAD (toolchain not found)"; \
 	fi
 
+# PS2 needs both the EE and IOP compilers (same gate as auto-ps2).
+dist-auto-ps2:
+	@if $(call has_host_tool,$(PS2_CC)) && \
+	    $(call has_host_tool,$(PS2_IOP_CC)); then \
+		$(MAKE) dist-ps2; \
+	else \
+		echo "  SKIP    PlayStation 2 ISO (toolchain not found)"; \
+	fi
+
 dist-dc: check-dc-toolchain dc
 	$(MAKE) -C make-dist dc ROOT=$(ROOT)
 
@@ -249,6 +259,9 @@ dist-gc: check-gc-toolchain gc
 
 dist-wii: check-wii-toolchain wii
 	$(MAKE) -C make-dist wii ROOT=$(ROOT)
+
+dist-ps2: check-ps2-toolchain ps2
+	$(MAKE) -C make-dist ps2 ROOT=$(ROOT)
 
 gc-dol: check-gc-toolchain gc
 	$(MAKE) -C make-dist gc-dol ROOT=$(ROOT)
