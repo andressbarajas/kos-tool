@@ -98,11 +98,19 @@ jobs:
 
       # Always uploaded (fresh build or cache restore) so the build job can
       # consume it within this run.
+      # Package as a tarball so executable bits and symlinks survive the
+      # artifact round-trip (raw-dir artifacts are zipped and lose both, which
+      # makes gcc fall back to the host assembler).
+      - name: Package toolchain
+        env:
+          ARTIFACT_PATH: ${{ matrix.artifact_path }}
+        run: tar czf "toolchain-${{ matrix.name }}.tar.gz" -C / "${ARTIFACT_PATH#/}"
+
       - name: Upload toolchain artifact
         uses: actions/upload-artifact@v4
         with:
           name: toolchain-${{ matrix.name }}
-          path: ${{ matrix.artifact_path }}
+          path: toolchain-${{ matrix.name }}.tar.gz
           retention-days: 1
 
   # ============================================================
@@ -124,27 +132,19 @@ jobs:
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y libelf-dev pkg-config zip
 
-      - name: Download Dreamcast toolchain
+      - name: Download toolchains
         uses: actions/download-artifact@v4
         with:
-          name: toolchain-dreamcast
-          path: /opt/toolchains/dc/sh-elf
-      - name: Download GameCube toolchain
-        uses: actions/download-artifact@v4
-        with:
-          name: toolchain-gamecube
-          path: /opt/toolchains/gc/powerpc-eabi
-      - name: Download PS2 toolchains
-        uses: actions/download-artifact@v4
-        with:
-          name: toolchain-ps2
-          path: /opt/toolchains/ps2
+          pattern: toolchain-*
+          path: toolchains
+          merge-multiple: true
 
-      - name: Fix toolchain permissions
+      - name: Unpack toolchains
         run: |
-          for d in /opt/toolchains/dc/sh-elf /opt/toolchains/gc/powerpc-eabi \
-                   /opt/toolchains/ps2/mips-elf /opt/toolchains/ps2/mipsel-elf; do
-            chmod -R +x "$d/bin" "$d/libexec" 2>/dev/null || true
+          sudo mkdir -p /opt/toolchains
+          for tb in toolchains/toolchain-*.tar.gz; do
+            echo "unpacking $tb"
+            sudo tar xzf "$tb" -C /
           done
 
       - name: Write Wii common key (if provided)

@@ -29,13 +29,16 @@ include mk/toolchains.mk
 VERSION_H    := $(ROOT)/include/kosload/version.h
 VERSION_H_IN := $(ROOT)/include/kosload/version.h.in
 
+# Uses a PID-unique temp so concurrent sub-makes (e.g. `make all -j` building
+# several consoles at once) don't clobber each other's $@.tmp and fail the mv.
 $(VERSION_H): $(VERSION_H_IN) mk/version.mk
-	@sed -e 's/@KOSLOAD_VERSION_MAJOR@/$(KOSLOAD_VERSION_MAJOR)/g' \
+	@t=$@.tmp.$$$$; \
+	 sed -e 's/@KOSLOAD_VERSION_MAJOR@/$(KOSLOAD_VERSION_MAJOR)/g' \
 	     -e 's/@KOSLOAD_VERSION_MINOR@/$(KOSLOAD_VERSION_MINOR)/g' \
 	     -e 's/@KOSLOAD_VERSION_PATCH@/$(KOSLOAD_VERSION_PATCH)/g' \
 	     -e 's/@KOSLOAD_VERSION@/$(KOSLOAD_VERSION)/g' \
-	     $< > $@.tmp
-	@if ! cmp -s $@.tmp $@ 2>/dev/null; then mv $@.tmp $@; echo "  GEN     $@"; else rm $@.tmp; fi
+	     $< > $$t; \
+	 if ! cmp -s $$t $@ 2>/dev/null; then mv $$t $@; echo "  GEN     $@"; else rm -f $$t; fi
 
 # ---------- Output directory ----------
 
