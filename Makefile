@@ -12,6 +12,9 @@
 #   make dist-wii      Build Wii channel WAD
 #   make dist-ps2      Build PlayStation 2 ISO
 #   make gc-dol        Build GameCube DOL files only (no ISO)
+#   make release       Build everything + package release archives (build/release/)
+#   make release-host  Package the host-tool archive for this OS
+#   make release-firmware  Package the firmware bundle
 #   make clean         Remove all build artifacts
 
 ROOT := $(CURDIR)
@@ -87,8 +90,14 @@ endef
 
 .PHONY: all host dc gc wii ps2 dist dist-dc dist-gc dist-wii dist-ps2 gc-dol \
         auto-dc auto-gc auto-wii auto-ps2 \
-        dist-auto-dc dist-auto-gc dist-auto-wii dist-auto-ps2 clean \
+        dist-auto-dc dist-auto-gc dist-auto-wii dist-auto-ps2 \
+        release release-host release-firmware print-version clean \
         check-dc-toolchain check-gc-toolchain check-wii-toolchain check-ps2-toolchain
+
+# Single source of truth for the version string (e.g. for release tooling/CI).
+# `make -s print-version` -> 3.0.0
+print-version:
+	@echo $(KOSLOAD_VERSION)
 
 check-dc-toolchain:
 	$(call require_host_tool,$(DC_CC),Dreamcast compiler (sh-elf-gcc),Dreamcast,DC_TOOLCHAIN)
@@ -157,7 +166,7 @@ auto-ps2:
 
 host: $(VERSION_H) | $(BUILDDIR)
 	$(MAKE) -C host ROOT=$(ROOT)
-	@cp host/build/kos-tool $(BUILDDIR)/
+	@cp host/build/kos-tool $(BUILDDIR)/ 2>/dev/null || cp host/build/kos-tool.exe $(BUILDDIR)/
 	@echo "  COPY    $(BUILDDIR)/kos-tool"
 
 dc: check-dc-toolchain $(VERSION_H) | $(BUILDDIR)
@@ -265,6 +274,28 @@ dist-ps2: check-ps2-toolchain ps2
 
 gc-dol: check-gc-toolchain gc
 	$(MAKE) -C make-dist gc-dol ROOT=$(ROOT)
+
+# ---------- Release packaging ----------
+# `make release` builds everything the installed toolchains allow, then packages
+# per-OS host archives + the firmware bundle into build/release/.  The split
+# targets exist for CI: `release-host` on each OS runner, `release-firmware`
+# once.  The script only packages what is already in build/; the dependencies
+# below build it.  KOSLOAD_VERSION (from mk/version.mk) feeds the archive names.
+#
+# Note: the host tool embeds the console firmware for -F, so a release-quality
+# kos-tool must be linked after the firmware .bin files exist.  `make release`
+# guarantees that via the `all` prerequisite; `release-host` embeds whatever
+# firmware is already present when `host` links.
+RELEASE_SCRIPT := scripts/package-release.sh
+
+release: all dist
+	@KOSLOAD_VERSION=$(KOSLOAD_VERSION) $(RELEASE_SCRIPT) --all
+
+release-host: host
+	@KOSLOAD_VERSION=$(KOSLOAD_VERSION) $(RELEASE_SCRIPT) --host
+
+release-firmware: dist
+	@KOSLOAD_VERSION=$(KOSLOAD_VERSION) $(RELEASE_SCRIPT) --firmware
 
 # ---------- Clean ----------
 
