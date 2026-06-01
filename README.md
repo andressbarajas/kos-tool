@@ -126,7 +126,7 @@ via the generated `wii-load-ip.dol`.
 Toolchain locations are configured in [`mk/toolchains.mk`](mk/toolchains.mk).
 If your Dreamcast, GameCube, Wii, or PlayStation 2 toolchains are not installed
 under the default paths, edit that file before running `make dc`, `make gc`,
-`make wii`, `make ps2`, or `./build.sh`.
+`make wii`, or `make ps2`.
 
 ### Build Everything
 
