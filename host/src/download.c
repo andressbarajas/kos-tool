@@ -36,7 +36,12 @@ int download(kostool_context_t *ctx, const char *filename, uint32_t address, uin
         return -1;
     }
 
-    write(fd, data, size);
+    if(write(fd, data, size) != (ssize_t)size) {
+        perror(filename);
+        close(fd);
+        free(data);
+        return -1;
+    }
     close(fd);
     free(data);
 

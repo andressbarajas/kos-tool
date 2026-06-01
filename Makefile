@@ -24,6 +24,15 @@ include mk/toolchains.mk
 # Default target
 .DEFAULT_GOAL := all
 
+# Each console target (dc/gc/wii/ps2) re-invokes `$(MAKE) host` so the host
+# tool embeds that console's freshly built firmware.  Under `make -j` the
+# auto-* console builds run concurrently, so several `make host` invocations
+# race on build-host/minilzo.a and build/kos-tool (intermittent link failures
+# like "undefined reference to lzo1x_*").  Serialize THIS makefile's targets;
+# the recursive sub-makes (client/*, host/) still compile their objects in
+# parallel, so per-console build time is unaffected.
+.NOTPARALLEL:
+
 # ---------- version.h generation ----------
 
 VERSION_H    := $(ROOT)/include/kosload/version.h
