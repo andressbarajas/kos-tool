@@ -1,0 +1,309 @@
+name: Build & Release
+
+# CI builds every console's firmware, the host tool (with firmware embedded for
+# -F) on Linux/macOS/Windows, and the delivery images, then on a `v*` tag
+# publishes the packaged archives to a GitHub Release.
+#
+# Cross-toolchains are built once via KallistiOS kos-chain (the same mechanism
+# used locally) and cached, so only the first run on a given kos-chain commit
+# pays the full toolchain-build cost.
+#
+# Required secret (for the Wii channel WAD):
+#   KOS_WII_COMMON_KEY  base64 of make-dist/tools/mkwad/common-key.bin
+#   If unset (e.g. fork PRs), the WAD is skipped and only the Wii DOL ships.
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # KallistiOS kos-chain source that provides the cross-toolchain build (the
+  # ps2_toolchain branch adds the PS2 EE + IOP profiles alongside DC/GC).
+  KOSCHAIN_REPO: https://github.com/andressbarajas/KallistiOS.git
+  KOSCHAIN_REF: ps2_toolchain
+  TOOLCHAIN_PROFILE: stable
+
+jobs:
+  # ============================================================
+  # Cross-toolchains (kos-chain, cached per kos-chain commit)
+  #
+  # Each matrix entry builds one or more targets and installs them to the same
+  # /opt/toolchains/... paths the kos-tool Makefiles default to, so the client
+  # jobs need no path overrides.  PS2 builds two targets (EE + IOP).
+  # ============================================================
+  toolchains:
+    name: Toolchain (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: dreamcast
+            artifact_path: /opt/toolchains/dc/sh-elf
+            builds: |
+              dreamcast /opt/toolchains/dc/sh-elf
+          - name: gamecube
+            artifact_path: /opt/toolchains/gc/powerpc-eabi
+            builds: |
+              gamecube /opt/toolchains/gc/powerpc-eabi
+          - name: ps2
+            artifact_path: /opt/toolchains/ps2
+            builds: |
+              playstation2 /opt/toolchains/ps2/mips-elf
+              iop /opt/toolchains/ps2/mipsel-elf
+    steps:
+      - name: Resolve kos-chain commit
+        id: rev
+        run: echo "sha=$(git ls-remote "$KOSCHAIN_REPO" "refs/heads/$KOSCHAIN_REF" | cut -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache toolchain
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ matrix.artifact_path }}
+          key: kos-chain-${{ matrix.name }}-${{ env.TOOLCHAIN_PROFILE }}-${{ steps.rev.outputs.sha }}
+
+      - name: Install build dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential bison flex texinfo \
+            libgmp-dev libmpfr-dev libmpc-dev libisl-dev \
+            wget curl python3 git subversion gettext patch \
+            libelf-dev libjpeg-dev libpng-dev
+
+      - name: Build toolchain(s) with kos-chain
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          BUILDS: ${{ matrix.builds }}
+        run: |
+          git clone --depth 1 --branch "$KOSCHAIN_REF" "$KOSCHAIN_REPO" koschain
+          sudo mkdir -p /opt/toolchains
+          sudo chown -R "$(id -u):$(id -g)" /opt/toolchains
+          cd koschain/utils/kos-chain
+          while read -r plat path; do
+            [ -z "$plat" ] && continue
+            echo "::group::kos-chain build $plat -> $path"
+            make build platform="$plat" toolchain_profile="$TOOLCHAIN_PROFILE" toolchain_path="$path"
+            echo "::endgroup::"
+          done <<< "$BUILDS"
+
+      # Always uploaded (fresh build or cache restore) so the build job can
+      # consume it within this run.
+      # Package as a tarball so executable bits and symlinks survive the
+      # artifact round-trip (raw-dir artifacts are zipped and lose both, which
+      # makes gcc fall back to the host assembler).
+      - name: Package toolchain
+        env:
+          ARTIFACT_PATH: ${{ matrix.artifact_path }}
+        run: tar czf "toolchain-${{ matrix.name }}.tar.gz" -C / "${ARTIFACT_PATH#/}"
+
+      - name: Upload toolchain artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: toolchain-${{ matrix.name }}
+          path: toolchain-${{ matrix.name }}.tar.gz
+          retention-days: 1
+
+  # ============================================================
+  # Firmware + Linux host + release packaging
+  #
+  # Builds every console's firmware (host tool embeds it for -F), the disc
+  # images, and the release archives.  Also emits the raw firmware .bin files
+  # so the macOS/Windows host jobs can embed them without a cross-toolchain.
+  # ============================================================
+  build:
+    name: Firmware + Linux host + packages
+    runs-on: ubuntu-latest
+    needs: toolchains
+    env:
+      WII_KEY: ${{ secrets.KOS_WII_COMMON_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libelf-dev pkg-config zip
+
+      - name: Download toolchains
+        uses: actions/download-artifact@v4
+        with:
+          pattern: toolchain-*
+          path: toolchains
+          merge-multiple: true
+
+      - name: Unpack toolchains
+        run: |
+          sudo mkdir -p /opt/toolchains
+          for tb in toolchains/toolchain-*.tar.gz; do
+            echo "unpacking $tb"
+            sudo tar xzf "$tb" -C /
+          done
+
+      - name: Write Wii common key (if provided)
+        run: |
+          if [ -n "$WII_KEY" ]; then
+            echo "$WII_KEY" | base64 -d > make-dist/tools/mkwad/common-key.bin
+            echo "Wii common key written"
+          else
+            echo "No KOS_WII_COMMON_KEY secret; the Wii WAD will be skipped"
+          fi
+
+      - name: Build all firmware
+        run: make all -j"$(nproc)"
+
+      - name: Build disc images
+        run: |
+          make dist-dc dist-gc dist-ps2 -j"$(nproc)"
+          if [ -f make-dist/tools/mkwad/common-key.bin ]; then
+            make dist-wii
+          else
+            echo "Skipping Wii WAD (no common key)"
+          fi
+
+      - name: Package release archives (Linux host + firmware bundle)
+        run: scripts/package-release.sh --all
+
+      - name: Bundle firmware .bin files (for host embedding)
+        run: |
+          tar czf firmware-bins.tar.gz \
+            client/dreamcast/build/serial/dc-load-ser.bin \
+            client/dreamcast/build/ip/dc-load-ip.bin \
+            client/gamecube/build/serial/gc-load-ser.bin \
+            client/gamecube/build/ip/gc-load-ip.bin \
+            client/playstation2/build/ip/ps2-load-ip-image.bin \
+            client/wii/build/ip/wii-load-ip.bin
+
+      - name: Upload firmware bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-bundle
+          path: build/release/kosload-*-firmware.zip
+
+      - name: Upload Linux host archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: host-linux
+          path: build/release/kos-tool-*-linux-*.tar.gz
+
+      - name: Upload firmware bins
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-bins
+          path: firmware-bins.tar.gz
+          retention-days: 1
+
+  # ============================================================
+  # Host tool (firmware-embedded) for macOS and Windows
+  #
+  # No cross-toolchain needed: the Linux-built firmware .bin files are staged
+  # into the client build dirs, and the host Makefile embeds whatever .bin
+  # files are present.
+  # ============================================================
+  host-macos:
+    name: Host (macOS)
+    runs-on: macos-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: brew install libelf pkg-config
+      - name: Download firmware bins
+        uses: actions/download-artifact@v4
+        with:
+          name: firmware-bins
+          path: .
+      - name: Stage firmware bins
+        run: tar xzf firmware-bins.tar.gz
+      - name: Build + package host
+        run: make release-host
+      - name: Upload macOS host archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: host-macos
+          path: build/release/kos-tool-*-macos.tar.gz
+
+  host-windows:
+    name: Host (Windows x86_64)
+    runs-on: windows-latest
+    needs: build
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-libelf
+            mingw-w64-x86_64-pkg-config
+            make
+            tar
+            zip
+      - name: Download firmware bins
+        uses: actions/download-artifact@v4
+        with:
+          name: firmware-bins
+          path: .
+      - name: Stage firmware bins
+        run: tar xzf firmware-bins.tar.gz
+      - name: Build + package host
+        run: make release-host
+      - name: Upload Windows host archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: host-windows
+          path: build/release/kos-tool-*-windows-*.zip
+
+  # ============================================================
+  # Publish GitHub Release (tags only)
+  # ============================================================
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, host-macos, host-windows]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify tag matches mk/version.mk
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          ver=$(make -s print-version)
+          echo "tag=$tag  version.mk=$ver"
+          if [ "$tag" != "$ver" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match mk/version.mk ($ver)"
+            exit 1
+          fi
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -lR dist
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/kos-tool-*-*.tar.gz
+            dist/kos-tool-*-*.zip
+            dist/kosload-*-firmware.zip
+          generate_release_notes: true
+          fail_on_unmatched_files: true

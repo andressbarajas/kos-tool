@@ -232,6 +232,14 @@ static int parse_trace_addr(const char *line, size_t len, uint32_t *addr) {
 #define STK_BANNER_PREFIX     "-------- "
 #define STK_BANNER_PREFIX_LEN 9
 
+/* Best-effort console output.  write(2) is warn_unused_result on glibc, and
+ * these are terminal-display paths where a short write or -1 is non-fatal
+ * (the guest syscall path uses write_full() below, which loops/retries). */
+static void console_emit(int fd, const void *buf, size_t len) {
+    ssize_t wr = write(fd, buf, len);
+    (void)wr;
+}
+
 /* Process a single complete line, annotating stack trace addresses
  * with addr2line results when available. */
 static void console_write_line(const char *addr2line_cmd, const char *elf_path, int fd, const char *line,
@@ -243,7 +251,7 @@ static void console_write_line(const char *addr2line_cmd, const char *elf_path, 
         } else if(line[STK_BANNER_PREFIX_LEN] == 'E') {
             in_stack_trace = 0;
         }
-        write(fd, line, len);
+        console_emit(fd, line, len);
         return;
     }
 
@@ -269,14 +277,14 @@ static void console_write_line(const char *addr2line_cmd, const char *elf_path, 
                 out_len = compat_str_append_bytes(outbuf, sizeof(outbuf), out_len, "   ", 3);
                 out_len = compat_str_append(outbuf, sizeof(outbuf), out_len, decoded);
                 out_len = compat_str_append_bytes(outbuf, sizeof(outbuf), out_len, "\n", 1);
-                write(fd, outbuf, out_len);
+                console_emit(fd, outbuf, out_len);
                 return;
             }
         }
     }
 
     /* Default: pass through unchanged */
-    write(fd, line, len);
+    console_emit(fd, line, len);
 }
 
 /* write(2) that completes the full buffer.  A bare write() may return
@@ -361,10 +369,10 @@ static int console_write(kostool_context_t *ctx, int fd, const uint8_t *data, ui
             } else {
                 /* Buffer overflow — flush raw */
                 if(stk_line_buf_len > 0) {
-                    write(fd, stk_line_buf, stk_line_buf_len);
+                    console_emit(fd, stk_line_buf, stk_line_buf_len);
                     stk_line_buf_len = 0;
                 }
-                write(fd, p, rem);
+                console_emit(fd, p, rem);
             }
             break;
         }
@@ -380,8 +388,8 @@ static int console_write(kostool_context_t *ctx, int fd, const uint8_t *data, ui
                 memcpy(stk_line_buf + stk_line_buf_len, p, line_len);
                 console_write_line(addr2line_cmd, ctx->loaded_binary_path, fd, stk_line_buf, total);
             } else {
-                write(fd, stk_line_buf, stk_line_buf_len);
-                write(fd, p, line_len);
+                console_emit(fd, stk_line_buf, stk_line_buf_len);
+                console_emit(fd, p, line_len);
             }
             stk_line_buf_len = 0;
         } else {
