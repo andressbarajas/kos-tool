@@ -18,10 +18,13 @@
 
 /* ===== Syscall implementations ===== */
 
-/* Syscall 14: loaded programs call this to provide work memory for
- * LZO compression used by write() and other send syscalls. */
-void assign_wrkmem(unsigned char *user_buffer) {
+/* Syscall 14: loaded programs (and KOS's kosload driver) call this to provide
+ * work memory for LZO compression used by write() and other send syscalls.
+ * Returns 0 to signal serial mode — KOS probes assign_wrkmem(0) and reads
+ * -1 => IP (no wrkmem) / 0 => serial (it then hands back a 64 KB buffer). */
+int assign_wrkmem(unsigned char *user_buffer) {
     wrkmem = user_buffer;
+    return 0;
 }
 
 void progexit(int ret_code) {

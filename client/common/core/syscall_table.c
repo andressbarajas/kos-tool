@@ -32,7 +32,7 @@ extern int fstat(int, void *);
 extern int time(unsigned int *);
 extern int stat(const char *, void *);
 extern int utime(const char *, void *);
-extern void assign_wrkmem(unsigned char *);
+extern int assign_wrkmem(unsigned char *);
 extern void progexit(int);
 extern unsigned int opendir(const char *);
 extern int closedir(unsigned int);

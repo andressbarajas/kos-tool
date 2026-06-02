@@ -283,10 +283,16 @@ static void kos_syscall_wait_for_retval(void) {
     syscall_data_len = 0;
 }
 
-/* Syscall 14: assign_wrkmem — not needed for network transport
- * (compression is handled differently), but must exist for crt0.S linkage. */
-void assign_wrkmem(unsigned char *user_buffer) {
+/* Syscall 14: assign_wrkmem.  Network transport needs no LZO work memory, but
+ * the return value is the host/loader transport probe: KOS's kosload driver
+ * calls assign_wrkmem(0) at init and reads -1 => IP mode, 0 => serial (which
+ * then gets a 64 KB compression buffer).  MUST return -1 here — returning void
+ * (garbage r0) makes KOS mis-detect serial mode and drive the IP loader down a
+ * compression/wrkmem path it doesn't implement, corrupting memory.  Classic
+ * dcload-ip returns -1 here too, which is why legacy loaders work. */
+int assign_wrkmem(unsigned char *user_buffer) {
     (void)user_buffer;
+    return -1;
 }
 
 /* ===== Syscall implementations ===== */
