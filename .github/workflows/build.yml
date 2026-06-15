@@ -96,22 +96,10 @@ jobs:
             echo "::endgroup::"
           done <<< "$BUILDS"
 
-      # Always uploaded (fresh build or cache restore) so the build job can
-      # consume it within this run.
-      # Package as a tarball so executable bits and symlinks survive the
-      # artifact round-trip (raw-dir artifacts are zipped and lose both, which
-      # makes gcc fall back to the host assembler).
-      - name: Package toolchain
-        env:
-          ARTIFACT_PATH: ${{ matrix.artifact_path }}
-        run: tar czf "toolchain-${{ matrix.name }}.tar.gz" -C / "${ARTIFACT_PATH#/}"
-
-      - name: Upload toolchain artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: toolchain-${{ matrix.name }}
-          path: toolchain-${{ matrix.name }}.tar.gz
-          retention-days: 1
+      # No artifact upload: the actions/cache step above persists the toolchain
+      # (keyed on the kos-chain commit). The build job restores it from that
+      # same cache, so the large cross-compilers never touch the artifact
+      # storage quota — they live in the roomier, auto-evicting Actions cache.
 
   # ============================================================
   # Firmware + Linux host + release packaging
@@ -132,20 +120,36 @@ jobs:
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y libelf-dev pkg-config zip
 
-      - name: Download toolchains
-        uses: actions/download-artifact@v4
-        with:
-          pattern: toolchain-*
-          path: toolchains
-          merge-multiple: true
+      # Restore the cross-toolchains from the cache the `toolchains` job
+      # populated (same keys), rather than downloading them as artifacts. The
+      # `needs: toolchains` dependency guarantees the cache is written first.
+      - name: Resolve kos-chain commit
+        id: rev
+        run: echo "sha=$(git ls-remote "$KOSCHAIN_REPO" "refs/heads/$KOSCHAIN_REF" | cut -f1)" >> "$GITHUB_OUTPUT"
 
-      - name: Unpack toolchains
-        run: |
-          sudo mkdir -p /opt/toolchains
-          for tb in toolchains/toolchain-*.tar.gz; do
-            echo "unpacking $tb"
-            sudo tar xzf "$tb" -C /
-          done
+      - name: Prepare /opt/toolchains
+        run: sudo mkdir -p /opt/toolchains && sudo chown -R "$(id -u):$(id -g)" /opt/toolchains
+
+      - name: Restore Dreamcast toolchain (cache)
+        uses: actions/cache/restore@v4
+        with:
+          path: /opt/toolchains/dc/sh-elf
+          key: kos-chain-dreamcast-${{ env.TOOLCHAIN_PROFILE }}-${{ steps.rev.outputs.sha }}
+          fail-on-cache-miss: true
+
+      - name: Restore GameCube toolchain (cache)
+        uses: actions/cache/restore@v4
+        with:
+          path: /opt/toolchains/gc/powerpc-eabi
+          key: kos-chain-gamecube-${{ env.TOOLCHAIN_PROFILE }}-${{ steps.rev.outputs.sha }}
+          fail-on-cache-miss: true
+
+      - name: Restore PS2 toolchain (cache)
+        uses: actions/cache/restore@v4
+        with:
+          path: /opt/toolchains/ps2
+          key: kos-chain-ps2-${{ env.TOOLCHAIN_PROFILE }}-${{ steps.rev.outputs.sha }}
+          fail-on-cache-miss: true
 
       - name: Write Wii common key (if provided)
         run: |
@@ -186,12 +190,14 @@ jobs:
         with:
           name: firmware-bundle
           path: build/release/kosload-*-firmware.zip
+          retention-days: 1
 
       - name: Upload Linux host archive
         uses: actions/upload-artifact@v4
         with:
           name: host-linux
           path: build/release/kos-tool-*-linux-*.tar.gz
+          retention-days: 1
 
       - name: Upload firmware bins
         uses: actions/upload-artifact@v4
@@ -229,6 +235,7 @@ jobs:
         with:
           name: host-macos
           path: build/release/kos-tool-*-macos.tar.gz
+          retention-days: 1
 
   host-windows:
     name: Host (Windows x86_64)
@@ -265,6 +272,7 @@ jobs:
         with:
           name: host-windows
           path: build/release/kos-tool-*-windows-*.zip
+          retention-days: 1
 
   # ============================================================
   # Publish GitHub Release (tags only)
