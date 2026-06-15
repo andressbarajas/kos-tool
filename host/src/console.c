@@ -1239,7 +1239,9 @@ static void ser_syscall_creat(kostool_context_t *ctx) {
     }
     ser_recv_data(ctx, pathname, namelen);
     int mode = ser_recv_uint(ctx);
-    int ret = creat(pathname, mode);
+    char buf[MAX_PATH_LEN];
+    const char *resolved = resolve_path(ctx, pathname, buf, sizeof(buf));
+    int ret = creat(resolved, mode);
     ser_send_uint(ctx, ret);
     free(pathname);
 }
@@ -1269,7 +1271,10 @@ static void ser_syscall_link(kostool_context_t *ctx) {
         return;
     }
     ser_recv_data(ctx, path2, len2);
-    int ret = link(path1, path2);
+    char buf1[MAX_PATH_LEN], buf2[MAX_PATH_LEN];
+    const char *r1 = resolve_path(ctx, path1, buf1, sizeof(buf1));
+    const char *r2 = resolve_path(ctx, path2, buf2, sizeof(buf2));
+    int ret = link(r1, r2);
     ser_send_uint(ctx, ret);
     free(path1);
     free(path2);
@@ -1287,7 +1292,9 @@ static void ser_syscall_unlink(kostool_context_t *ctx) {
         return;
     }
     ser_recv_data(ctx, pathname, namelen);
-    int ret = unlink(pathname);
+    char buf[MAX_PATH_LEN];
+    const char *resolved = resolve_path(ctx, pathname, buf, sizeof(buf));
+    int ret = unlink(resolved);
     ser_send_uint(ctx, ret);
     free(pathname);
 }
@@ -1324,7 +1331,9 @@ static void ser_syscall_chmod(kostool_context_t *ctx) {
     }
     ser_recv_data(ctx, pathname, namelen);
     int mode = ser_recv_uint(ctx);
-    int ret = chmod(pathname, mode);
+    char buf[MAX_PATH_LEN];
+    const char *resolved = resolve_path(ctx, pathname, buf, sizeof(buf));
+    int ret = chmod(resolved, mode);
     ser_send_uint(ctx, ret);
     free(pathname);
 }
@@ -1414,14 +1423,16 @@ static void ser_syscall_utime(kostool_context_t *ctx) {
     }
     ser_recv_data(ctx, pathname, namelen);
     int has_times = ser_recv_uint(ctx);
+    char buf[MAX_PATH_LEN];
+    const char *resolved = resolve_path(ctx, pathname, buf, sizeof(buf));
     int ret;
     if(has_times) {
         struct utimbuf tbuf;
         tbuf.actime = ser_recv_uint(ctx);
         tbuf.modtime = ser_recv_uint(ctx);
-        ret = utime(pathname, &tbuf);
+        ret = utime(resolved, &tbuf);
     } else {
-        ret = utime(pathname, NULL);
+        ret = utime(resolved, NULL);
     }
     ser_send_uint(ctx, ret);
     free(pathname);
@@ -1861,13 +1872,18 @@ static void net_syscall_link(kostool_context_t *ctx, uint8_t *pkt) {
     net_command_string_t *cmd = (net_command_string_t *)pkt;
     const char *path1 = cmd->string;
     const char *path2 = path1 + strlen(path1) + 1;
-    int ret = link(path1, path2);
+    char buf1[MAX_PATH_LEN], buf2[MAX_PATH_LEN];
+    const char *r1 = resolve_path(ctx, path1, buf1, sizeof(buf1));
+    const char *r2 = resolve_path(ctx, path2, buf2, sizeof(buf2));
+    int ret = link(r1, r2);
     net_send_cmd(ctx, NET_CMD_RETVAL, ret, ret, NULL, 0);
 }
 
 static void net_syscall_unlink(kostool_context_t *ctx, uint8_t *pkt) {
     net_command_string_t *cmd = (net_command_string_t *)pkt;
-    int ret = unlink(cmd->string);
+    char buf[MAX_PATH_LEN];
+    const char *resolved = resolve_path(ctx, cmd->string, buf, sizeof(buf));
+    int ret = unlink(resolved);
     net_send_cmd(ctx, NET_CMD_RETVAL, ret, ret, NULL, 0);
 }
 
@@ -1942,14 +1958,16 @@ static void net_syscall_stat(kostool_context_t *ctx, uint8_t *pkt, int pkt_len) 
 
 static void net_syscall_utime(kostool_context_t *ctx, uint8_t *pkt) {
     net_command_3int_string_t *cmd = (net_command_3int_string_t *)pkt;
+    char buf[MAX_PATH_LEN];
+    const char *resolved = resolve_path(ctx, cmd->string, buf, sizeof(buf));
     int ret;
     if(ntohl(cmd->value0)) {
         struct utimbuf tbuf;
         tbuf.actime = ntohl(cmd->value1);
         tbuf.modtime = ntohl(cmd->value2);
-        ret = utime(cmd->string, &tbuf);
+        ret = utime(resolved, &tbuf);
     } else {
-        ret = utime(cmd->string, NULL);
+        ret = utime(resolved, NULL);
     }
     net_send_cmd(ctx, NET_CMD_RETVAL, ret, ret, NULL, 0);
 }
