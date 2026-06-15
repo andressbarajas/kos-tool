@@ -318,7 +318,7 @@ void progexit(int ret_code) {
 
     net_command_t *command = (net_command_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
 
-    memcpy(command->id, NET_SYSCALL_PROGEXIT, 4);
+    memcpy(command->id, NET_SYSCALL_EXIT, 4);
     command->address = htonl((unsigned int)ret_code);
     command->size = 0;
 
