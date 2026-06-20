@@ -2,8 +2,11 @@
 /*
  * Configuration file support for kos-tool.
  *
- * Loads kos-tool.cfg from the same directory as the kos-tool binary.
- * Creates a default config if the file doesn't exist.
+ * On Linux/BSD the XDG location is preferred: kos-tool.cfg is read from
+ * $XDG_CONFIG_HOME (or ~/.config) first, then from the directory holding
+ * the kos-tool binary.  If neither exists a default is created under
+ * ~/.config.  On macOS and Windows the config is read/created next to the
+ * binary, as before.
  */
 
 #include <stdio.h>
@@ -21,6 +24,15 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#endif
+
+/* The XDG Base Directory convention (~/.config) is a Linux/BSD thing; macOS
+ * and Windows keep the legacy "next to the binary" behavior. */
+#if defined(__linux__) || defined(__FreeBSD__) || defined(__OpenBSD__) || \
+    defined(__NetBSD__) || defined(__DragonFly__)
+#define KOSTOOL_XDG_CONFIG 1
+#include <sys/stat.h>
+#include <sys/types.h>
 #endif
 
 #define CONFIG_FILENAME "kos-tool.cfg"
@@ -106,6 +118,26 @@ static int get_executable_dir(char *buf, size_t size) {
     return 0;
 }
 
+#ifdef KOSTOOL_XDG_CONFIG
+/* Build the XDG config path ($XDG_CONFIG_HOME/kos-tool.cfg, or
+ * ~/.config/kos-tool.cfg) into `path`, and the containing directory into
+ * `dir` (so the caller can create it on first run).  Returns 0 on success,
+ * -1 if neither $XDG_CONFIG_HOME nor $HOME is usable. */
+static int get_xdg_config_path(char *path, size_t path_sz, char *dir, size_t dir_sz) {
+    const char *xdg = getenv("XDG_CONFIG_HOME");
+    if(xdg && xdg[0]) {
+        compat_str_copy(dir, dir_sz, xdg);
+    } else {
+        const char *home = getenv("HOME");
+        if(!home || !home[0])
+            return -1;
+        snprintf(dir, dir_sz, "%s/.config", home);
+    }
+    compat_path_join(path, path_sz, dir, CONFIG_FILENAME);
+    return 0;
+}
+#endif
+
 static void trim_whitespace(char *s) {
     /* Leading */
     char *p = s;
@@ -167,13 +199,50 @@ void config_load(struct kostool_context *ctx) {
     derive_addr2line(ctx->mips_addr2line, sizeof(ctx->mips_addr2line), "PS2_EE_TOOLCHAIN", MIPS_TOOL_PREFIX,
                      DEFAULT_MIPS_ADDR2LINE);
 
+    FILE *fp = NULL;
+
+#ifdef KOSTOOL_XDG_CONFIG
+    char xdg_dir[4096];
+    char xdg_path[4096];
+    int have_xdg = (get_xdg_config_path(xdg_path, sizeof(xdg_path), xdg_dir, sizeof(xdg_dir)) == 0);
+
+    /* 1. Prefer the XDG config (~/.config) if it exists. */
+    if(have_xdg) {
+        fp = fopen(xdg_path, "r");
+        if(fp)
+            compat_str_copy(ctx->config_path, sizeof(ctx->config_path), xdg_path);
+    }
+
+    /* 2. Otherwise fall back to a config next to the binary, if present. */
+    if(!fp && get_executable_dir(dir, sizeof(dir)) == 0) {
+        compat_path_join(path, sizeof(path), dir, CONFIG_FILENAME);
+        fp = fopen(path, "r");
+        if(fp)
+            compat_str_copy(ctx->config_path, sizeof(ctx->config_path), path);
+    }
+
+    /* 3. Neither exists — create a default under ~/.config. */
+    if(!fp) {
+        if(have_xdg) {
+            mkdir(xdg_dir, 0755); /* harmless if it already exists */
+            compat_str_copy(ctx->config_path, sizeof(ctx->config_path), xdg_path);
+            FILE *out = fopen(xdg_path, "w");
+            if(out) {
+                fputs(default_config, out);
+                fclose(out);
+            }
+        }
+        return;
+    }
+#else
+    /* macOS / Windows: config lives next to the binary. */
     if(get_executable_dir(dir, sizeof(dir)) != 0)
         return;
 
     compat_path_join(path, sizeof(path), dir, CONFIG_FILENAME);
     compat_str_copy(ctx->config_path, sizeof(ctx->config_path), path);
 
-    FILE *fp = fopen(path, "r");
+    fp = fopen(path, "r");
     if(!fp) {
         /* Create default config */
         fp = fopen(path, "w");
@@ -183,6 +252,7 @@ void config_load(struct kostool_context *ctx) {
         }
         return;
     }
+#endif
 
     /* Parse config file */
     char line[1024];

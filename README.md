@@ -273,8 +273,15 @@ Options:
 
 ### Configured Targets
 
-`kos-tool.cfg` is created next to the `kos-tool` binary. You can add target
-profiles there and select them with `-T`:
+kos-tool reads target profiles from `kos-tool.cfg`, located as follows:
+
+* **Linux / BSD** — `$XDG_CONFIG_HOME/kos-tool.cfg` (or `~/.config/kos-tool.cfg`)
+  is preferred, falling back to a `kos-tool.cfg` next to the `kos-tool` binary.
+  If neither exists, a default is created under `~/.config`.
+* **macOS / Windows** — `kos-tool.cfg` is read from / created next to the
+  `kos-tool` binary.
+
+You can add target profiles to that file and select them with `-T`:
 
 ```cfg
 # Target profiles
