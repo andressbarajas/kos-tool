@@ -913,7 +913,12 @@ int auto_update_firmware(kostool_context_t *ctx) {
         /* Same name — compare versions */
         int cmp = compare_versions(KOSLOAD_VERSION_MAJOR, KOSLOAD_VERSION_MINOR, KOSLOAD_VERSION_PATCH,
                                    remote_major, remote_minor, remote_patch);
+        /* Dev builds re-flash even when the version matches. */
+#ifdef KOS_TOOL_DEV_FORCE_REFLASH
         if(cmp >= 0)
+#else
+        if(cmp > 0)
+#endif
             need_update = 1; /* Embedded is newer */
         else {
             if(!ctx->quiet_mode)

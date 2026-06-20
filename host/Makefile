@@ -182,9 +182,13 @@ $(VERSION_H): $(VERSION_H_IN) $(ROOT)/mk/version.mk
 
 # ---------- Rules ----------
 
-.PHONY: all clean
+.PHONY: all clean dev
 
 all: $(TARGET)
+
+# Development build: re-flash firmware even when the version is unchanged.
+dev: CFLAGS += -DKOS_TOOL_DEV_FORCE_REFLASH
+dev: all
 
 $(TARGET): $(OBJS) $(FW_OBJS) $(MINILZO_A) | $(BUILDDIR)
 	$(CC) $(OBJS) $(FW_OBJS) $(MINILZO_A) $(LDFLAGS) -o $@
@@ -205,6 +209,11 @@ $(BUILDDIR)/main.o: gitrev-stamp
 # FW_OBJS changes and firmware_update.o must be recompiled with the new
 # FW_DEFS to avoid duplicate symbol errors at link time.
 $(BUILDDIR)/firmware_update.o: $(FW_OBJS)
+
+# KOS_TOOL_DEV_FORCE_REFLASH setting.  Recompile it every build.
+.PHONY: fwupdate-stamp
+fwupdate-stamp:
+$(BUILDDIR)/firmware_update.o: fwupdate-stamp
 
 $(MINILZO_A):
 	$(MAKE) -C $(MINILZO_DIR) CC="$(CC)" AR=ar CFLAGS="-O2" BUILDDIR=build-host
