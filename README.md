@@ -306,46 +306,30 @@ kos-tool -T wii_ip -x program.elf
 `-t` overrides `-T` when both are present. `serial_baud` is used only for
 serial targets, and `-b` overrides it.
 
+> **Note:** `-b` / `serial_baud` apply only to UART serial (e.g. the Dreamcast
+> coder's cable). The GameCube USB Gecko is an EXI/USB device with no baud
+> divisor — it runs at the EXI bus maximum (32 MHz) — so `-b` is ignored for it.
+
 ### Examples
 
+The target (`-t`) selects the transport; the console (DC, GC, PS2, Wii) is
+auto-detected, so the same invocation works across all of them. On the Wii,
+network covers both the LAN Adapter and internal Wi-Fi.
+
 ```bash
-# Dreamcast serial — upload and run a program
-kos-tool -t /dev/ttyUSB0 -x program.elf
+# Upload and run a program — the target picks the transport:
+kos-tool -t /dev/ttyUSB0 -x program.elf     # serial (device path)
+kos-tool -t 192.168.1.100 -x program.elf    # network (IP address)
+kos-tool -t dhcp -x program.elf             # network (discover device on LAN)
 
-# Dreamcast serial — high baud rate on macOS
-kos-tool -t /dev/cu.usbserial-A50285BI -b 1500000 -x program.elf
+# Serial baud rate (-b) and platform-specific device names:
+kos-tool -t /dev/cu.usbserial-A50285BI -b 1500000 -x program.elf   # macOS
+kos-tool.exe -t COM4 -b 500000 -x program.elf                      # Windows
 
-# Dreamcast serial — Windows
-kos-tool.exe -t COM4 -b 500000 -x program.elf
-
-# Dreamcast network — upload and run
-kos-tool -t 192.168.1.100 -x program.elf
-
-# Dreamcast network — discover DHCP device on LAN
-kos-tool -t dhcp -x program.elf
-
-# Dreamcast network — with CDFS redirection
+# CDFS redirection — serve an ISO to the program
 kos-tool -t 192.168.1.100 -i game.iso -x program.elf
 
-# GameCube serial — upload and run
-kos-tool -t /dev/ttyUSB0 -x program.elf
-
-# GameCube network — upload and run
-kos-tool -t 192.168.1.50 -x program.elf
-
-# PlayStation 2 network — upload and run
-kos-tool -t 172.16.0.10 -x program.elf
-
-# PlayStation 2 network — discover DHCP device on LAN
-kos-tool -t dhcp -x program.elf
-
-# Wii network — upload and run (LAN Adapter or internal Wi-Fi)
-kos-tool -t 192.168.1.95 -x program.elf
-
-# Wii network — discover DHCP device on LAN
-kos-tool -t dhcp -x program.elf
-
-# Enable performance diagnostics
+# Performance diagnostics
 kos-tool -t dhcp --diag -x program.elf
 
 # GDB debugging session
