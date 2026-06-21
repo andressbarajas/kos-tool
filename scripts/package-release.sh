@@ -11,8 +11,8 @@
 #
 #   Firmware bundle (OS-independent):
 #     kosload-<version>-firmware.zip
-#       -> per-console bootable images (CDI/ISO/DOL/WAD), the example
-#          programs, and README + LICENSE
+#       -> per-console bootable images (CDI/ISO/DOL/WAD) and raw loader
+#          binaries (ELF/BIN/DOL), the example programs, and README + LICENSE
 #
 # This script only PACKAGES what is already in build/; it does not build.
 # The `make release*` targets declare the build dependencies.  CI's release
@@ -123,8 +123,11 @@ package_firmware() {
     rm -rf "$OUTDIR/.stage-fw"
     mkdir -p "$stage/dreamcast" "$stage/gamecube" "$stage/wii" "$stage/playstation2"
 
-    # Bootable deliverables per console (each skipped if absent).
-    copy_into "$stage/dreamcast"      "$BUILDDIR"/dc-load-*.cdi
+    # Bootable deliverables + raw loader binaries per console (each skipped if
+    # absent).  Dreamcast ships the .cdi boot image plus the raw .elf/.bin
+    # loaders (the DC analog of the GC/Wii .dol and PS2 .elf below).
+    copy_into "$stage/dreamcast"      "$BUILDDIR"/dc-load-*.cdi \
+                                      "$BUILDDIR"/dc-load-*.elf "$BUILDDIR"/dc-load-*.bin
     copy_into "$stage/gamecube"       "$BUILDDIR"/gc-load-*.dol "$BUILDDIR"/gc-load-*.iso
     copy_into "$stage/wii"            "$BUILDDIR"/wii-load-*.dol "$BUILDDIR"/wii-load-*.wad
     copy_into "$stage/playstation2"   "$BUILDDIR"/ps2-load-ip*.iso "$BUILDDIR"/ps2-load-ip.elf
