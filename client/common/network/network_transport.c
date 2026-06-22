@@ -149,9 +149,8 @@ static int network_transport_init(void) {
     /* Populate info block with adapter MAC */
     memcpy(kosload_info.mac, bb->mac, 6);
 
-    /* Set initial IP address from patchable config block */
+    /* Set initial IP address from patchable config block. */
     set_ip_from_string();
-    kosload_info.console_ip = our_ip;
 
     /* Static IP skips DHCP, but the adapter may still need to enable RX so
      * it can answer the host's first VERS packet. */

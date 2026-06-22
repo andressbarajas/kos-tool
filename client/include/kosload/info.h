@@ -35,6 +35,7 @@ typedef struct {
 
     /* Network fields (zero for serial builds) */
     uint32_t console_ip;         /* Console IP address (network byte order) */
+    uint16_t console_port;       /* Console UDP port (network byte order) */
     uint32_t host_ip;            /* Host/tool IP address (network byte order) */
     uint16_t host_port;          /* Host UDP port (network byte order) */
     uint8_t mac[6];              /* Console MAC address */

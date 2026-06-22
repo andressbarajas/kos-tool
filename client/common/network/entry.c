@@ -64,6 +64,9 @@ extern void clear_lines(int y, int height, unsigned int color);
 extern unsigned int tool_ip;
 extern unsigned short tool_port;
 
+/* From network_syscalls.c — negotiated console syscall port (host order). */
+extern unsigned short kosload_syscall_port;
+
 extern kosload_info_t kosload_info;
 
 /* ===== Global state ===== */
@@ -242,6 +245,7 @@ void disp_info(void) {
     kosload_info.console_ip = htonl(our_ip);
     kosload_info.host_ip = htonl(tool_ip);
     kosload_info.host_port = htons(tool_port);
+    kosload_info.console_port = htons(kosload_syscall_port);
 
     /* Reset lease display timer so the next ~1Hz update starts from "now"
      * rather than accumulating a bogus delta from TBR epoch (which could
