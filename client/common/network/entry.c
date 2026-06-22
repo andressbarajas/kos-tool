@@ -25,6 +25,7 @@
 #include <kosload/net_stack.h>
 
 #include <kosload/dhcp.h>
+#include "packet.h" /* target-local htonl/htons wrappers */
 #include "kosload.h"
 
 #include <kosload/screensaver.h>
@@ -238,9 +239,9 @@ void disp_info(void) {
         t->draw_string(NETWORK_DISPLAY_X, 150, phase_status, 0xffff);
 
     /* Update info block with current network state */
-    kosload_info.console_ip = our_ip;
-    kosload_info.host_ip = tool_ip;
-    kosload_info.host_port = tool_port;
+    kosload_info.console_ip = htonl(our_ip);
+    kosload_info.host_ip = htonl(tool_ip);
+    kosload_info.host_port = htons(tool_port);
 
     /* Reset lease display timer so the next ~1Hz update starts from "now"
      * rather than accumulating a bogus delta from TBR epoch (which could
