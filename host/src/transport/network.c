@@ -367,7 +367,6 @@ static int prepare_comms(kostool_context_t *ctx) {
     uint32_t encoded_ver = make_encoded_version(ctx->force_legacy);
     uint8_t buffer[2048];
     uint64_t start = ctx->time_ops->time_usec();
-    int flip = 0;
     int recv_len = -1;
 
     /* Start with v2 socket unless forcing legacy */
@@ -376,16 +375,24 @@ static int prepare_comms(kostool_context_t *ctx) {
     else
         ctx->global_socket = ctx->socket_fd;
 
-    /* Send version commands, alternating between v2 and legacy sockets. */
+    /* Mirror legacy dc-tool's sticky probe: keep resending VERSION on the
+     * current socket and only switch sockets after we actually receive a
+     * non-VERSION packet.  A bare timeout (lost probe or lost reply) must
+     * NOT flip us -- the firmware answers VERSION on both 53535 and 31313,
+     * so flipping on a single dropped packet can wrongly commit us to the
+     * legacy port even when the v2 console path needs 53535. */
     while((ctx->time_ops->time_usec() - start) < NET_HANDSHAKE_TIMEOUT_USEC) {
         send_cmd(ctx, NET_CMD_VERSION, encoded_ver, 0, NULL, 0);
         recv_len = recv_resp(ctx, buffer, sizeof(buffer), NET_PACKET_TIMEOUT_USEC);
-        if(recv_len > 0 && memcmp(buffer, NET_CMD_VERSION, 4) == 0)
+        if(recv_len <= 0)
+            continue; /* timeout: stay on this socket and resend */
+        if(memcmp(buffer, NET_CMD_VERSION, 4) == 0)
             goto got_version;
 
-        /* Try the other socket */
-        flip ^= 1;
-        ctx->global_socket = flip ? ctx->socket_legacy : ctx->socket_fd;
+        /* Got a non-VERSION packet: alternate to the other socket. */
+        ctx->global_socket = (ctx->global_socket == ctx->socket_fd)
+                                 ? ctx->socket_legacy
+                                 : ctx->socket_fd;
     }
 
     fprintf(stderr, "No network loader response from %s\n", ctx->hostname);
