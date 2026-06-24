@@ -124,6 +124,11 @@ void cmd_execute(ether_header_t *ether, ip_header_t *ip, udp_header_t *udp, comm
         memcpy(tool_mac, ether->src, 6);
         our_ip = ntohl(ip->dest);
 
+        kosload_info.console_ip   = htonl(our_ip);
+        kosload_info.console_port = htons(kosload_syscall_port);
+        kosload_info.host_ip      = htonl(tool_ip);
+        kosload_info.host_port    = htons(tool_port);
+
         unsigned int cmd_size = ntohl(command->size);
 
         unsigned char *buffer = pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN;
