@@ -15,7 +15,7 @@ extern void exception_init(void);
 
 /* Version string - configured by CMake, fallback for direct builds */
 #ifndef KOSLOAD_VERSION_STRING
-#define KOSLOAD_VERSION_STRING "3.0.0"
+#define KOSLOAD_VERSION_STRING "3.0.1"
 #endif
 
 /* Git revision sub-version stamp — on-screen DISPLAY ONLY, never the VERS wire
