@@ -71,6 +71,14 @@
 
 /* Read/write 32-bit little-endian. The host might be big-endian, so
  * always go through these accessors. */
+/* Rolling our own strnlen() */
+static size_t bounded_strlen(const char *s, size_t maxlen) {
+    size_t n = 0;
+    while(n < maxlen && s[n] != '\0')
+        n++;
+    return n;
+}
+
 static uint32_t rd32(const void *p) {
     const uint8_t *b = (const uint8_t *)p;
     return (uint32_t)b[0] | ((uint32_t)b[1] << 8) | ((uint32_t)b[2] << 16) | ((uint32_t)b[3] << 24);
@@ -308,7 +316,7 @@ static void parse_section_headers(void) {
         if(s->sh_name >= shstr->sh_size)
             continue;
         const char *nm = (const char *)(g_in + shstr->sh_offset + s->sh_name);
-        size_t n = strnlen(nm, sizeof(s->name) - 1);
+        size_t n = bounded_strlen(nm, sizeof(s->name) - 1);
         memcpy(s->name, nm, n);
         s->name[n] = 0;
     }
@@ -363,7 +371,7 @@ static void parse_symbols(void) {
         sym->st_shndx = rd16(p + 14);
         if(sym->st_name < strtab->sh_size) {
             const char *nm = (const char *)(g_in + strtab->sh_offset + sym->st_name);
-            size_t n = strnlen(nm, sizeof(sym->name) - 1);
+            size_t n = bounded_strlen(nm, sizeof(sym->name) - 1);
             memcpy(sym->name, nm, n);
             sym->name[n] = 0;
         }
