@@ -28,6 +28,7 @@
 #define SERIAL_CMD_CAPABILITIES 'I'     /* Query capability bitmask */
 #define SERIAL_CMD_SPEED        'S'     /* Change serial speed */
 #define SERIAL_CMD_SETRTC       'W'     /* Set RTC to host time */
+#define SERIAL_CMD_REBOOT       'R'     /* Reboot the loader (idle only) */
 
 /* Serial data transfer types */
 #define SERIAL_DATA_UNCOMPRESSED 'U'

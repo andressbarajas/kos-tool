@@ -399,6 +399,10 @@ static void serial_transport_loop(bool is_main_loop)
             serial_io_puts((const unsigned char *)"\n");
             break;
 
+        case SERIAL_CMD_REBOOT: /* 'R' - reboot the loader */
+            t->reboot();
+            break; /* not reached */
+
         default:
             serial_io_init(SERIAL_DEFAULT_SPEED);
             break;

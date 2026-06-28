@@ -408,7 +408,7 @@ static int serial_send_command(kostool_context_t *ctx, const char cmd[4], uint32
     else if(memcmp(cmd, NET_CMD_LOADBIN, 4) == 0)
         c = SERIAL_CMD_LOAD_BEGIN;
     else if(memcmp(cmd, NET_CMD_REBOOT, 4) == 0)
-        c = SERIAL_CMD_SPEED; /* No direct reboot command in serial */
+        c = SERIAL_CMD_REBOOT;
     else {
         fprintf(stderr, "serial: unsupported command %.4s\n", cmd);
         return -1;
@@ -535,9 +535,31 @@ static int serial_set_rtc(kostool_context_t *ctx, uint32_t timestamp) {
     return 0;
 }
 
+/*
+ * Reboot the loader.  Serial is a synchronous, host-driven stream: while a
+ * user program runs, the loader is not reading top-level command bytes, so
+ * this only takes effect at the idle command prompt (between programs).
+ * Reset-while-running is network-only.
+ */
+static int serial_reset(kostool_context_t *ctx) {
+    uint8_t c = SERIAL_CMD_REBOOT;
+    printf("Resetting...\n");
+    ctx->serial_ops->write(ctx->serial_handle, &c, 1);
+    if(ctx->serial_ops->drain)
+        ctx->serial_ops->drain(ctx->serial_handle);
+
+    /* The loader is rebooting and is no longer listening at the negotiated
+     * speed.  Mark the speed as default so serial_shutdown() skips its
+     * speed-restore handshake (which would block on a loader that just
+     * reset) and simply closes the port — i.e. the host just exits. */
+    ctx->current_speed = SERIAL_DEFAULT_SPEED;
+    return 0;
+}
+
 const transport_ops_t serial_transport_ops = {
     .name = "serial",
-    .capabilities = TRANSPORT_CAP_COMPRESS | TRANSPORT_CAP_RTC | TRANSPORT_CAP_SPEED_CHANGE,
+    .capabilities = TRANSPORT_CAP_COMPRESS | TRANSPORT_CAP_RTC | TRANSPORT_CAP_SPEED_CHANGE |
+                    TRANSPORT_CAP_RESET,
     .init = serial_init,
     .shutdown = serial_shutdown,
     .send_data = serial_send_data,
@@ -545,7 +567,7 @@ const transport_ops_t serial_transport_ops = {
     .send_command = serial_send_command,
     .recv_response = serial_recv_response,
     .execute = serial_execute,
-    .reset = NULL,
+    .reset = serial_reset,
     .change_speed = serial_change_speed,
     .maple_command = NULL,
     .pmcr_command = NULL,
