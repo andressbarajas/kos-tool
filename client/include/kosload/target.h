@@ -51,6 +51,10 @@ typedef struct target_ops {
     /* Optional: called right before execute() when the EXEC command carries
      * KOSLOAD_EXEC_FW_UPDATE. */
     void (*fw_update_prepare)(void);
+
+    /* Visible screen size in pixels; 0 means the legacy 640x480 default. */
+    uint32_t screen_width;
+    uint32_t screen_height;
 } target_ops_t;
 
 /* Target implementations */

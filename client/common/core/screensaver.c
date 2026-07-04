@@ -17,8 +17,9 @@ extern const target_ops_t *common_get_target(void);
 /* Screensaver parameters */
 #define IDLE_TIMEOUT_SECS  30
 #define ICON_SIZE          32
-#define SCREEN_W           640
-#define SCREEN_H           480
+/* Legacy default for targets that don't set screen_width/screen_height. */
+#define SCREEN_W_DEFAULT   640
+#define SCREEN_H_DEFAULT   480
 #define TARGET_FPS         60
 
 #define BLACK_COLOR        0
@@ -84,7 +85,7 @@ void screensaver_poll(void) {
     if(!active) {
         /* Check if idle timeout has elapsed (unsigned subtraction handles wrap) */
         uint64_t elapsed = now - timer_start;
-        unsigned int timeout_ticks = IDLE_TIMEOUT_SECS * t->ticks_per_second;
+        uint64_t timeout_ticks = (uint64_t)IDLE_TIMEOUT_SECS * t->ticks_per_second;
         if(elapsed < timeout_ticks)
             return;
 
@@ -113,11 +114,13 @@ void screensaver_poll(void) {
     box_y += box_dy;
 
     /* Bounce off edges */
-    if(box_x <= 0 || box_x + ICON_SIZE >= SCREEN_W) {
+    int screen_w = t->screen_width ? (int)t->screen_width : SCREEN_W_DEFAULT;
+    int screen_h = t->screen_height ? (int)t->screen_height : SCREEN_H_DEFAULT;
+    if(box_x <= 0 || box_x + ICON_SIZE >= screen_w) {
         box_dx = -box_dx;
         box_x += box_dx;
     }
-    if(box_y <= 0 || box_y + ICON_SIZE >= SCREEN_H) {
+    if(box_y <= 0 || box_y + ICON_SIZE >= screen_h) {
         box_dy = -box_dy;
         box_y += box_dy;
     }
