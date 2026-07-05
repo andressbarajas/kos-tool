@@ -115,7 +115,9 @@ GC_IP_DOL  := $(BUILDDIR)/gc-load-ip.dol
 GC_SER_ISO := $(BUILDDIR)/gc-load-ser.iso
 GC_IP_ISO  := $(BUILDDIR)/gc-load-ip.iso
 
-PS2_IP_ISO := $(BUILDDIR)/ps2-load-ip-$(KOSLOAD_VERSION).iso
+# Canonical (un-versioned) name like every other console deliverable; the
+# release version is stamped into the filename once, by scripts/package-release.sh.
+PS2_IP_ISO := $(BUILDDIR)/ps2-load-ip.iso
 
 # PlayStation 2 SYSTEM.CNF is generated from this template with the kosload
 # version (@KOSLOAD_VERSION@) and the boot executable name (@PS2_BOOT_NAME@)

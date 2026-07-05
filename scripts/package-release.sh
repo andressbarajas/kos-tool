@@ -76,6 +76,25 @@ copy_into() {
     return 0
 }
 
+# Stamps the release version into each filename before its extension (dc-load-ip.bin ->
+# dc-load-ip-3.0.1.bin).
+copy_versioned() {
+    local dest="$1"; shift
+    local src base stem ext
+    for src in "$@"; do
+        [ -e "$src" ] || continue
+        base="$(basename "$src")"
+        ext="${base##*.}"
+        if [ "$ext" = "$base" ]; then          # no extension
+            cp -R "$src" "$dest/$base-$VERSION"
+        else
+            stem="${base%.*}"
+            cp -R "$src" "$dest/$stem-$VERSION.$ext"
+        fi
+    done
+    return 0
+}
+
 # archive_dir <stage-parent> <name> <ext>  — make <name>.<ext> from <stage>/<name>.
 archive_dir() {
     local parent="$1" name="$2" ext="$3"
@@ -126,11 +145,11 @@ package_firmware() {
     # Bootable deliverables + raw loader binaries per console (each skipped if
     # absent).  Dreamcast ships the .cdi boot image plus the raw .elf/.bin
     # loaders (the DC analog of the GC/Wii .dol and PS2 .elf below).
-    copy_into "$stage/dreamcast"      "$BUILDDIR"/dc-load-*.cdi \
-                                      "$BUILDDIR"/dc-load-*.elf "$BUILDDIR"/dc-load-*.bin
-    copy_into "$stage/gamecube"       "$BUILDDIR"/gc-load-*.dol "$BUILDDIR"/gc-load-*.iso
-    copy_into "$stage/wii"            "$BUILDDIR"/wii-load-*.dol "$BUILDDIR"/wii-load-*.wad
-    copy_into "$stage/playstation2"   "$BUILDDIR"/ps2-load-ip*.iso "$BUILDDIR"/ps2-load-ip.elf
+    copy_versioned "$stage/dreamcast"      "$BUILDDIR"/dc-load-*.cdi \
+                                           "$BUILDDIR"/dc-load-*.elf "$BUILDDIR"/dc-load-*.bin
+    copy_versioned "$stage/gamecube"       "$BUILDDIR"/gc-load-*.dol "$BUILDDIR"/gc-load-*.iso
+    copy_versioned "$stage/wii"            "$BUILDDIR"/wii-load-*.dol "$BUILDDIR"/wii-load-*.wad
+    copy_versioned "$stage/playstation2"   "$BUILDDIR"/ps2-load-ip*.iso "$BUILDDIR"/ps2-load-ip.elf
 
     # Drop any console dir that ended up empty (toolchain wasn't installed).
     local d
