@@ -79,6 +79,10 @@ static int posix_setsockopt_reuse(int64_t sock) {
     return setsockopt((int)sock, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable));
 }
 
+static int posix_setsockopt_tos(int64_t sock, int tos) {
+    return setsockopt((int)sock, IPPROTO_IP, IP_TOS, &tos, sizeof(tos));
+}
+
 static void posix_socket_close(int64_t sock) {
     close((int)sock);
 }
@@ -96,6 +100,7 @@ const platform_socket_ops_t posix_socket_ops = {
     .recv = posix_recv,
     .setsockopt_reuse = posix_setsockopt_reuse,
     .close = posix_socket_close,
+    .setsockopt_tos = posix_setsockopt_tos,
 };
 
 /* POSIX filesystem ops */

@@ -31,6 +31,7 @@ typedef struct platform_socket_ops {
     int (*recv)(int64_t sock, void *buffer, size_t len);
     int (*setsockopt_reuse)(int64_t sock);
     void (*close)(int64_t sock);
+    int (*setsockopt_tos)(int64_t sock, int tos);
 } platform_socket_ops_t;
 
 /* Filesystem operations — flag translation, path mapping */

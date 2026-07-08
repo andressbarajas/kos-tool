@@ -10,7 +10,7 @@
 
 void make_ip(int dest, int src, int length, char protocol, ip_header_t *ip, unsigned short pkt_id) {
     ip->version_ihl = 0x45;
-    ip->tos = 0;
+    ip->tos = IP_TOS_DSCP_EF;
     ip->length = htons(20 + length);
     ip->packet_id = pkt_id;
     ip->flags_frag_offset = htons(0x4000);

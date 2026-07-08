@@ -523,6 +523,13 @@ static int network_init(kostool_context_t *ctx) {
         return -1;
     }
 
+    /* Mark host-originated packets with DSCP EF to match the client's make_ip.
+     * Best-effort: failure (or Winsock stripping the bits) is non-fatal. */
+    if(ctx->socket_ops->setsockopt_tos) {
+        ctx->socket_ops->setsockopt_tos(ctx->socket_fd, IP_TOS_DSCP_EF);
+        ctx->socket_ops->setsockopt_tos(ctx->socket_legacy, IP_TOS_DSCP_EF);
+    }
+
     /* Connect legacy socket first */
     int rc;
     rc = ctx->socket_ops->connect(ctx->socket_legacy, host_copy, NET_LEGACY_PORT);

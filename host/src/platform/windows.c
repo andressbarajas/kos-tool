@@ -89,6 +89,16 @@ static int win_setsockopt_reuse(int64_t sock) {
     return setsockopt((SOCKET)sock, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable));
 }
 
+static int win_setsockopt_tos(int64_t sock, int tos) {
+    /*
+     * Winsock accepts IP_TOS but by default silently strips the bits off the
+     * wire unless qWAVE / the DisableUserTOSSetting registry key is enabled.
+     * We still set it for parity; the DSCP marking is effectively POSIX-only.
+     */
+    DWORD val = (DWORD)tos;
+    return setsockopt((SOCKET)sock, IPPROTO_IP, IP_TOS, (const char *)&val, sizeof(val));
+}
+
 static void win_socket_close(int64_t sock) {
     closesocket((SOCKET)sock);
 }
@@ -106,6 +116,7 @@ const platform_socket_ops_t windows_socket_ops = {
     .recv = win_recv,
     .setsockopt_reuse = win_setsockopt_reuse,
     .close = win_socket_close,
+    .setsockopt_tos = win_setsockopt_tos,
 };
 
 /* ===== Windows Filesystem Ops ===== */

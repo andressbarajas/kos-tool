@@ -304,6 +304,9 @@ typedef struct {
     uint8_t type[2];
 } __attribute__((packed, aligned(2))) ether_header_t;
 
+/* TOS byte for all kosload IP traffic: DSCP EF (class 46), ECN 0. */
+#define IP_TOS_DSCP_EF 0xB8
+
 typedef struct {
     uint8_t  version_ihl;
     uint8_t  tos;
