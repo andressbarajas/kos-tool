@@ -11,11 +11,10 @@
 #include "rtl8139.h"
 #include "lan_adapter.h"
 #include "w5500_spi_dc.h"
+#include "../hardware.h"
 
 #include <stdint.h>
 
-#define DC_HW_TYPE_RETAIL      0x0
-#define DC_SYSMODE_REG         0xa05f74b0
 #define DC_SYSINFO_VECTOR      0x8c0000b0
 #define DC_SYSINFO_FUNC_INIT   0
 #define DC_SYSINFO_FUNC_ID     3
@@ -34,12 +33,6 @@ __attribute__((aligned(32))) unsigned char raw_current_pkt[RAW_RX_PKT_BUF_SIZE];
 /* Offset by 2 for command->data alignment after Ethernet + IP + UDP headers */
 __attribute__((aligned(2))) unsigned char *current_pkt = &(raw_current_pkt[2]);
 static const char *last_error = "NO ETHERNET ADAPTER DETECTED!";
-
-static int dc_hardware_type(void) {
-    uint32_t sysmode = *(volatile uint32_t *)DC_SYSMODE_REG;
-
-    return (int)((sysmode >> 4) & 0x0f);
-}
 
 static int dc_sysinfo_id(uint64_t *id) {
     uintptr_t sysinfo = *(volatile uintptr_t *)DC_SYSINFO_VECTOR;

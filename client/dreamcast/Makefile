@@ -74,11 +74,6 @@ ASFLAGS := $(ARCH_ASFLAGS) $(INCLUDES) $(MEMORY_DEFS)
 CFLAGS  += -MMD -MP
 ASFLAGS += -MMD -MP
 
-# Optional VGA-only (Naomi / System SP)
-ifdef VGAONLY
-CFLAGS += -DFORCE_VGA
-endif
-
 # IP-additional includes
 IP_INCLUDES := -I$(CURDIR)/net
 
