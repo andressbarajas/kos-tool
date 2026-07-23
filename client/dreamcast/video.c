@@ -10,6 +10,8 @@
 
 #include <stdint.h>
 
+#include "hardware.h"
+
 /* Assembly-level video functions (from video.S).
  * SH-ELF compiler prepends _ to C symbols, so these match
  * the _init_video, _clrscr, etc. labels in video.S. */
@@ -37,11 +39,10 @@ void __call_builtin_sh_set_fpscr(unsigned int value) {
  */
 void setup_video(uint32_t mode, uint32_t bg_color) {
     (void)mode;
-#ifdef FORCE_VGA
-    init_video(0, 1); /* Naomi/System SP: skip cable detect, force VGA */
-#else
-    init_video(check_cable(), 1);
-#endif
+    /* Only retail Dreamcasts have the cable-detect line; NAOMI / System SP
+       and any other hardware type default to VGA (0). */
+    int cabletype = (dc_hardware_type() == DC_HW_TYPE_RETAIL) ? check_cable() : 0;
+    init_video(cabletype, 1);
     clrscr(bg_color);
 }
 

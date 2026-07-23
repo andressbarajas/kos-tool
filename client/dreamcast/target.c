@@ -12,6 +12,7 @@
 #include <string.h>
 #include <kosload/target.h>
 #include <kosload/protocol.h>
+#include "hardware.h"
 
 #ifndef DC_LOADER_BASE
 #define DC_LOADER_BASE 0x8c004000 /* fallback; normally -D'd from mk/memory.mk */
@@ -45,6 +46,14 @@ extern void maple_init(void);
 
 /* From cdfs.c */
 extern void cdfs_init(void);
+
+/* Holly system-mode register: bits [7:4] = hardware type (retail vs NAOMI),
+ * bits [3:0] = region.  Mirrors KOS hardware_sys_mode(). */
+int dc_hardware_type(void) {
+    uint32_t sysmode = *(volatile uint32_t *)DC_SYSMODE_REG;
+
+    return (int)((sysmode >> 4) & 0x0f);
+}
 
 /* Console enabled flag — affects serial transport behavior */
 static volatile bool console_enabled = false;
