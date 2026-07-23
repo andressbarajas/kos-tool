@@ -55,7 +55,7 @@ fi
 # ---------- platform (host archive naming) ----------
 EXE=""
 case "$(uname -s)" in
-    Darwin)              PLATFORM="macos" ;;
+    Darwin)              PLATFORM="macos-$(uname -m)" ;;
     Linux)               PLATFORM="linux-$(uname -m)" ;;
     MINGW*|MSYS*|CYGWIN*) PLATFORM="windows-$(uname -m)"; EXE=".exe" ;;
     *)                   PLATFORM="$(uname -s)-$(uname -m)" ;;
