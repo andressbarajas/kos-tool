@@ -214,9 +214,17 @@ jobs:
   # files are present.
   # ============================================================
   host-macos:
-    name: Host (macOS)
-    runs-on: macos-latest
+    name: Host (macOS ${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
     needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macos-latest is Apple Silicon; macos-15-intel is GitHub's Intel
+          # runner label.
+          - { runner: macos-latest,   arch: arm64 }
+          - { runner: macos-15-intel, arch: x86_64 }
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
@@ -233,8 +241,9 @@ jobs:
       - name: Upload macOS host archive
         uses: actions/upload-artifact@v4
         with:
-          name: host-macos
-          path: build/release/kos-tool-*-macos.tar.gz
+          # upload-artifact@v4 fails on duplicate names across matrix legs.
+          name: host-macos-${{ matrix.arch }}
+          path: build/release/kos-tool-*-macos-*.tar.gz
           retention-days: 1
 
   host-windows:
