@@ -211,14 +211,6 @@ Common Windows USB-serial drivers:
   Manager, open the adapter properties and make sure **Load VCP** is enabled so
   Windows exposes the adapter as a `COMx` serial port.
 
-### VGA-Only (Naomi / System SP)
-
-Arcade boards like Naomi and System SP don't have standard A/V cable detect wiring. To build Dreamcast firmware that forces VGA output and skips cable detection:
-
-```bash
-make dc VGAONLY=1
-```
-
 ### Static IP
 
 By default, network firmware uses DHCP. To build with a static IP:
