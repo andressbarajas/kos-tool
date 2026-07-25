@@ -1,7 +1,7 @@
 /* client/dreamcast/net/adapter.c */
 /*
  * Network adapter detection for Dreamcast.
- * Supports BBA (RTL8139), LAN Adapter (MB86967), and W5500 (SCIF-SPI).
+ * Supports BBA (RTL8139), LAN Adapter (MB86967), and W5500 (SCIF or SCI SPI).
  *
  * Detection priority: BBA > LAN Adapter > W5500
  * (BBA and LAN are tried first as they don't conflict with serial I/O)
@@ -100,6 +100,22 @@ static void w5500_dc_generate_mac(unsigned char *mac) {
         w5500_dc_generate_fallback_mac(mac);
 }
 
+/*
+ * Probe for a W5500 on either serial port. Same order as the KOS
+ * w5500 driver: SCIF bit-bang first, then SCI hardware SPI. Whichever
+ * backend detects the chip stays selected for init/tx/rx.
+ */
+static int w5500_dc_detect(void) {
+    w5500_dc_generate_mac(adapter_w5500.mac);
+
+    w5500_set_spi_ops(&dc_w5500_scif_spi_ops);
+    if(adapter_w5500.detect() >= 0)
+        return 0;
+
+    w5500_set_spi_ops(&dc_w5500_sci_spi_ops);
+    return adapter_w5500.detect();
+}
+
 int adapter_detect(void) {
     /* Try BBA first (most common, doesn't conflict with serial) */
     if(adapter_bba.detect() >= 0) {
@@ -107,12 +123,9 @@ int adapter_detect(void) {
     } else if(adapter_la.detect() >= 0) {
         bb = &adapter_la;
     } else {
-        /* Try W5500 on SCIF-SPI.
-         * This takes over the serial port, so it's tried last. */
-        w5500_set_spi_ops(&dc_w5500_spi_ops);
-        w5500_dc_generate_mac(adapter_w5500.mac);
-
-        if(adapter_w5500.detect() >= 0) {
+        /* Try W5500 on SCIF-SPI, then SCI-SPI.
+         * These take over serial pins, so they're tried last. */
+        if(w5500_dc_detect() >= 0) {
             bb = &adapter_w5500;
         } else {
             last_error = "NO ETHERNET ADAPTER DETECTED!";

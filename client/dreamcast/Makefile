@@ -270,7 +270,8 @@ IP_SHARED_CHIP_DRIVER_OBJS := \
     $(IPDIR)/w5500.o
 
 IP_PLATFORM_BUS_BINDING_OBJS := \
-    $(IPDIR)/w5500_spi_dc.o
+    $(IPDIR)/w5500_spi_dc_scif.o \
+    $(IPDIR)/w5500_spi_dc_sci.o
 
 IP_NETWORK_STACK_OBJS := \
     $(IPDIR)/net.o \
@@ -329,7 +330,10 @@ $(IPDIR)/lan_adapter.o: net/lan_adapter.c $(VERSION_H) | $(IPDIR)
 $(IPDIR)/w5500.o: $(CLIENTDIR)/common/drivers/w5500.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/w5500_spi_dc.o: net/w5500_spi_dc.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/w5500_spi_dc_scif.o: net/w5500_spi_dc_scif.c $(VERSION_H) | $(IPDIR)
+	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
+
+$(IPDIR)/w5500_spi_dc_sci.o: net/w5500_spi_dc_sci.c $(VERSION_H) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
 $(IPDIR)/net.o: net/net.c $(VERSION_H) | $(IPDIR)
