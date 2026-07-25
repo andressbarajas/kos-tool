@@ -1,4 +1,4 @@
-/* client/dreamcast/net/w5500_spi_dc.c */
+/* client/dreamcast/net/w5500_spi_dc_scif.c */
 /*
  * Dreamcast SCIF bit-bang SPI backend for W5500 driver.
  *
@@ -156,7 +156,7 @@ static void dc_w5500_spi_read_data(unsigned char *buf, int len) {
 
 /* ===== SPI Ops Table ===== */
 
-const w5500_spi_ops_t dc_w5500_spi_ops = {
+const w5500_spi_ops_t dc_w5500_scif_spi_ops = {
     dc_w5500_spi_init,
     dc_w5500_spi_shutdown,
     dc_w5500_spi_cs_assert,

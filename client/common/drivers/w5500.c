@@ -4,7 +4,7 @@
  *
  * Operates in MACRAW mode (Socket 0) for raw Ethernet frame TX/RX.
  * SPI access is abstracted via w5500_spi_ops_t — each platform
- * (DC SCIF bit-bang, GC EXI) provides its own backend.
+ * (DC SCIF bit-bang, DC SCI hardware SPI, GC EXI) provides its own backend.
  *
  * Based on the KallistiOS W5500 network driver by SWAT (Ruslan Rostovtsev):
  *   https://github.com/KallistiOS/KallistiOS/pull/1261

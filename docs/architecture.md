@@ -100,7 +100,8 @@ Network drivers are layered as follows:
   under `client/<console>/net/`
 - shared chip drivers, such as `client/common/drivers/w5500.c`, keep reusable
   register and socket logic outside any one console tree
-- console bus bindings, such as `client/dreamcast/net/w5500_spi_dc.c` and
+- console bus bindings, such as `client/dreamcast/net/w5500_spi_dc_scif.c`,
+  `client/dreamcast/net/w5500_spi_dc_sci.c`, and
   `client/gamecube/net/w5500_spi_gc.c`, connect a shared chip driver to the
   target's bus, GPIO, EXI, SPI, or similar hardware path
 

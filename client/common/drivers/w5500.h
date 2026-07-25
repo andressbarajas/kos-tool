@@ -6,7 +6,7 @@
  * via SPI. We use it in MACRAW mode (Socket 0) for raw Ethernet frames.
  *
  * Platform-specific SPI backends provide a w5500_spi_ops_t struct:
- *   - DC: SCIF bit-bang SPI
+ *   - DC: SCIF bit-bang SPI or SCI hardware SPI
  *   - GC: EXI SPI
  *
  * Based on the KallistiOS W5500 network driver by SWAT (Ruslan Rostovtsev):
