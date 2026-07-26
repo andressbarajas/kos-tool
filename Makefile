@@ -1,16 +1,18 @@
 # Makefile — kosload top-level build dispatcher
 #
 # Usage:
-#   make all           Build host tool + DC + GC + Wii + PS2 firmware
+#   make all           Build host tool + DC + GC + Wii + PS2 + Xbox firmware
 #   make dc            Build Dreamcast firmware
 #   make gc            Build GameCube firmware
 #   make wii           Build Wii firmware
 #   make ps2           Build PlayStation 2 firmware
-#   make dist          Build all delivery artifacts (CDI + ISO + Wii channel WAD + PS2 ISO)
+#   make xbox          Build Xbox firmware
+#   make dist          Build all delivery artifacts (CDI + ISO + WAD + XISO)
 #   make dist-dc       Build Dreamcast CDI images
 #   make dist-gc       Build GameCube ISO images
 #   make dist-wii      Build Wii channel WAD
 #   make dist-ps2      Build PlayStation 2 ISO
+#   make dist-xbox     Build Xbox XISO
 #   make gc-dol        Build GameCube DOL files only (no ISO)
 #   make release       Build everything + package release archives (build/release/)
 #   make release-host  Package the host-tool archive for this OS
@@ -24,7 +26,7 @@ include mk/toolchains.mk
 # Default target
 .DEFAULT_GOAL := all
 
-# Each console target (dc/gc/wii/ps2) re-invokes `$(MAKE) host` so the host
+# Each console target (dc/gc/wii/ps2/xbox) re-invokes `$(MAKE) host` so the host
 # tool embeds that console's freshly built firmware.  Under `make -j` the
 # auto-* console builds run concurrently, so several `make host` invocations
 # race on build-host/minilzo.a and build/kos-tool (intermittent link failures
@@ -86,6 +88,11 @@ PS2_SIZE     := $(PS2_EE_TOOLCHAIN)/$(PS2_PREFIX)size
 
 PS2_IOP_CC        := $(PS2_IOP_TOOLCHAIN)/$(PS2_IOP_PREFIX)gcc
 
+XBOX_CC      := $(XBOX_TOOLCHAIN)/$(XBOX_PREFIX)gcc
+XBOX_AR      := $(XBOX_TOOLCHAIN)/$(XBOX_PREFIX)ar
+XBOX_OBJCOPY := $(XBOX_TOOLCHAIN)/$(XBOX_PREFIX)objcopy
+XBOX_SIZE    := $(XBOX_TOOLCHAIN)/$(XBOX_PREFIX)size
+
 define require_host_tool
 	@if [ ! -x "$(1)" ] && [ ! -x "$(1).exe" ]; then \
 		echo "Error: missing $(2): $(1)"; \
@@ -100,11 +107,12 @@ endef
 
 # ---------- Targets ----------
 
-.PHONY: all host dc gc wii ps2 dist dist-dc dist-gc dist-wii dist-ps2 gc-dol \
-        auto-dc auto-gc auto-wii auto-ps2 \
-        dist-auto-dc dist-auto-gc dist-auto-wii dist-auto-ps2 \
+.PHONY: all host dc gc wii ps2 xbox dist dist-dc dist-gc dist-wii dist-ps2 dist-xbox gc-dol \
+        auto-dc auto-gc auto-wii auto-ps2 auto-xbox \
+        dist-auto-dc dist-auto-gc dist-auto-wii dist-auto-ps2 dist-auto-xbox \
         release release-host release-firmware print-version clean \
-        check-dc-toolchain check-gc-toolchain check-wii-toolchain check-ps2-toolchain
+        check-dc-toolchain check-gc-toolchain check-wii-toolchain check-ps2-toolchain \
+        check-xbox-toolchain
 
 # Single source of truth for the version string (e.g. for release tooling/CI).
 # `make -s print-version` -> 3.0.0
@@ -129,12 +137,18 @@ check-ps2-toolchain:
 	$(call require_host_tool,$(PS2_CC),PS2 EE compiler (mips64r5900el-ps2-elf-gcc),PlayStation 2,PS2_EE_TOOLCHAIN)
 	$(call require_host_tool,$(PS2_IOP_CC),PS2 IOP compiler (mipsel-elf-gcc),PlayStation 2,PS2_IOP_TOOLCHAIN)
 
+check-xbox-toolchain:
+	$(call require_host_tool,$(XBOX_CC),Xbox compiler (i686-pc-xbox-gcc),Xbox,XBOX_TOOLCHAIN)
+	$(call require_host_tool,$(XBOX_AR),Xbox archiver (i686-pc-xbox-ar),Xbox,XBOX_TOOLCHAIN)
+	$(call require_host_tool,$(XBOX_OBJCOPY),Xbox objcopy (i686-pc-xbox-objcopy),Xbox,XBOX_TOOLCHAIN)
+	$(call require_host_tool,$(XBOX_SIZE),Xbox size tool (i686-pc-xbox-size),Xbox,XBOX_TOOLCHAIN)
+
 # `make all` builds every console whose cross-toolchain is installed, skipping
 # the rest with a SKIP notice, then always builds the host tool.  Use the
-# explicit per-console targets (make dc/gc/wii/ps2) for a hard error when a
+# explicit per-console targets (make dc/gc/wii/ps2/xbox) for a hard error when a
 # toolchain is missing.  Real compile failures still abort — only a missing
 # toolchain is skipped.
-all: auto-dc auto-gc auto-wii auto-ps2 host
+all: auto-dc auto-gc auto-wii auto-ps2 auto-xbox host
 
 # Skip-if-missing wrappers (mirror dist-auto-*).  Wii uses the GameCube
 # (powerpc-eabi) toolchain; PS2 needs both the EE and IOP compilers.
@@ -174,6 +188,16 @@ auto-ps2:
 		$(MAKE) ps2; \
 	else \
 		echo "  SKIP    PlayStation 2 firmware (toolchain not found)"; \
+	fi
+
+auto-xbox:
+	@if $(call has_host_tool,$(XBOX_CC)) && \
+	    $(call has_host_tool,$(XBOX_AR)) && \
+	    $(call has_host_tool,$(XBOX_OBJCOPY)) && \
+	    $(call has_host_tool,$(XBOX_SIZE)); then \
+		$(MAKE) xbox; \
+	else \
+		echo "  SKIP    Xbox firmware (toolchain not found)"; \
 	fi
 
 host: $(VERSION_H) | $(BUILDDIR)
@@ -228,9 +252,20 @@ ps2: check-ps2-toolchain $(VERSION_H) | $(BUILDDIR)
 	@echo "  COPY    $(BUILDDIR)/examples/ps2/*.elf"
 	$(MAKE) host
 
+xbox: check-xbox-toolchain $(VERSION_H) | $(BUILDDIR)
+	$(MAKE) -C client/xbox ROOT=$(ROOT) all
+	@cp client/xbox/build/ip/xbox-load-ip.exe $(BUILDDIR)/
+	@cp client/xbox/build/ip/xbox-load-ip.bin $(BUILDDIR)/
+	@cp client/xbox/build/ip/default.xbe $(BUILDDIR)/default.xbe
+	@echo "  COPY    $(BUILDDIR)/xbox-load-ip.{exe,bin} $(BUILDDIR)/default.xbe"
+	@mkdir -p $(BUILDDIR)/examples/xbox
+	@cp client/xbox/build/examples/*.elf $(BUILDDIR)/examples/xbox/
+	@echo "  COPY    $(BUILDDIR)/examples/xbox/*.elf"
+	$(MAKE) host
+
 # ---------- Distribution artifact targets ----------
 
-dist: dist-auto-dc dist-auto-gc dist-auto-wii dist-auto-ps2
+dist: dist-auto-dc dist-auto-gc dist-auto-wii dist-auto-ps2 dist-auto-xbox
 
 dist-auto-dc:
 	@if $(call has_host_tool,$(DC_CC)) && \
@@ -272,6 +307,16 @@ dist-auto-ps2:
 		echo "  SKIP    PlayStation 2 ISO (toolchain not found)"; \
 	fi
 
+dist-auto-xbox:
+	@if $(call has_host_tool,$(XBOX_CC)) && \
+	    $(call has_host_tool,$(XBOX_AR)) && \
+	    $(call has_host_tool,$(XBOX_OBJCOPY)) && \
+	    $(call has_host_tool,$(XBOX_SIZE)); then \
+		$(MAKE) dist-xbox; \
+	else \
+		echo "  SKIP    Xbox XISO (toolchain not found)"; \
+	fi
+
 dist-dc: check-dc-toolchain dc
 	$(MAKE) -C make-dist dc ROOT=$(ROOT)
 
@@ -283,6 +328,9 @@ dist-wii: check-wii-toolchain wii
 
 dist-ps2: check-ps2-toolchain ps2
 	$(MAKE) -C make-dist ps2 ROOT=$(ROOT)
+
+dist-xbox: check-xbox-toolchain xbox
+	$(MAKE) -C make-dist xbox ROOT=$(ROOT)
 
 gc-dol: check-gc-toolchain gc
 	$(MAKE) -C make-dist gc-dol ROOT=$(ROOT)

@@ -2,9 +2,9 @@
 
 ROOT ?= $(CURDIR)/..
 
-.PHONY: all dc gc wii ps2 clean
+.PHONY: all dc gc wii ps2 xbox clean
 
-all: dc gc wii ps2
+all: dc gc wii ps2 xbox
 
 dc:
 	$(MAKE) -C dreamcast ROOT=$(ROOT) $(MAKECMDGOALS_EXTRA)
@@ -18,8 +18,12 @@ wii:
 ps2:
 	$(MAKE) -C playstation2 ROOT=$(ROOT) $(MAKECMDGOALS_EXTRA)
 
+xbox:
+	$(MAKE) -C xbox ROOT=$(ROOT) $(MAKECMDGOALS_EXTRA)
+
 clean:
 	$(MAKE) -C dreamcast ROOT=$(ROOT) clean
 	$(MAKE) -C gamecube ROOT=$(ROOT) clean
 	$(MAKE) -C wii ROOT=$(ROOT) clean
 	$(MAKE) -C playstation2 ROOT=$(ROOT) clean
+	$(MAKE) -C xbox ROOT=$(ROOT) clean

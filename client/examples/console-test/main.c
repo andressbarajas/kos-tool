@@ -57,6 +57,10 @@
  * is _start+4 (0x80000280+4), not the real entry. */
 #define KOSLOAD_BASE    0x80000284
 #endif
+#elif defined(__i386__)
+/* Xbox header starts with magic at XBOX_KOSLOAD_BASE+0.  The shared accessors
+ * below use the legacy magic-at-base+4 convention. */
+#define KOSLOAD_BASE    (XBOX_KOSLOAD_BASE - 4)
 #else
 #error "Unsupported architecture"
 #endif

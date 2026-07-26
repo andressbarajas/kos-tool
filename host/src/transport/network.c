@@ -38,6 +38,8 @@
 #define W5500_UPLOAD_WINDOW_SIZE      (32 * 1024)
 #define PS2_BBA_RX_FIFO_DELAY_TIME    1800 /* microseconds */
 #define PS2_BBA_RX_FIFO_DELAY_COUNT   10   /* packets per burst */
+#define XBOX_NVNET_RX_DELAY_TIME      1000 /* microseconds*/
+#define XBOX_NVNET_RX_DELAY_COUNT     1    /* packets per burst */
 
 #define DEFAULT_RX_FIFO_DELAY   (NET_PACKET_TIMEOUT_USEC / 51)
 #define DEFAULT_RX_FIFO_COUNT   15
@@ -107,6 +109,14 @@ static int adapter_is_spi(uint32_t adapter) {
  * post-VERS adapter-ID fallback hasn't recognised ADAPTER_WII_LAN_WIFI. */
 static int is_wii_loader(const kostool_context_t *ctx) {
     return ctx && strncmp(ctx->remote_version_string, "wii-load-ip ", 12) == 0;
+}
+
+/* NVnet's polling RX path has only a 16-entry descriptor ring.  Keep this
+ * predicate version-aware as well as adapter-aware so the host still selects
+ * the Xbox profile if an older firmware reports an incomplete adapter ID. */
+static int is_xbox_loader(const kostool_context_t *ctx) {
+    return ctx && (ctx->installed_adapter == ADAPTER_XBOX_NFORCE ||
+                   strncmp(ctx->remote_version_string, "xbox-load-ip ", 13) == 0);
 }
 
 /* Initial streaming-wait timeout for the SENDBIN/SENDBINQ download path.
@@ -294,7 +304,8 @@ static bool network_remote_supports_capabilities(const kostool_context_t *ctx) {
     return strncmp(ctx->remote_version_string, "dc-load-ip ", 11) == 0 ||
            strncmp(ctx->remote_version_string, "gc-load-ip ", 11) == 0 ||
            strncmp(ctx->remote_version_string, "ps2-load-ip ", 12) == 0 ||
-           strncmp(ctx->remote_version_string, "wii-load-ip ", 12) == 0;
+           strncmp(ctx->remote_version_string, "wii-load-ip ", 12) == 0 ||
+           strncmp(ctx->remote_version_string, "xbox-load-ip ", 13) == 0;
 }
 
 static int query_capabilities(kostool_context_t *ctx, uint32_t *capabilities) {
@@ -477,6 +488,9 @@ got_version:
         ctx->legacy_mode = 1;
         ctx->rx_fifo_delay = 4000;
         ctx->rx_fifo_delay_count = 1;
+    } else if(is_xbox_loader(ctx)) {
+        ctx->rx_fifo_delay = XBOX_NVNET_RX_DELAY_TIME;
+        ctx->rx_fifo_delay_count = XBOX_NVNET_RX_DELAY_COUNT;
     } else {
         ctx->installed_adapter = ADAPTER_DC_BBA;
         ctx->legacy_mode = 1;
@@ -657,9 +671,10 @@ static int network_send_data_once(kostool_context_t *ctx, const uint8_t *data, u
 #endif
 
     /* Auto-fast: skip FIFO pacing for small transfers (e.g. syscall I/O).
-     * These fit in the BBA's RX FIFO without loss, so pacing is pure waste.
-     * The Wii has no such FIFO (synchronous IOS IPC per datagram), so even
-     * a few-chunk burst can overrun it — never auto_fast that path. */
+     * These fit in the adapter's RX FIFO/ring without loss, so pacing is
+     * pure waste.  The Wii has no such FIFO (synchronous IOS IPC
+     * per datagram), so even a few-chunk burst can overrun it — never
+     * auto_fast that path. */
     int auto_fast = (!adapter_is_spi(ctx->installed_adapter) && !is_wii_loader(ctx) &&
                      num_chunks <= AUTO_FAST_CHUNK_THRESHOLD);
     if(auto_fast)
@@ -870,7 +885,8 @@ static int network_send_data(kostool_context_t *ctx, const uint8_t *data, uint32
     if(!size)
         return -1;
 
-    prepare_comms(ctx);
+    if(prepare_comms(ctx) != 0)
+        return -1;
 
     if(!adapter_is_w5500(ctx->installed_adapter) || size <= W5500_UPLOAD_WINDOW_SIZE) {
         return network_send_data_once(ctx, data, dest_addr, size);
@@ -926,7 +942,8 @@ static int network_recv_data(kostool_context_t *ctx, uint8_t *data, uint32_t src
     uint32_t diag_packets = 0;
     uint32_t diag_rerequests = 0;
 
-    prepare_comms(ctx);
+    if(prepare_comms(ctx) != 0)
+        return -1;
     recv_timeout = recv_data_timeout_usec(ctx);
     max_rerequests = recv_data_max_rerequests(ctx);
 
@@ -1089,7 +1106,8 @@ static int network_execute(kostool_context_t *ctx, uint32_t addr, int console_en
     uint8_t buffer[2048];
     bool send_argv;
 
-    prepare_comms(ctx);
+    if(prepare_comms(ctx) != 0)
+        return -1;
     send_argv = (ctx->prog_argc > 0) && network_remote_supports_argv(ctx);
 
     uint32_t flags = ((uint32_t)cdfs_redir << 1) | (uint32_t)console_enabled;

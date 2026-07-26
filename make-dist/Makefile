@@ -1,5 +1,5 @@
-# make-dist/Makefile — Build delivery artifacts: Dreamcast (CDI), GameCube (ISO/DOL),
-#                      the Wii channel WAD, and the PlayStation 2 ISO
+# make-dist/Makefile — Build delivery artifacts: Dreamcast (CDI), GameCube
+#                      (ISO/DOL), Wii (WAD), PlayStation 2 (ISO), and Xbox (XISO)
 #
 # Dreamcast: Assembles a 1st_read bootstrap that embeds the kosload firmware,
 #            objcopies it to a boot binary, then creates a repo-local CDI.
@@ -19,7 +19,8 @@
 #   make dc          Build Dreamcast 1st_read ELFs/BINs + CDIs
 #   make gc          Build GameCube DOLs + ISOs
 #   make ps2         Build PlayStation 2 ISO
-#   make all         Build dc + gc + ps2
+#   make xbox        Build Xbox XISO
+#   make all         Build dc + gc + ps2 + xbox
 #   make clean       Remove all build artifacts
 
 ROOT ?= $(CURDIR)/..
@@ -102,6 +103,7 @@ GC_IP_BOOTSTRAP  := $(LOCALDIR)/gc-bootstrap-ip.elf
 ELF2DOL := $(LOCALDIR)/elf2dol
 MKISO_LITE := $(LOCALDIR)/mkiso-lite
 MKCDI_LITE := $(LOCALDIR)/mkcdi-lite
+MKXISO_LITE := $(LOCALDIR)/mkxiso-lite
 MKWAD := $(LOCALDIR)/mkwad
 GBI_HDR := tools/gbi.hdr
 
@@ -118,6 +120,11 @@ GC_IP_ISO  := $(BUILDDIR)/gc-load-ip.iso
 # Canonical (un-versioned) name like every other console deliverable; the
 # release version is stamped into the filename once, by scripts/package-release.sh.
 PS2_IP_ISO := $(BUILDDIR)/ps2-load-ip.iso
+
+# Xbox XDVDFS (XISO) disc image wrapping the pe2xbe-packed default.xbe.
+XBOX_IP_XBE  := $(BUILDDIR)/default.xbe
+XBOX_IP_XISO := $(BUILDDIR)/xbox-load-ip.xiso
+XBOX_DISC_DIR := $(LOCALDIR)/xbox-ip-disc
 
 # PlayStation 2 SYSTEM.CNF is generated from this template with the kosload
 # version (@KOSLOAD_VERSION@) and the boot executable name (@PS2_BOOT_NAME@)
@@ -153,9 +160,9 @@ WII_WAD_TITLE_VER ?= 1
 # ============================================================
 
 .DEFAULT_GOAL := all
-.PHONY: all dc gc wii ps2 dc-serial dc-ip gc-serial gc-ip gc-dol mkwad clean
+.PHONY: all dc gc wii ps2 xbox dc-serial dc-ip gc-serial gc-ip gc-dol mkwad clean
 
-all: dc gc ps2
+all: dc gc ps2 xbox
 
 dc: dc-serial dc-ip
 
@@ -418,6 +425,29 @@ ps2: $(MKISO_LITE) $(PS2_DISC_CNF) $(PS2_DISC_ELF) | $(BUILDDIR)
 	    --volume-id KOSLOAD_PS2
 
 # ============================================================
+# Xbox: XDVDFS (XISO) disc image
+#
+# An Xbox disc is an XDVDFS image whose root holds default.xbe (produced by
+# pe2xbe in the main build).  The kernel/xemu auto-boots default.xbe from
+# the disc root.  The top-level `xbox` target stages default.xbe into
+# $(BUILDDIR); we copy it in under its boot name and pack with mkxiso-lite.
+# ============================================================
+
+$(MKXISO_LITE): tools/mkxiso-lite.c | $(LOCALDIR)
+	@echo "  HOSTCC  $@"
+	@$(HOSTCC) $(HOST_CFLAGS) -o $@ tools/mkxiso-lite.c
+
+$(XBOX_DISC_DIR):
+	@mkdir -p $@
+
+$(XBOX_DISC_DIR)/default.xbe: $(XBOX_IP_XBE) | $(XBOX_DISC_DIR)
+	@cp $< $@
+
+xbox: $(MKXISO_LITE) $(XBOX_DISC_DIR)/default.xbe | $(BUILDDIR)
+	@echo "  XISO    $(XBOX_IP_XISO)"
+	@$(MKXISO_LITE) --quiet --source-dir $(XBOX_DISC_DIR) --output $(XBOX_IP_XISO)
+
+# ============================================================
 # Clean
 # ============================================================
 
@@ -427,3 +457,4 @@ clean:
 	rm -f $(GC_SER_DOL) $(GC_IP_DOL)
 	rm -f $(GC_SER_ISO) $(GC_IP_ISO)
 	rm -f $(PS2_IP_ISO)
+	rm -f $(XBOX_IP_XISO)

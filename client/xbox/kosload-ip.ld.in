@@ -1,0 +1,136 @@
+/*
+ * Independent GNU PE/i386 linker script for the production Xbox loader.
+ *
+ * Required invocation supplies: --image-base=0x00010000
+ */
+
+OUTPUT_FORMAT("pei-i386")
+OUTPUT_ARCH(i386)
+ENTRY(_start)
+
+SECTIONS
+{
+  ASSERT(__image_base__ == 0x00010000,
+         "Xbox loader must be linked with --image-base=0x00010000")
+  ASSERT(__image_base__ + @XBOX_LOADER_SIZE@ == @XBOX_DEFAULT_LOAD_ADDR@,
+         "Xbox guest arena must immediately follow the loader window")
+
+  /* Reserve image-base + 0x0000..0x0fff for generated XBE headers. */
+  . = __image_base__ + 0x1000;
+  __loaded_image_start__ = .;
+
+  .text ALIGN(32) :
+  {
+    __text_start__ = .;
+
+    /* This order is part of the loader/converter integration contract. */
+    __kosload_header_start__ = .;
+    KEEP(*(.text.kosload_header))
+    __kosload_header_end__ = .;
+
+    __startup_start__ = .;
+    KEEP(*(.text.startup))
+    __startup_end__ = .;
+
+    *(.text .text.* .gnu.linkonce.t.*)
+    . = ALIGN(16);
+    __text_end__ = .;
+  }
+
+  .rdata ALIGN(32) :
+  {
+    __rdata_start__ = .;
+    *(.rdata .rdata.* .rdata$*)
+    *(.rodata .rodata.* .gnu.linkonce.r.*)
+    . = ALIGN(16);
+    __rdata_end__ = .;
+  }
+
+  .data ALIGN(32) :
+  {
+    __data_start__ = .;
+    *(.data .data.* .data$* .gnu.linkonce.d.*)
+    *(.sdata .sdata.*)
+    . = ALIGN(16);
+    __data_end__ = .;
+  }
+
+  .bss ALIGN(32) :
+  {
+    __bss_start__ = .;
+    *(.bss .bss.* .bss$* .gnu.linkonce.b.*)
+    *(.sbss .sbss.*)
+    *(COMMON)
+
+    . = ALIGN(16);
+    __stack_bottom__ = .;
+    . += 0x00002000;     /* 8 KiB private loader/guest execution stack. */
+    . = ALIGN(16);
+    __stack_top__ = .;
+    __bss_end__ = .;
+  }
+
+  /* Persistent NVnet DMA region: RX/TX descriptors and buffers.
+   * It is outside .bss so crt0 does not clear it, and it has no contents in the
+   * flat update binary.  Keep it inside the identity range so VA == PA remains
+   * valid. */
+  .nicpersist 0x0002D000 (NOLOAD) :
+  {
+    __nicpersist_start__ = .;
+    . += 0x0000D000;     /* 52 KiB: NVnet rings, buffers, and metadata */
+    __nicpersist_end__ = .;
+  }
+
+  __loaded_image_end__ = .;
+  ASSERT(__bss_end__ <= __nicpersist_start__,
+         "loader BSS/stack overlaps the fixed persistent NVnet region")
+  ASSERT(__nicpersist_start__ == 0x0002D000,
+         "persistent NVnet ABI moved from its fixed address")
+  ASSERT(__nicpersist_end__ - __nicpersist_start__ >= 0x0000C00C,
+         "persistent NVnet region is too small")
+  ASSERT(__loaded_image_end__ <= 0x0003C000,
+         "loader identity region overlaps the Xbox kernel free-page boundary")
+  ASSERT(__loaded_image_end__ <= @XBOX_DEFAULT_LOAD_ADDR@,
+         "loader image overlaps the fixed guest arena")
+
+  /*
+   * Guest execution/load space is mapped but is deliberately outside BSS;
+   * startup therefore does not zero it.
+   */
+  .guest_arena @XBOX_DEFAULT_LOAD_ADDR@ (NOLOAD) :
+  {
+    __guest_arena_start__ = .;
+    . += 0x02000000;
+    __guest_arena_end__ = .;
+  }
+
+  /* Only non-runtime bookkeeping, debug, and unwind inputs are discarded. */
+  /DISCARD/ :
+  {
+    *(.reloc .reloc.*)
+    *(.drectve)
+    *(.comment)
+    *(.note .note.*)
+    *(.debug .debug_* .zdebug_*)
+    *(.stab .stabstr)
+    *(.eh_frame .eh_frame_hdr)
+    *(.gcc_except_table .gcc_except_table.*)
+  }
+
+  ASSERT(__kosload_header_start__ == 0x00011000,
+         ".text.kosload_header must begin at VA 0x00011000")
+  ASSERT(__kosload_header_end__ > __kosload_header_start__,
+         "missing required .text.kosload_header input")
+  ASSERT((__bss_start__ & 15) == 0,
+         "BSS start must be 16-byte aligned")
+  ASSERT((__stack_bottom__ & 15) == 0,
+         "private stack bottom must be 16-byte aligned")
+  ASSERT((__stack_top__ & 15) == 0,
+         "private stack top must be 16-byte aligned")
+  ASSERT(__stack_top__ - __stack_bottom__ == 0x00002000,
+         "private startup stack must be exactly 8 KiB")
+  ASSERT(__guest_arena_start__ == @XBOX_DEFAULT_LOAD_ADDR@,
+         "guest arena does not begin at XBOX_DEFAULT_LOAD_ADDR")
+  ASSERT(__guest_arena_end__ - __guest_arena_start__ == 0x02000000,
+         "guest arena must be exactly 32 MiB")
+}

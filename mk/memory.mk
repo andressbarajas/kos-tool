@@ -62,3 +62,35 @@ PS2_BOOTSTRAP_BASE := 0x00100000  # outer ELF landing zone (= PS2_DEFAULT_LOAD_A
 PS2_BOOTSTRAP_SIZE := 0x100000    # 1 MB landing zone
 PS2_LOADER_BASE    := 0x80000280  # where the real loader runs (cached phys 0x280)
 PS2_LOADER_SIZE    := 0xFFD80     # 1 MB minus the 0x280 vector area
+
+# Original Microsoft Xbox (Pentium III / nForce).  Xbox titles run in ring 0
+# with paging on and flat segments.  The addresses declared by an XBE are
+# VIRTUAL addresses: when the kernel first loads the image, its sections are
+# backed by pages allocated from the physical free-page pool, so VA != PA.
+#
+# xbox-load-ip keeps the conventional homebrew XBE base (0x00010000).  After
+# taking over from the kernel, it copies its runtime into the former resident
+# kernel pages and rewrites its PTEs so VA == PA from 0x00011000 through the
+# loader image.  The linker caps that identity-mapped image below 0x0003C000.
+# The XBE header page at VA 0x00010000 is not part of the runtime relocation.
+#
+# Virtual layout:
+#   VA 0x00010000..0x00010FFF  generated XBE headers (launch-time only)
+#   VA 0x00011000..0x0003BFFF  loader identity window (maximum)
+#   VA 0x0003C000..0x0203BFFF  mapped 32 MiB guest arena
+#
+# After takeover, only the loader window above has the same physical addresses.
+# The guest arena remains kernel-paged and can be backed by scattered physical
+# pages; its virtual addresses do not identify a corresponding physical portion
+# of the Xbox's 64 MiB UMA RAM.  The remaining physical RAM also includes the
+# framebuffer and other reservations.
+#
+# XBOX_KOSLOAD_BASE is the first byte after the generated XBE header page and
+# is where the loader publishes its guest-facing header (magic + syscall entry
+# + info-block pointer).  The linker forces .text.kosload_header there.
+XBOX_RAM_TOP           := 0x04000000  # physical top of 64 MiB retail RAM
+XBOX_LOADER_BASE       := 0x00010000  # XBE image base (conventional homebrew)
+XBOX_LOADER_SIZE       := 0x0002C000  # max XBE header + loader window, ending at 0x0003C000
+XBOX_HEADER_RESERVE    := 0x1000      # XBE header page (must match pe2xbe HEADER_RESERVE)
+XBOX_KOSLOAD_BASE      := 0x00011000  # = XBOX_LOADER_BASE + XBOX_HEADER_RESERVE
+XBOX_DEFAULT_LOAD_ADDR := 0x0003C000  # first guest VA, immediately after loader window

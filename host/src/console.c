@@ -320,6 +320,8 @@ static const char *addr2line_for_console(const kostool_context_t *ctx) {
         return ctx->ppc_addr2line;
     case CONSOLE_PS2:
         return ctx->mips_addr2line;
+    case CONSOLE_XBOX:
+        return ctx->xbox_addr2line;
     default:
         /* Unrecognized loader: fall back to the endianness heuristic. */
         return ctx->target_big_endian ? ctx->ppc_addr2line : ctx->sh4_addr2line;
@@ -1026,6 +1028,7 @@ static void ser_recv_data(kostool_context_t *ctx, void *data, uint32_t total) {
 /* ===== Network console helpers ===== */
 
 #define GC_ENC_RETVAL_DELAY_USEC 5000
+#define XBOX_NVNET_RETVAL_DELAY_USEC 5000
 
 static int net_send_cmd(kostool_context_t *ctx, const char cmd[4], uint32_t addr, uint32_t size,
                         const uint8_t *data, uint32_t dsize) {
@@ -1066,6 +1069,10 @@ static int net_send_cmd(kostool_context_t *ctx, const char cmd[4], uint32_t addr
     if(ctx->installed_adapter == ADAPTER_GC_ENC && memcmp(cmd, NET_CMD_RETVAL, 4) == 0 && ctx->time_ops &&
        ctx->time_ops->sleep_usec) {
         ctx->time_ops->sleep_usec(GC_ENC_RETVAL_DELAY_USEC);
+    }
+    if(ctx->installed_adapter == ADAPTER_XBOX_NFORCE && memcmp(cmd, NET_CMD_RETVAL, 4) == 0 &&
+       ctx->time_ops && ctx->time_ops->sleep_usec) {
+        ctx->time_ops->sleep_usec(XBOX_NVNET_RETVAL_DELAY_USEC);
     }
     int ret = ctx->socket_ops->send(ctx->global_socket, buf, wire_len);
     if(ret >= 0)

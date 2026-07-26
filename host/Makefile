@@ -75,16 +75,21 @@ CFLAGS  += -MMD -MP
 CFLAGS  += -DDEFAULT_SH4_ADDR2LINE=\"$(DC_TOOLCHAIN)/$(DC_PREFIX)addr2line\" \
            -DDEFAULT_PPC_ADDR2LINE=\"$(GC_TOOLCHAIN)/$(GC_PREFIX)addr2line\" \
            -DDEFAULT_MIPS_ADDR2LINE=\"$(PS2_EE_TOOLCHAIN)/$(PS2_PREFIX)addr2line\" \
+           -DDEFAULT_XBOX_ADDR2LINE=\"$(XBOX_TOOLCHAIN)/$(XBOX_PREFIX)addr2line\" \
            -DSH4_TOOL_PREFIX=\"$(DC_PREFIX)\" \
            -DPPC_TOOL_PREFIX=\"$(GC_PREFIX)\" \
-           -DMIPS_TOOL_PREFIX=\"$(PS2_PREFIX)\"
+           -DMIPS_TOOL_PREFIX=\"$(PS2_PREFIX)\" \
+           -DXBOX_TOOL_PREFIX=\"$(XBOX_PREFIX)\"
 
 # Loader base/load addresses for the firmware-update trampolines, from
 # mk/memory.mk (the source of truth).  These override the protocol.h fallbacks.
 CFLAGS  += -DDC_LOADER_BASE=$(DC_LOADER_BASE) \
            -DGC_LOADER_BASE=$(GC_LOADER_BASE) \
            -DWII_LOADER_BASE=$(WII_LOADER_BASE) \
-           -DPS2_LOADER_BASE=$(PS2_LOADER_BASE)
+           -DPS2_LOADER_BASE=$(PS2_LOADER_BASE) \
+           -DXBOX_LOADER_BASE=$(XBOX_LOADER_BASE) \
+           -DXBOX_KOSLOAD_BASE=$(XBOX_KOSLOAD_BASE) \
+           -DXBOX_DEFAULT_LOAD_ADDR=$(XBOX_DEFAULT_LOAD_ADDR)
 
 LDFLAGS := $(LIBELF_LDFLAGS) $(EXTRA_LDLIBS)
 
@@ -101,6 +106,7 @@ GC_SER_BIN := $(ROOT)/client/gamecube/build/serial/gc-load-ser.bin
 GC_IP_BIN  := $(ROOT)/client/gamecube/build/ip/gc-load-ip.bin
 PS2_IP_BIN := $(ROOT)/client/playstation2/build/ip/ps2-load-ip-image.bin
 WII_IP_BIN := $(ROOT)/client/wii/build/ip/wii-load-ip.bin
+XBOX_IP_BIN := $(ROOT)/client/xbox/build/ip/xbox-load-ip.bin
 
 FW_OBJS :=
 FW_DEFS :=
@@ -128,6 +134,10 @@ endif
 ifneq ($(wildcard $(WII_IP_BIN)),)
   FW_OBJS += $(BUILDDIR)/firmware_wii_ip_data.o
   FW_DEFS += -DHAS_FIRMWARE_WII_IP
+endif
+ifneq ($(wildcard $(XBOX_IP_BIN)),)
+  FW_OBJS += $(BUILDDIR)/firmware_xbox_ip_data.o
+  FW_DEFS += -DHAS_FIRMWARE_XBOX_IP
 endif
 
 CFLAGS += $(FW_DEFS)
@@ -246,6 +256,10 @@ $(BUILDDIR)/firmware_ps2_ip_data.c: $(PS2_IP_BIN) $(BIN2C) | $(BUILDDIR)
 $(BUILDDIR)/firmware_wii_ip_data.c: $(WII_IP_BIN) $(BIN2C) | $(BUILDDIR)
 	@echo "  BIN2C   $<"
 	@$(BIN2C) $< firmware_wii_ip $@
+
+$(BUILDDIR)/firmware_xbox_ip_data.c: $(XBOX_IP_BIN) $(BIN2C) | $(BUILDDIR)
+	@echo "  BIN2C   $<"
+	@$(BIN2C) $< firmware_xbox_ip $@
 
 $(BUILDDIR)/firmware_%_data.o: $(BUILDDIR)/firmware_%_data.c
 	@$(CC) $(CFLAGS) -c $< -o $@

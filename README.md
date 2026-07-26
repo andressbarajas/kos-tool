@@ -1,6 +1,6 @@
 # kos-tool 3.0.0
 
-**kos-tool** is a unified console loader for the **Sega Dreamcast**, **Nintendo GameCube**, **Sony PlayStation 2**, and **Nintendo Wii**, combining the functionality of [dcload-serial](https://github.com/KallistiOS/dcload-serial) and [dcload-ip](https://github.com/KallistiOS/dcload-ip) into a single, clean codebase. It is a derivative of the original **dcload** by [Andrew Kieschnick](http://napalm-x.thegypsy.com/andrewk/dc/) (ADK/Napalm).
+**kos-tool** is a unified console loader for the **Sega Dreamcast**, **Nintendo GameCube**, **Sony PlayStation 2**, **Nintendo Wii**, and **Microsoft Xbox**, combining the functionality of [dcload-serial](https://github.com/KallistiOS/dcload-serial) and [dcload-ip](https://github.com/KallistiOS/dcload-ip) into a single, clean codebase. It is a derivative of the original **dcload** by [Andrew Kieschnick](http://napalm-x.thegypsy.com/andrewk/dc/) (ADK/Napalm).
 
 **kos-tool** is a set of programs used to send and receive data between your computer and your console. The classic use case is uploading and debugging homebrew programs. It consists of two parts:
 
@@ -9,6 +9,7 @@
 * `gc-load-serial` / `gc-load-ip` — the GameCube client firmware
 * `ps2-load-ip` — the PlayStation 2 client firmware
 * `wii-load-ip` — the Wii client firmware
+* `xbox-load-ip` — the Xbox client firmware
 
 ## Supported Hardware
 
@@ -46,17 +47,28 @@ syscall retransmit/dedup logic specifically to tolerate it). `wii-load-ip`
 is launched from the [Homebrew Channel](https://wiibrew.org/wiki/Homebrew_Channel)
 via the generated `wii-load-ip.dol`.
 
+### Xbox
+
+| Connection | Client Firmware | Adapter |
+|---|---|---|
+| Ethernet | `xbox-load-ip` | Onboard nForce Ethernet (NVnet / MCPX) |
+
+Boot `default.xbe` from a homebrew-capable dashboard, or boot
+`xbox-load-ip.xiso` from a compatible emulator or modified console. The XBE is
+unsigned, so a retail console with unmodified signature enforcement cannot run
+it.
+
 ## Improvements over dcload-serial / dcload-ip
 
 ### Unified Codebase
 * **Single host tool** — `kos-tool` replaces both `dc-tool-ser` and `dc-tool-ip` with one binary that handles serial and network transports across supported consoles
 * **Shared client code** — common client logic (main loop, screensaver, exception handler, CDFS, syscall table) is shared across client firmware variants via a platform abstraction layer (`target_ops_t`)
-* **Unified build system** — one `make` builds everything: DC firmware, GC firmware, PS2 firmware, host tool, examples, and delivery artifacts (CDI/ISO/WAD)
+* **Unified build system** — one `make` builds everything: DC firmware, GC firmware, PS2 firmware, Xbox firmware, host tool, examples, and delivery artifacts (CDI/ISO/WAD/XISO)
 * **Documented extension points** — see [`docs/architecture.md`](docs/architecture.md) for the console and transport boundaries used by new ports
 
 ### Firmware Update
-* **Embedded firmware** — all client firmware binaries (DC serial, DC IP, GC serial, GC IP, PS2 IP, Wii IP) are embedded directly in the `kos-tool` host binary
-* **Opt-in auto-update** — with `-F`, when `kos-tool` connects to a console running an older (or legacy dcload) firmware, it uploads and installs the new firmware via architecture-specific trampolines (SH4, PPC, and MIPS R5900)
+* **Embedded firmware** — all client firmware binaries (DC serial, DC IP, GC serial, GC IP, PS2 IP, Wii IP, Xbox IP) are embedded directly in the `kos-tool` host binary
+* **Opt-in auto-update** — with `-F`, when `kos-tool` connects to a console running an older (or legacy dcload) firmware, it uploads and installs the new firmware via architecture-specific trampolines (SH4, PPC, MIPS R5900, and x86)
 * **IP config preservation** — during network firmware updates, DHCP/static IP settings are detected and patched into the new firmware so the console stays reachable
 * **Legacy dcload compatibility** — auto-update works on consoles still running the original `dcload-serial` or `dcload-ip`, upgrading them in-place
 * **Manual update** — `-U <file>` flag for updating from an external firmware binary
@@ -79,10 +91,15 @@ via the generated `wii-load-ip.dol`.
 * **Lossy-link resilience** — the syscall path adds opt-in request sequencing with host-side reply dedup and bounded retransmit, so a dropped request or reply recovers instead of wedging — important on the experimental Wi-Fi path
 * **DHCP support** — IOS handles address acquisition; the loader displays the current lease
 
+### Xbox Support
+* **Xbox network loader** — Ethernet over the console's onboard nForce Ethernet (NVnet / forcedeth-class MCPX controller); no add-on adapter required
+* **Shared protocol** — Xbox uses the same network upload/download command protocol as the other consoles
+* **DHCP and static IP support** — Xbox network firmware can discover an address with DHCP or be built with a fixed IP
+
 ### Host Tool Enhancements
 * **Automatic transport detection** — `kos-tool` infers serial vs network from `-t <device|ip|dhcp>`
 * **Network DHCP discovery** — `-t dhcp` broadcasts on the LAN to find consoles (tries both legacy port 31313 and new port 53535)
-* **Automatic addr2line integration** — when the uploaded file is an ELF, console stack addresses are annotated automatically for SH4 (DC), PPC (GC/Wii), or MIPS (PS2). The `addr2line` path is derived from the toolchain location (`$DC_TOOLCHAIN`/`$GC_TOOLCHAIN`/`$PS2_EE_TOOLCHAIN`, else the build-time default)
+* **Automatic addr2line integration** — when an uploaded ELF emits a supported console trace, stack addresses are annotated automatically for SH4 (DC), PPC (GC/Wii), MIPS (PS2), or i386 (Xbox). The `addr2line` path is derived from the toolchain location (`$DC_TOOLCHAIN`/`$GC_TOOLCHAIN`/`$PS2_EE_TOOLCHAIN`/`$XBOX_TOOLCHAIN`, else the build-time default)
 * **RTC sync** — `-w` flag sets the console's real-time clock to the host's local time
 * **Program arguments** — `-- arg1 arg2` passes arguments to the loaded program
 * **Performance diagnostics** — `-P` / `--diag` prints transfer timing and recovery statistics
@@ -95,7 +112,7 @@ via the generated `wii-load-ip.dol`.
 
 ### Build System
 * **Simple Makefiles** — no CMake dependency; just `make` with the cross-compiler toolchains in PATH
-* **Delivery artifact generation** — `make dist` produces bootable CDI (Dreamcast) and ISO (GameCube) disc images, plus an installable Wii channel WAD, using in-tree image builders
+* **Delivery artifact generation** — `make dist` produces bootable CDI (Dreamcast) and ISO (GameCube) disc images, an installable Wii channel WAD, and an Xbox XISO, using in-tree image builders
 * **Example programs** — freestanding test programs (console, rainbow, syscall, CDFS, exception, maple, etc.) built automatically
 
 ## Features
@@ -106,7 +123,7 @@ via the generated `wii-load-ip.dol`.
 * GDB remote debugging via GDB-over-dcload
 * Exception handler with full register dump
 * DHCP/network discovery (`-t dhcp`)
-* Network firmware supports BBA/LAN/W5500 on Dreamcast, BBA/ENC28J60/W5500 on GameCube, DEV9 SMAP on PlayStation 2, and LAN Adapter / Wi-Fi (experimental) on Wii
+* Network firmware supports BBA/LAN/W5500 on Dreamcast, BBA/ENC28J60/W5500 on GameCube, DEV9 SMAP on PlayStation 2, LAN Adapter / Wi-Fi (experimental) on Wii, and onboard nForce Ethernet (NVnet) on Xbox
 * Runtime baud rate negotiation up to 1.5Mbaud (Dreamcast serial)
 * Cross-platform host tool: Linux, macOS, Windows (MSYS2)
 
@@ -122,16 +139,17 @@ via the generated `wii-load-ip.dol`.
   * Wii: `powerpc-eabi-gcc` (same toolchain as GameCube)
   * PlayStation 2 EE: `mips64r5900el-ps2-elf-gcc`
   * PlayStation 2 IOP: `mipsel-elf-gcc`
+  * Xbox: `i686-pc-xbox-gcc`
 
 Toolchain locations are configured in [`mk/toolchains.mk`](mk/toolchains.mk).
-If your Dreamcast, GameCube, Wii, or PlayStation 2 toolchains are not installed
-under the default paths, edit that file before running `make dc`, `make gc`,
-`make wii`, or `make ps2`.
+If your Dreamcast, GameCube, Wii, PlayStation 2, or Xbox toolchains are not
+installed under the default paths, edit that file before running `make dc`,
+`make gc`, `make wii`, `make ps2`, or `make xbox`.
 
 ### Build Everything
 
 ```bash
-make        # builds DC firmware, GC firmware, PS2 firmware, Wii firmware, host tool, and examples
+make        # builds DC firmware, GC firmware, PS2 firmware, Wii firmware, Xbox firmware, host tool, and examples
 ```
 
 Output goes to `build/`:
@@ -145,11 +163,15 @@ build/
 ├── ps2-load-ip.elf           # PlayStation 2 network firmware
 ├── wii-load-ip.{elf,bin,dol} # Wii network firmware (.dol boots from Homebrew Channel)
 ├── wii-load-ip.wad           # Wii installable channel (built by `make dist-wii`/`make dist`)
+├── xbox-load-ip.{exe,bin}    # Xbox network firmware
+├── default.xbe               # Xbox loader as a launchable XBE (pe2xbe-packed, unsigned)
+├── xbox-load-ip.xiso         # Xbox bootable disc image (built by `make dist-xbox`/`make dist`)
 └── examples/
     ├── dc/                   # Dreamcast example ELFs
     ├── gc/                   # GameCube example ELFs
     ├── ps2/                  # PlayStation 2 example ELFs
-    └── wii/                  # Wii example ELFs
+    ├── wii/                  # Wii example ELFs
+    └── xbox/                 # Xbox example ELFs
 ```
 
 ### Individual Targets
@@ -159,11 +181,14 @@ make dc       # Dreamcast firmware + examples + rebuild kos-tool
 make gc       # GameCube firmware + examples + rebuild kos-tool
 make ps2      # PlayStation 2 firmware + examples + rebuild kos-tool
 make wii      # Wii firmware + examples + rebuild kos-tool
+make xbox     # Xbox firmware + examples + rebuild kos-tool
 make host     # Host tool only (embeds whatever firmware bins exist)
-make dist     # Delivery artifacts: CDI (DC), ISO (GC), and Wii channel WAD
+make dist     # Delivery artifacts: CDI (DC), ISO (GC), Wii channel WAD, PS2 ISO, and Xbox XISO
 make dist-dc  # Dreamcast-only bootable CDI images
 make dist-gc  # GameCube-only bootable ISO images
 make dist-wii # Wii-only installable channel WAD
+make dist-ps2 # PlayStation 2-only bootable ISO
+make dist-xbox # Xbox-only bootable XISO
 make gc-dol   # GameCube DOL files only (no ISO)
 ```
 
@@ -174,6 +199,7 @@ make gc GC_TOOLCHAIN=/path/to/powerpc-eabi/bin
 make dc DC_TOOLCHAIN=/path/to/sh-elf/bin
 make wii GC_TOOLCHAIN=/path/to/powerpc-eabi/bin
 make ps2 PS2_EE_TOOLCHAIN=/path/to/mips64r5900el-ps2-elf/bin PS2_IOP_TOOLCHAIN=/path/to/mipsel-elf/bin
+make xbox XBOX_TOOLCHAIN=/path/to/i686-pc-xbox/bin
 ```
 
 ### Platform-Specific Notes
@@ -219,6 +245,7 @@ By default, network firmware uses DHCP. To build with a static IP:
 make dc STATICIP=192.168.1.100
 make gc STATICIP=192.168.1.100
 make ps2 STATICIP=192.168.1.100
+make xbox STATICIP=192.168.1.100
 ```
 
 The Wii has no `STATICIP` knob — IOS owns address acquisition, so a
@@ -240,10 +267,10 @@ Commands:
   -r           Reset console
 
 Options:
-  -a <addr>    Set address (default: 0x8c010000)
+  -a <addr>    Set address (target default if omitted)
   -s <size>    Set size for download
   -t <device>  Serial device, IP address, or 'dhcp'
-  -T <profile> Use configured target profile (dc_serial, gc_serial, dc_ip, gc_ip, ps2_ip, wii_ip)
+  -T <profile> Use configured target profile (dc_serial, gc_serial, dc_ip, gc_ip, ps2_ip, wii_ip, xbox_ip)
   -b <baud>    Serial baud rate (default: 57600)
   -n           Disable console/fileserver
   -p           Dumb terminal mode
@@ -283,6 +310,7 @@ dc_ip = 172.16.0.10
 gc_ip = dhcp
 ps2_ip = dhcp
 wii_ip = dhcp
+xbox_ip = dhcp
 serial_baud = 1562500
 ```
 
@@ -293,6 +321,7 @@ kos-tool -T dc_serial -x program.elf
 kos-tool -T gc_ip -x program.elf
 kos-tool -T ps2_ip -x program.elf
 kos-tool -T wii_ip -x program.elf
+kos-tool -T xbox_ip -x program.elf
 ```
 
 `-t` overrides `-T` when both are present. `serial_baud` is used only for
@@ -304,7 +333,7 @@ serial targets, and `-b` overrides it.
 
 ### Examples
 
-The target (`-t`) selects the transport; the console (DC, GC, PS2, Wii) is
+The target (`-t`) selects the transport; the console (DC, GC, PS2, Wii, Xbox) is
 auto-detected, so the same invocation works across all of them. On the Wii,
 network covers both the LAN Adapter and internal Wi-Fi.
 
@@ -375,12 +404,14 @@ kos-tool/
 │   ├── gamecube/        # GC platform (USBGecko, EXI, BBA/ENC28J60/W5500 drivers)
 │   ├── playstation2/    # PS2 platform (DEV9, SMAP, IOP modules, video)
 │   ├── wii/             # Wii platform (IOS net sockets, HBC stub, video)
+│   ├── xbox/            # Xbox platform (NVnet, NV2A video, kernel takeover)
 │   └── examples/        # Freestanding test programs
 ├── host/                # Host tool (kos-tool)
 │   ├── src/             # Main, console, upload/download, discovery
-│   └── include/         # Host headers
+│   ├── include/         # Host headers
+│   └── tools/           # pe2xbe (Xbox XBE packer), elf2irx (PS2 IRX converter)
 ├── include/             # Shared protocol headers
-├── make-dist/           # Delivery artifact tools (CDI, ISO/DOL, WAD)
+├── make-dist/           # Delivery artifact tools (CDI, ISO/DOL, WAD, XISO)
 ├── third_party/         # minilzo, mingw-libelf
 └── mk/                  # Build configuration
 ```
@@ -398,12 +429,13 @@ kos-tool is derived from the original dcload by Andrew Kieschnick (ADK/Napalm), 
 * **Paul Boese** (Axlen) — serial protocol endian fixes
 * **Eric Fradella** (darcagn) — DHCP retry
 * **Lawrence Sebald**, **Donald Haase**, **Falco Girgis** — KallistiOS team contributions
-* **Andy Barajas** (BBHoodsta) — kos-tool unification, GameCube, PlayStation 2, and Wii support
-* **Paul Cercueil** (pcercuei) - Testing, feedback, bug fixes
+* **Andy Barajas** (BBHoodsta) — kos-tool unification and GameCube, PlayStation 2, Wii, and Xbox support
+* **Paul Cercueil** (pcercuei) - Testing, feedback, bug fixes for PS2
 * **Ruslan Rostovtsev** (DC-SWAT) - W5500 driver
 * **Extrems**, **emukidid** - Swiss
 * **fail0verflow** - Homebrew Channel
 * **fjtrujy** - PS2Link
+* **Cypress** — Testing, feedback, bug fixes for Xbox
 
 See the legacy [dcload-serial](https://github.com/KallistiOS/dcload-serial) and [dcload-ip](https://github.com/KallistiOS/dcload-ip) repositories for the full history of contributors.
 
