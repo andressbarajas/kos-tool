@@ -18,7 +18,8 @@ typedef enum {
     CONSOLE_DC,
     CONSOLE_GC,
     CONSOLE_PS2,
-    CONSOLE_WII
+    CONSOLE_WII,
+    CONSOLE_XBOX
 } console_type_t;
 
 console_type_t detect_console(const char *name);
@@ -124,6 +125,7 @@ typedef struct kostool_context {
     char sh4_addr2line[512];        /* Full path to SH4 addr2line  (DC) */
     char ppc_addr2line[512];        /* Full path to PPC addr2line  (GC/Wii) */
     char mips_addr2line[512];       /* Full path to MIPS addr2line (PS2) */
+    char xbox_addr2line[512];       /* Full path to i386 addr2line (Xbox) */
 
     /* Target profiles (configured via kos-tool.cfg) */
     char config_path[512];
@@ -133,6 +135,7 @@ typedef struct kostool_context {
     char gc_ip[64];
     char ps2_ip[64];
     char wii_ip[64];
+    char xbox_ip[64];
     uint32_t serial_baud;
 
     /* Remote loader info (populated during transport init/handshake) */

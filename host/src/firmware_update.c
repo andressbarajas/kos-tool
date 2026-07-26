@@ -7,15 +7,16 @@
  * older (or a different loader, e.g. dcload → dc-load), uploads
  * a trampoline + new firmware binary and reconnects.
  *
- * Supports multiple consoles: DC (SH4), GC (PPC), PS2 (R5900).
+ * Supports multiple consoles: DC (SH4), GC/Wii (PPC), PS2 (R5900),
+ * and Xbox (i386).
  * Firmware is embedded per-console per-transport:
  *   firmware_dc_serial, firmware_dc_ip, firmware_gc_serial, firmware_gc_ip,
- *   firmware_ps2_ip
+ *   firmware_ps2_ip, firmware_wii_ip, firmware_xbox_ip
  *
  * The SH4 trampoline copies the firmware to 0x8c004000 (DC loader
  * base), the PPC trampoline copies to 0x817EC000 (GC loader base,
  * top of MEM1). The R5900 trampoline copies to 0x80000280 (PS2 loader
- * base).
+ * base), and the i386 trampoline copies to 0x00011000 (Xbox runtime base).
  */
 
 #include <stdio.h>
@@ -65,6 +66,11 @@ const uint8_t firmware_wii_ip_data[] = {0};
 const uint32_t firmware_wii_ip_size = 0;
 #endif
 
+#ifndef HAS_FIRMWARE_XBOX_IP
+const uint8_t firmware_xbox_ip_data[] = {0};
+const uint32_t firmware_xbox_ip_size = 0;
+#endif
+
 /* ===== Console detection (console_type_t declared in kostool/context.h) ===== */
 
 console_type_t detect_console(const char *name) {
@@ -76,6 +82,8 @@ console_type_t detect_console(const char *name) {
         return CONSOLE_PS2;
     if(strncmp(name, "wii-load-", 9) == 0)
         return CONSOLE_WII;
+    if(strncmp(name, "xbox-load-", 10) == 0)
+        return CONSOLE_XBOX;
 
     return CONSOLE_UNKNOWN;
 }
@@ -574,6 +582,55 @@ static const arch_update_params_t mips_r5900_params = {
     .big_endian = 0,
 };
 
+/* ===== i386 Trampoline (Xbox) ===== */
+
+/*
+ * Position-independent i386 trampoline, padded to 256 bytes.
+ *
+ * The Xbox flat binary starts at XBOX_KOSLOAD_BASE (0x00011000), after
+ * the XBE's reserved header page.  The trampoline runs from the guest upload
+ * arena, moves its stack clear of both source and destination, copies the new
+ * image over the old loader, flushes caches, and enters _start at +0x20.
+ *
+ * Memory layout when uploaded to XBOX_DEFAULT_LOAD_ADDR:
+ *   [0x000-0x0FF]  Trampoline code (256 bytes)
+ *   [0x100-...]    Firmware .bin data
+ */
+#define LE32_BYTES(value)                         \
+    (uint8_t)(((uint32_t)(value)) & 0xff),        \
+    (uint8_t)(((uint32_t)(value) >> 8) & 0xff),   \
+    (uint8_t)(((uint32_t)(value) >> 16) & 0xff),  \
+    (uint8_t)(((uint32_t)(value) >> 24) & 0xff)
+
+static const uint8_t i386_xbox_trampoline[256] = {
+    0xfa,                               /* cli */
+    0xfc,                               /* cld */
+    0x0f, 0x20, 0xc0,                   /* mov eax, cr0 */
+    0x89, 0xc3,                         /* mov ebx, eax (save CR0) */
+    0x25, 0xff, 0xff, 0xfe, 0xff,       /* and eax, ~CR0.WP */
+    0x0f, 0x22, 0xc0,                   /* mov cr0, eax */
+    0xbc, LE32_BYTES(XBOX_DEFAULT_LOAD_ADDR + 0x02000000), /* mov esp, guest arena top */
+    0xbe, LE32_BYTES(XBOX_DEFAULT_LOAD_ADDR + 0x100),      /* mov esi, firmware source */
+    0xbf, LE32_BYTES(XBOX_KOSLOAD_BASE),            /* mov edi, loader base */
+    0xb9, 0x00, 0x00, 0x00, 0x00,       /* mov ecx, SIZE (patched) */
+    0xf3, 0xa4,                         /* rep movsb */
+    0x0f, 0x09,                         /* wbinvd */
+    0x0f, 0x22, 0xc3,                   /* mov cr0, ebx (restore WP) */
+    0xb8, LE32_BYTES(XBOX_KOSLOAD_BASE + 0x20),     /* mov eax, loader entry */
+    0xff, 0xe0,                         /* jmp eax */
+};
+
+#undef LE32_BYTES
+
+static const arch_update_params_t i386_xbox_params = {
+    .trampoline = i386_xbox_trampoline,
+    .trampoline_size = 256,
+    .size_patch_offset = 31,
+    .load_addr = XBOX_DEFAULT_LOAD_ADDR,
+    .loader_base = XBOX_KOSLOAD_BASE,
+    .big_endian = 0,
+};
+
 /* ===== Version parsing ===== */
 
 /* Parse "name X.Y.Z" or "name X.Y" from a version string.
@@ -828,6 +885,8 @@ int auto_update_firmware(kostool_context_t *ctx) {
         arch = &ppc_wii_params;
     else if(console == CONSOLE_PS2)
         arch = &mips_r5900_params;
+    else if(console == CONSOLE_XBOX)
+        arch = &i386_xbox_params;
     else
         arch = &sh4_params; /* DC or unknown (unknown won't reach
                                perform_update) */
@@ -853,10 +912,11 @@ int auto_update_firmware(kostool_context_t *ctx) {
         return 0;
     }
 
-    const char *prefix = (console == CONSOLE_DC)    ? "dc"
-                         : (console == CONSOLE_GC)  ? "gc"
-                         : (console == CONSOLE_WII) ? "wii"
-                                                    : "ps2";
+    const char *prefix = (console == CONSOLE_DC)     ? "dc"
+                         : (console == CONSOLE_GC)   ? "gc"
+                         : (console == CONSOLE_WII)  ? "wii"
+                         : (console == CONSOLE_XBOX) ? "xbox"
+                                                     : "ps2";
 
     /* Select embedded firmware based on console + transport */
     if(console == CONSOLE_DC) {
@@ -879,6 +939,10 @@ int auto_update_firmware(kostool_context_t *ctx) {
         /* Wii: network only (IOS socket shim, no serial transport). */
         fw_data = firmware_wii_ip_data;
         fw_size = firmware_wii_ip_size;
+    } else if(console == CONSOLE_XBOX) {
+        /* Xbox: network only (onboard NVnet). */
+        fw_data = firmware_xbox_ip_data;
+        fw_size = firmware_xbox_ip_size;
     } else {
         /* PS2: network only, no serial transport */
         fw_data = firmware_ps2_ip_data;

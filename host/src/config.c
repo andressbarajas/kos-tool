@@ -61,6 +61,14 @@
 #define MIPS_TOOL_PREFIX "mips64r5900el-ps2-elf-"
 #endif
 
+#ifndef XBOX_TOOL_PREFIX
+#define XBOX_TOOL_PREFIX "i686-pc-xbox-"
+#endif
+
+#ifndef DEFAULT_XBOX_ADDR2LINE
+#define DEFAULT_XBOX_ADDR2LINE "/opt/toolchains/xbox/i686-pc-xbox/bin/i686-pc-xbox-addr2line"
+#endif
+
 #ifndef DEFAULT_MIPS_ADDR2LINE
 #define DEFAULT_MIPS_ADDR2LINE "/opt/toolchains/ps2/mips-elf/bin/mips64r5900el-ps2-elf-addr2line"
 #endif
@@ -78,6 +86,7 @@ static const char default_config[] =
     "# gc_ip = dhcp\n"
     "# ps2_ip = dhcp\n"
     "# wii_ip = dhcp\n"
+    "# xbox_ip = dhcp\n"
     "# serial_baud = 1562500\n";
 
 /* Get the directory containing the kos-tool binary. */
@@ -166,6 +175,8 @@ static void apply_config_value(struct kostool_context *ctx, const char *key, con
         compat_str_copy(ctx->ps2_ip, sizeof(ctx->ps2_ip), value);
     } else if(strcmp(key, "wii_ip") == 0) {
         compat_str_copy(ctx->wii_ip, sizeof(ctx->wii_ip), value);
+    } else if(strcmp(key, "xbox_ip") == 0) {
+        compat_str_copy(ctx->xbox_ip, sizeof(ctx->xbox_ip), value);
     } else if(strcmp(key, "serial_baud") == 0) {
         uint32_t baud = (uint32_t)strtoul(value, NULL, 0);
         if(baud)
@@ -198,6 +209,8 @@ void config_load(struct kostool_context *ctx) {
                      DEFAULT_PPC_ADDR2LINE);
     derive_addr2line(ctx->mips_addr2line, sizeof(ctx->mips_addr2line), "PS2_EE_TOOLCHAIN", MIPS_TOOL_PREFIX,
                      DEFAULT_MIPS_ADDR2LINE);
+    derive_addr2line(ctx->xbox_addr2line, sizeof(ctx->xbox_addr2line), "XBOX_TOOLCHAIN", XBOX_TOOL_PREFIX,
+                     DEFAULT_XBOX_ADDR2LINE);
 
     FILE *fp = NULL;
 

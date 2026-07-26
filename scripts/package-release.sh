@@ -140,7 +140,8 @@ package_firmware() {
     local name="kosload-$VERSION-firmware"
     local stage="$OUTDIR/.stage-fw/$name"
     rm -rf "$OUTDIR/.stage-fw"
-    mkdir -p "$stage/dreamcast" "$stage/gamecube" "$stage/wii" "$stage/playstation2"
+    mkdir -p "$stage/dreamcast" "$stage/gamecube" "$stage/wii" \
+             "$stage/playstation2" "$stage/xbox"
 
     # Bootable deliverables + raw loader binaries per console (each skipped if
     # absent).  Dreamcast ships the .cdi boot image plus the raw .elf/.bin
@@ -150,10 +151,14 @@ package_firmware() {
     copy_versioned "$stage/gamecube"       "$BUILDDIR"/gc-load-*.dol "$BUILDDIR"/gc-load-*.iso
     copy_versioned "$stage/wii"            "$BUILDDIR"/wii-load-*.dol "$BUILDDIR"/wii-load-*.wad
     copy_versioned "$stage/playstation2"   "$BUILDDIR"/ps2-load-ip*.iso "$BUILDDIR"/ps2-load-ip.elf
+    copy_into "$stage/xbox"                "$BUILDDIR"/default.xbe
+    copy_versioned "$stage/xbox"           "$BUILDDIR"/xbox-load-ip.xiso \
+                                           "$BUILDDIR"/xbox-load-ip.exe \
+                                           "$BUILDDIR"/xbox-load-ip.bin
 
     # Drop any console dir that ended up empty (toolchain wasn't installed).
     local d
-    for d in dreamcast gamecube wii playstation2; do
+    for d in dreamcast gamecube wii playstation2 xbox; do
         rmdir "$stage/$d" 2>/dev/null || true
     done
 

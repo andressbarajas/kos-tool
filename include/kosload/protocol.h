@@ -241,6 +241,7 @@ typedef struct {
 #define ADAPTER_GC_W5500        0x5501 /* GameCube W5500 (EXI-SPI) */
 #define ADAPTER_PS2_BBA         0x0500 /* PlayStation 2 Broadband Adapter */
 #define ADAPTER_WII_LAN_WIFI    0x0E58 /* Wii IOS net — USB LAN Adapter (RVL-015) or internal Wi-Fi */
+#define ADAPTER_XBOX_NFORCE     0x01C3 /* Xbox onboard nForce Ethernet MAC (NVnet) */
 
 /* ===== Serial Constants ===== */
 
@@ -252,6 +253,7 @@ typedef struct {
 #define GC_DEFAULT_LOAD_ADDR    0x80003100
 #define WII_DEFAULT_LOAD_ADDR   0x80004000
 #define PS2_DEFAULT_LOAD_ADDR   0x00100000
+#define XBOX_DEFAULT_LOAD_ADDR  0x0003C000
 
 /* Memory layout constants.  Wii MEM1/MEM2 ceilings deliberately omitted:
  * the build system passes the channel-safe loader ceiling via -DWII_MEM1_TOP
@@ -276,6 +278,12 @@ typedef struct {
 #endif
 #ifndef PS2_LOADER_BASE
 #define PS2_LOADER_BASE        0x80000280
+#endif
+#ifndef XBOX_LOADER_BASE
+#define XBOX_LOADER_BASE       0x00010000 /* XBE image base; see mk/memory.mk */
+#endif
+#ifndef XBOX_KOSLOAD_BASE
+#define XBOX_KOSLOAD_BASE      0x00011000 /* first loaded section/runtime base */
 #endif
 
 #define LZO_WRKMEM_SIZE    0x10000 /* 64 KB — LZO1X_1_MEM_COMPRESS */

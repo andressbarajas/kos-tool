@@ -27,6 +27,23 @@ int download(kostool_context_t *ctx, const char *filename, uint32_t address, uin
 int execute_command(kostool_context_t *ctx, uint32_t address);
 int do_console(kostool_context_t *ctx);
 
+static uint32_t default_load_address(console_type_t console) {
+    switch(console) {
+    case CONSOLE_GC:
+        return GC_DEFAULT_LOAD_ADDR;
+    case CONSOLE_PS2:
+        return PS2_DEFAULT_LOAD_ADDR;
+    case CONSOLE_WII:
+        return WII_DEFAULT_LOAD_ADDR;
+    case CONSOLE_XBOX:
+        return XBOX_DEFAULT_LOAD_ADDR;
+    case CONSOLE_DC:
+    case CONSOLE_UNKNOWN:
+    default:
+        return DC_DEFAULT_LOAD_ADDR;
+    }
+}
+
 static double diag_ms(uint64_t usec) {
     return (double)usec / 1000.0;
 }
@@ -138,10 +155,12 @@ static int apply_target_profile(kostool_context_t *ctx, const char *profile) {
         target = ctx->ps2_ip;
     } else if(strcmp(profile, "wii_ip") == 0) {
         target = ctx->wii_ip;
+    } else if(strcmp(profile, "xbox_ip") == 0) {
+        target = ctx->xbox_ip;
     } else {
         fprintf(stderr, "Unknown target profile: %s\n", profile);
         fprintf(stderr, "Valid profiles: dc_serial, gc_serial, dc_ip, gc_ip, "
-                        "ps2_ip, wii_ip\n");
+                        "ps2_ip, wii_ip, xbox_ip\n");
         return -1;
     }
 
@@ -199,10 +218,10 @@ static void usage(void) {
     printf("  -d <file>    Download to <file>\n");
     printf("  -r           Reset console\n\n");
     printf("Options:\n");
-    printf("  -a <addr>    Set address (default: 0x8c010000)\n");
+    printf("  -a <addr>    Set address (target default if omitted)\n");
     printf("  -s <size>    Set size for download\n");
     printf("  -t <device>  Serial device, IP address, or 'dhcp'\n");
-    printf("  -T <profile> Use configured target profile (dc_serial, gc_serial, dc_ip, gc_ip, ps2_ip, wii_ip)\n");
+    printf("  -T <profile> Use configured target profile (dc_serial, gc_serial, dc_ip, gc_ip, ps2_ip, wii_ip, xbox_ip)\n");
     printf("  -b <baud>    Serial baud rate (default: %d)\n", SERIAL_DEFAULT_SPEED);
     printf("  -n           Disable console/fileserver\n");
     printf("  -p           Dumb terminal mode\n");
@@ -253,6 +272,7 @@ int main(int argc, char *argv[]) {
     const char *target_profile = NULL;
     int explicit_target = 0;
     int explicit_baud = 0;
+    int explicit_address = 0;
 
     if(argc < 2) {
         usage();
@@ -294,8 +314,10 @@ int main(int argc, char *argv[]) {
             command = 'r';
             break;
         case 'a':
-            if(++i < argc)
+            if(++i < argc) {
                 ctx.load_address = strtoul(argv[i], NULL, 0);
+                explicit_address = 1;
+            }
             break;
         case 's':
             if(++i < argc)
@@ -488,6 +510,12 @@ int main(int argc, char *argv[]) {
     /* Console identity drives arch-specific tooling (e.g. which addr2line). */
     ctx.console_type = detect_console(ctx.remote_version_string);
 
+    /* ELF/S-record formats carry their own addresses, but raw binaries use
+     * ctx.load_address.  Select the detected console's default after the
+     * handshake unless the user explicitly supplied -a. */
+    if(!explicit_address)
+        ctx.load_address = default_load_address(ctx.console_type);
+
     /* Firmware update if requested */
     if(!ctx.skip_update || ctx.firmware_path) {
         phase_start = ctx.time_ops->time_usec();
@@ -523,6 +551,8 @@ int main(int argc, char *argv[]) {
      *     UTC seconds and converts to JST internally (mechacon stores a
      *     JST calendar; the PS2 BIOS handles per-region display).  Send
      *     the raw host UTC timestamp.
+     *   - Xbox CMOS RTC: stores the local calendar directly, so use the
+     *     same local-wall-clock representation as DC/GC.
      */
     if(ctx.rtc_sync && transport_can_set_rtc(ctx.transport)) {
         time_t now = time(NULL);
@@ -596,7 +626,9 @@ int main(int argc, char *argv[]) {
             ret = ctx.transport->reset(&ctx);
         break;
     default:
-        if(!ctx.rtc_sync) {
+        /* -w and -F/-U work standalone: the sync/update already ran above,
+         * so a missing command isn't an error. */
+        if(!ctx.rtc_sync && ctx.skip_update && !ctx.firmware_path) {
             usage();
             ret = 1;
         }
