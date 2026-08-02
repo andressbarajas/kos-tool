@@ -25,10 +25,12 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  # KallistiOS kos-chain source that provides the cross-toolchain build (the
-  # ps2_toolchain branch adds the PS2 EE + IOP profiles alongside DC/GC).
+  # KallistiOS kos-chain source and platform branches. Keep the Xbox toolchain
+  # independent from the PS2 EE + IOP toolchains. NOTE: the toolchains matrix
+  # `ref:` values must match these (strategy.matrix can't read the env context).
   KOSCHAIN_REPO: https://github.com/andressbarajas/KallistiOS.git
-  KOSCHAIN_REF: ps2_toolchain
+  KOSCHAIN_PS2_REF: ps2_toolchain
+  KOSCHAIN_XBOX_REF: xbox_toolchain
   TOOLCHAIN_PROFILE: stable
 
 jobs:
@@ -47,22 +49,35 @@ jobs:
       matrix:
         include:
           - name: dreamcast
+            ref: ps2_toolchain
             artifact_path: /opt/toolchains/dc/sh-elf
             builds: |
               dreamcast /opt/toolchains/dc/sh-elf
           - name: gamecube
+            ref: ps2_toolchain
             artifact_path: /opt/toolchains/gc/powerpc-eabi
             builds: |
               gamecube /opt/toolchains/gc/powerpc-eabi
           - name: ps2
+            ref: ps2_toolchain
             artifact_path: /opt/toolchains/ps2
             builds: |
               playstation2 /opt/toolchains/ps2/mips-elf
               iop /opt/toolchains/ps2/mipsel-elf
+          - name: xbox
+            ref: xbox_toolchain
+            artifact_path: /opt/toolchains/xbox/i686-pc-xbox
+            builds: |
+              xbox /opt/toolchains/xbox/i686-pc-xbox
     steps:
       - name: Resolve kos-chain commit
         id: rev
-        run: echo "sha=$(git ls-remote "$KOSCHAIN_REPO" "refs/heads/$KOSCHAIN_REF" | cut -f1)" >> "$GITHUB_OUTPUT"
+        env:
+          KOSCHAIN_MATRIX_REF: ${{ matrix.ref }}
+        run: |
+          sha=$(git ls-remote "$KOSCHAIN_REPO" "refs/heads/$KOSCHAIN_MATRIX_REF" | cut -f1)
+          [ -n "$sha" ] || { echo "::error::branch $KOSCHAIN_MATRIX_REF not found in $KOSCHAIN_REPO"; exit 1; }
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
       - name: Cache toolchain
         id: cache
@@ -84,8 +99,9 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
         env:
           BUILDS: ${{ matrix.builds }}
+          KOSCHAIN_MATRIX_REF: ${{ matrix.ref }}
         run: |
-          git clone --depth 1 --branch "$KOSCHAIN_REF" "$KOSCHAIN_REPO" koschain
+          git clone --depth 1 --branch "$KOSCHAIN_MATRIX_REF" "$KOSCHAIN_REPO" koschain
           sudo mkdir -p /opt/toolchains
           sudo chown -R "$(id -u):$(id -g)" /opt/toolchains
           cd koschain/utils/kos-chain
@@ -123,9 +139,15 @@ jobs:
       # Restore the cross-toolchains from the cache the `toolchains` job
       # populated (same keys), rather than downloading them as artifacts. The
       # `needs: toolchains` dependency guarantees the cache is written first.
-      - name: Resolve kos-chain commit
+      - name: Resolve kos-chain commits
         id: rev
-        run: echo "sha=$(git ls-remote "$KOSCHAIN_REPO" "refs/heads/$KOSCHAIN_REF" | cut -f1)" >> "$GITHUB_OUTPUT"
+        run: |
+          for pair in "ps2:$KOSCHAIN_PS2_REF" "xbox:$KOSCHAIN_XBOX_REF"; do
+            name=${pair%%:*}; ref=${pair#*:}
+            sha=$(git ls-remote "$KOSCHAIN_REPO" "refs/heads/$ref" | cut -f1)
+            [ -n "$sha" ] || { echo "::error::branch $ref not found in $KOSCHAIN_REPO"; exit 1; }
+            echo "$name=$sha" >> "$GITHUB_OUTPUT"
+          done
 
       - name: Prepare /opt/toolchains
         run: sudo mkdir -p /opt/toolchains && sudo chown -R "$(id -u):$(id -g)" /opt/toolchains
@@ -134,21 +156,28 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: /opt/toolchains/dc/sh-elf
-          key: kos-chain-dreamcast-${{ env.TOOLCHAIN_PROFILE }}-${{ steps.rev.outputs.sha }}
+          key: kos-chain-dreamcast-${{ env.TOOLCHAIN_PROFILE }}-${{ steps.rev.outputs.ps2 }}
           fail-on-cache-miss: true
 
       - name: Restore GameCube toolchain (cache)
         uses: actions/cache/restore@v4
         with:
           path: /opt/toolchains/gc/powerpc-eabi
-          key: kos-chain-gamecube-${{ env.TOOLCHAIN_PROFILE }}-${{ steps.rev.outputs.sha }}
+          key: kos-chain-gamecube-${{ env.TOOLCHAIN_PROFILE }}-${{ steps.rev.outputs.ps2 }}
           fail-on-cache-miss: true
 
       - name: Restore PS2 toolchain (cache)
         uses: actions/cache/restore@v4
         with:
           path: /opt/toolchains/ps2
-          key: kos-chain-ps2-${{ env.TOOLCHAIN_PROFILE }}-${{ steps.rev.outputs.sha }}
+          key: kos-chain-ps2-${{ env.TOOLCHAIN_PROFILE }}-${{ steps.rev.outputs.ps2 }}
+          fail-on-cache-miss: true
+
+      - name: Restore Xbox toolchain (cache)
+        uses: actions/cache/restore@v4
+        with:
+          path: /opt/toolchains/xbox/i686-pc-xbox
+          key: kos-chain-xbox-${{ env.TOOLCHAIN_PROFILE }}-${{ steps.rev.outputs.xbox }}
           fail-on-cache-miss: true
 
       - name: Write Wii common key (if provided)
@@ -165,12 +194,18 @@ jobs:
 
       - name: Build disc images
         run: |
-          make dist-dc dist-gc dist-ps2 -j"$(nproc)"
+          make dist-dc dist-gc dist-ps2 dist-xbox -j"$(nproc)"
           if [ -f make-dist/tools/mkwad/common-key.bin ]; then
             make dist-wii
           else
             echo "Skipping Wii WAD (no common key)"
           fi
+
+      - name: Verify Xbox outputs
+        run: |
+          test -s client/xbox/build/ip/xbox-load-ip.bin
+          test -s client/xbox/build/ip/default.xbe
+          test -s build/xbox-load-ip.xiso
 
       - name: Package release archives (Linux host + firmware bundle)
         run: scripts/package-release.sh --all
@@ -183,7 +218,8 @@ jobs:
             client/gamecube/build/serial/gc-load-ser.bin \
             client/gamecube/build/ip/gc-load-ip.bin \
             client/playstation2/build/ip/ps2-load-ip-image.bin \
-            client/wii/build/ip/wii-load-ip.bin
+            client/wii/build/ip/wii-load-ip.bin \
+            client/xbox/build/ip/xbox-load-ip.bin
 
       - name: Upload firmware bundle
         uses: actions/upload-artifact@v4
