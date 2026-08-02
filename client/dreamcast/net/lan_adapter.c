@@ -183,6 +183,8 @@ int la_bb_detect(void) {
     DEBUG("bb_detect entered\r\n");
 
     if(bb_started > 0) {
+        global_bg_color = LAN_BG_COLOR;
+        installed_adapter = LAN_MODEL;
         DEBUG("bb_detect exited, already started\r\n");
         return 0;
     }
