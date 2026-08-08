@@ -36,9 +36,9 @@
 #define W5500_RX_FIFO_DELAY_COUNT     3    /* packets per burst */
 #define W5500_BULK_RX_FIFO_DELAY_TIME 9000 /* microseconds */
 #define W5500_UPLOAD_WINDOW_SIZE      (32 * 1024)
-#define PS2_BBA_RX_FIFO_DELAY_TIME    1800 /* microseconds */
-#define PS2_BBA_RX_FIFO_DELAY_COUNT   10   /* packets per burst */
-#define XBOX_NVNET_RX_DELAY_TIME      1000 /* microseconds*/
+#define PS2_BBA_RX_FIFO_DELAY_TIME    1200 /* microseconds */
+#define PS2_BBA_RX_FIFO_DELAY_COUNT   1    /* packets per burst */
+#define XBOX_NVNET_RX_DELAY_TIME      1000 /* microseconds */
 #define XBOX_NVNET_RX_DELAY_COUNT     1    /* packets per burst */
 
 #define DEFAULT_RX_FIFO_DELAY   (NET_PACKET_TIMEOUT_USEC / 51)
@@ -442,7 +442,7 @@ got_version:
     /* Accept legacy octal IDs and modern ADAPTER_* IDs.
      * Old loaders sometimes report octal 0400/0300 as decimal 256/192. */
     int is_bba = (ctx->installed_adapter == LEGACY_BBA_MODEL || ctx->installed_adapter == ADAPTER_DC_BBA ||
-                  ctx->installed_adapter == ADAPTER_GC_BBA || ctx->installed_adapter == ADAPTER_PS2_BBA);
+                  ctx->installed_adapter == ADAPTER_GC_BBA);
     int is_lan = (ctx->installed_adapter == LEGACY_LAN_MODEL || ctx->installed_adapter == ADAPTER_DC_LAN);
     int is_w5500 = adapter_is_w5500(ctx->installed_adapter);
     int is_spi = adapter_is_spi(ctx->installed_adapter);
@@ -491,6 +491,9 @@ got_version:
     } else if(is_xbox_loader(ctx)) {
         ctx->rx_fifo_delay = XBOX_NVNET_RX_DELAY_TIME;
         ctx->rx_fifo_delay_count = XBOX_NVNET_RX_DELAY_COUNT;
+    } else if(ctx->installed_adapter == ADAPTER_PS2_BBA) {
+        ctx->rx_fifo_delay = PS2_BBA_RX_FIFO_DELAY_TIME;
+        ctx->rx_fifo_delay_count = PS2_BBA_RX_FIFO_DELAY_COUNT;
     } else {
         ctx->installed_adapter = ADAPTER_DC_BBA;
         ctx->legacy_mode = 1;
@@ -674,8 +677,11 @@ static int network_send_data_once(kostool_context_t *ctx, const uint8_t *data, u
      * These fit in the adapter's RX FIFO/ring without loss, so pacing is
      * pure waste.  The Wii has no such FIFO (synchronous IOS IPC
      * per datagram), so even a few-chunk burst can overrun it — never
-     * auto_fast that path. */
+     * auto_fast that path.  The PS2 SMAP has no usable RX headroom either:
+     * measured on HW, an unpaced 49-chunk burst shed 45% and took 4x longer
+     * in recovery than the same transfer paced. */
     int auto_fast = (!adapter_is_spi(ctx->installed_adapter) && !is_wii_loader(ctx) &&
+                     ctx->installed_adapter != ADAPTER_PS2_BBA &&
                      num_chunks <= AUTO_FAST_CHUNK_THRESHOLD);
     if(auto_fast)
         current_fifo_delay = 0;
