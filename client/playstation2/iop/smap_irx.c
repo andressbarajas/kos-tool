@@ -391,6 +391,13 @@ static volatile unsigned int g_tx_seq[PS2_SMAP_TX_SLOTS];
  * length; the frame pump consumes it on the next iteration. */
 static volatile unsigned int g_tx_slot_len[PS2_SMAP_TX_SLOTS];
 
+/* Consecutive pump iterations where a slot wanted to send and nothing went
+ * out.  At the limit the pump drops the frame so an unsendable one can't pin
+ * a slot forever.  64 iters is ~13ms at 200us polling: longer than any real 
+ * FIFO-full stall, shorter than DHCP's ~1s retry. */
+static unsigned int g_tx_stall_iters;
+#define SMAP_TX_STALL_LIMIT 64
+
 /* Last validation reject snapshot (filled when RPC handler rejects
  * a request — surfaced via GET_DIAG cold path). */
 static volatile unsigned int g_last_validation_op;
@@ -1732,9 +1739,15 @@ static void smap_pump_thread(void *arg) {
         smap_iop_tx_intr(smap);
 
         /* TX submit: scan slots looking for BUSY transitions queued by
-         * the RPC handler.  smap_iop_send may fail; either way drop the
-         * BUSY state back to FREE so the EE can retry. */
+         * the RPC handler.  smap_iop_send fails transiently while the
+         * 4KB TX FIFO is full; keep the slot BUSY and retry on a later
+         * iteration, once smap_iop_tx_intr() (above) has reclaimed FIFO
+         * space.  Dropping those failures silently truncated large
+         * SENDBIN downloads once the EE outran the FIFO. */
         if(g_hot_diag != 0 && g_tx_data != 0) {
+            int tx_progress = 0;
+            int tx_waiting = 0;
+
             for(slot = 0; slot < PS2_SMAP_TX_SLOTS; slot++) {
                 if(g_hot_diag->tx_slot_state[slot] == PS2_SMAP_TX_BUSY) {
                     unsigned int len = g_tx_slot_len[slot];
@@ -1742,15 +1755,41 @@ static void smap_pump_thread(void *arg) {
                     if(len >= (unsigned int)SMAP_RXMINSIZE && len <= (unsigned int)SMAP_TXMAXSIZE) {
                         tx_rc = smap_iop_send(
                             smap, (const unsigned char *)(g_tx_data + slot * g_tx_slot_size), len);
+                        if(tx_rc != 0) {
+                            tx_waiting = 1;
+                            continue;
+                        }
+                        tx_progress = 1;
                     }
-                    if(tx_rc != 0)
+                    else {
+                        /* Bad length — permanent, drop it. */
                         g_hot_diag->tx_underruns = g_hot_diag->tx_underruns + 1;
+                    }
                     /* Slot returns to FREE — EE polls tx_slot_state
                      * before reusing.  Sequence already bumped on
                      * SUBMIT. */
                     g_hot_diag->tx_slot_state[slot] = PS2_SMAP_TX_FREE;
                     dirty = 1;
                 }
+            }
+
+            /* Bound whole-ring no-progress, not per-slot attempts: slots
+             * legitimately wait their turn. */
+            if(tx_progress || !tx_waiting) {
+                g_tx_stall_iters = 0;
+            }
+            else if(++g_tx_stall_iters >= SMAP_TX_STALL_LIMIT) {
+                /* Nothing has gone out for the whole window (link is
+                 * down or the MAC is wedged).  Release every waiting slot
+                 * so the stack can retry from a clean ring. */
+                for(slot = 0; slot < PS2_SMAP_TX_SLOTS; slot++) {
+                    if(g_hot_diag->tx_slot_state[slot] == PS2_SMAP_TX_BUSY) {
+                        g_hot_diag->tx_underruns = g_hot_diag->tx_underruns + 1;
+                        g_hot_diag->tx_slot_state[slot] = PS2_SMAP_TX_FREE;
+                    }
+                }
+                g_tx_stall_iters = 0;
+                dirty = 1;
             }
         }
 

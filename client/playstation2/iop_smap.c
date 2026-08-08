@@ -20,6 +20,7 @@
 #include <stdint.h>
 
 #include "ee_sif.h"
+#include "ee_cop0.h"
 #include "iop_smap.h"
 #include "iop/smap_protocol.h"
 #include "ps2_memory_map.h"
@@ -66,6 +67,10 @@ static struct {
     uint32_t seq;
 } g_pending_releases[PS2_SMAP_RELEASE_BATCH_MAX];
 static uint32_t g_pending_release_count;
+
+/* Flush staged releases once this many are queued, instead of waiting for
+ * a full PS2_SMAP_RELEASE_BATCH_MAX batch. */
+#define PS2_SMAP_RELEASE_FLUSH_WATERMARK 4
 
 /* TX frames are submitted in batches too.  ps2_smap_send() copies packet
  * bytes into a free TX slot, then records {slot, len, seq} here.  The slot
@@ -370,9 +375,33 @@ static int ps2_smap_flush_tx(void) {
     return rc_fallback;
 }
 
+/* Round-robin scan for a FREE, unclaimed TX slot.  A claimed slot is
+ * staged locally but not yet handed to the IOP, so it is FREE in the
+ * IOP's view yet reserved by us.  Returns the slot index, or
+ * g_tx_slot_count when every slot is busy or claimed. */
+static uint32_t tx_scan_free_slot(void) {
+    uint32_t slot = g_tx_next_slot;
+    uint32_t scanned;
+
+    for(scanned = 0; scanned < g_tx_slot_count; scanned++) {
+        int claimed = (g_tx_claimed_mask & (1 << slot)) != 0;
+        if(!claimed && g_tx_state_view[slot] == PS2_SMAP_TX_FREE)
+            return slot;
+
+        slot++;
+        if(slot >= g_tx_slot_count)
+            slot = 0;
+    }
+
+    return g_tx_slot_count;
+}
+
+/* Bounded wait for the IOP TX pump to drain an in-flight frame back to
+ * FREE, expressed in EE COP0 Count ticks (294.912 MHz; ~50 ms). */
+#define PS2_SMAP_TX_DRAIN_TICKS  14745600
+
 int ps2_smap_send(const void *frame, uint32_t len) {
     uint32_t slot;
-    uint32_t scanned;
     uint32_t tx_data_iop;
     uint32_t expected_seq;
 
@@ -393,20 +422,25 @@ int ps2_smap_send(const void *frame, uint32_t len) {
         }
     }
 
-    /* Round-robin scan for a FREE slot.  Skip slots already claimed
-     * (staged but not yet submitted) — those are FREE in the IOP's
-     * view but reserved by us. */
-    slot = g_tx_next_slot;
-    for(scanned = 0; scanned < g_tx_slot_count; scanned++) {
-        int claimed = (g_tx_claimed_mask & (1u << slot)) != 0;
-        if(!claimed && g_tx_state_view[slot] == PS2_SMAP_TX_FREE)
-            break;
-        slot++;
+    /* Acquire a FREE slot.  If the ring is momentarily full, do NOT drop
+     * the frame, instead hand off any staged frames so their slots can
+     * progress, then busy-wait (bounded) for the IOP pump to drain one
+     * back to FREE. */
+    slot = tx_scan_free_slot();
+    if(slot >= g_tx_slot_count) {
+        uint32_t start_ct = ee_cop0_read_count();
+
+        if(g_pending_submit_count > 0)
+            (void)ps2_smap_flush_tx();
+
+        do {
+            slot = tx_scan_free_slot();
+        } while(slot >= g_tx_slot_count &&
+                (uint32_t)(ee_cop0_read_count() - start_ct) < PS2_SMAP_TX_DRAIN_TICKS);
+
         if(slot >= g_tx_slot_count)
-            slot = 0;
+            return -3; /* IOP genuinely stuck — fail cleanly */
     }
-    if(scanned >= g_tx_slot_count)
-        return -3;
     g_tx_next_slot = slot + 1;
     if(g_tx_next_slot >= g_tx_slot_count)
         g_tx_next_slot = 0;
@@ -458,6 +492,14 @@ static int ps2_smap_stage_release(uint32_t slot, uint32_t seq) {
     g_pending_releases[g_pending_release_count].slot = slot;
     g_pending_releases[g_pending_release_count].seq = seq;
     g_pending_release_count++;
+
+    /* Hand slots back to the IOP part-way through a drain rather than
+     * only when the batch is full. Flushing at the watermark keeps the 
+     * back half of the ring available while the front half is still 
+     * being processed. */
+    if(g_pending_release_count >= PS2_SMAP_RELEASE_FLUSH_WATERMARK)
+        (void)ps2_smap_release_pending();
+
     return 0;
 }
 
