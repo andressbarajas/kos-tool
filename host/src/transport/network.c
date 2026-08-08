@@ -28,18 +28,21 @@
 
 /* Host-side pacing.  Some adapters drop packets if the host sends a long
  * burst with no pause.  After N packets, sleep for the matching delay. */
-#define BBA_RX_FIFO_DELAY_TIME        1800 /* microseconds */
-#define BBA_RX_FIFO_DELAY_COUNT       10   /* packets per burst */
-#define LAN_RX_FIFO_DELAY_TIME        1250 /* microseconds */
-#define LAN_RX_FIFO_DELAY_COUNT       1    /* packets per burst */
+#define DC_BBA_RX_FIFO_DELAY_TIME     1800 /* microseconds */
+#define DC_BBA_RX_FIFO_DELAY_COUNT    10   /* packets per burst */
+#define DC_LAN_RX_FIFO_DELAY_TIME     1250 /* microseconds */
+#define DC_LAN_RX_FIFO_DELAY_COUNT    1    /* packets per burst */
 #define W5500_RX_FIFO_DELAY_TIME      7000 /* microseconds */
 #define W5500_RX_FIFO_DELAY_COUNT     3    /* packets per burst */
 #define W5500_BULK_RX_FIFO_DELAY_TIME 9000 /* microseconds */
 #define W5500_UPLOAD_WINDOW_SIZE      (32 * 1024)
+#define WII_IPC_RX_DELAY_TIME         4000 /* microseconds */
+#define WII_IPC_RX_DELAY_COUNT        1    /* packets per burst */
 #define PS2_BBA_RX_FIFO_DELAY_TIME    1200 /* microseconds */
 #define PS2_BBA_RX_FIFO_DELAY_COUNT   1    /* packets per burst */
 #define XBOX_NVNET_RX_DELAY_TIME      1000 /* microseconds */
 #define XBOX_NVNET_RX_DELAY_COUNT     1    /* packets per burst */
+
 
 #define DEFAULT_RX_FIFO_DELAY   (NET_PACKET_TIMEOUT_USEC / 51)
 #define DEFAULT_RX_FIFO_COUNT   15
@@ -101,14 +104,36 @@ static int adapter_is_spi(uint32_t adapter) {
     return adapter_is_w5500(adapter) || adapter == ADAPTER_GC_ENC;
 }
 
+static int adapter_is_dc_bba(uint32_t adapter) {
+    return adapter == LEGACY_BBA_MODEL || adapter == ADAPTER_DC_BBA;
+}
+
+static int adapter_is_dc_lan(uint32_t adapter) {
+    return adapter == LEGACY_LAN_MODEL || adapter == ADAPTER_DC_LAN;
+}
+
+static int adapter_is_gc_bba(uint32_t adapter) {
+    return adapter == ADAPTER_GC_BBA;
+}
+
 /* The Wii has no NIC FIFO — every incoming UDP datagram is drained by a
  * synchronous IOS IPC recvfrom — and IOS-side handling is fussier about
  * non-4-byte-aligned UDP payloads after the first round of traffic.  These
  * call sites pad outbound commands and disable host-side auto_fast.  Keyed
- * on the VERS name rather than installed_adapter so it works even when the
+ * on the VERS name as well as installed_adapter so it still works when the
  * post-VERS adapter-ID fallback hasn't recognised ADAPTER_WII_LAN_WIFI. */
 static int is_wii_loader(const kostool_context_t *ctx) {
-    return ctx && strncmp(ctx->remote_version_string, "wii-load-ip ", 12) == 0;
+    return ctx && (ctx->installed_adapter == ADAPTER_WII_LAN_WIFI ||
+                   strncmp(ctx->remote_version_string, "wii-load-ip ", 12) == 0);
+}
+
+/* The SMAP has no usable RX headroom, so the PS2 must never take the
+ * unpaced auto_fast path.  Version-aware for the same reason as the Wii:
+ * an unrecognised adapter ID would otherwise fall through to the generic
+ * profile and re-enable auto_fast. */
+static int is_ps2_loader(const kostool_context_t *ctx) {
+    return ctx && (ctx->installed_adapter == ADAPTER_PS2_BBA ||
+                   strncmp(ctx->remote_version_string, "ps2-load-ip ", 12) == 0);
 }
 
 /* NVnet's polling RX path has only a 16-entry descriptor ring.  Keep this
@@ -439,14 +464,6 @@ got_version:
     if(network_remote_supports_capabilities(ctx))
         query_capabilities(ctx, &ctx->remote_capabilities);
 
-    /* Accept legacy octal IDs and modern ADAPTER_* IDs.
-     * Old loaders sometimes report octal 0400/0300 as decimal 256/192. */
-    int is_bba = (ctx->installed_adapter == LEGACY_BBA_MODEL || ctx->installed_adapter == ADAPTER_DC_BBA ||
-                  ctx->installed_adapter == ADAPTER_GC_BBA);
-    int is_lan = (ctx->installed_adapter == LEGACY_LAN_MODEL || ctx->installed_adapter == ADAPTER_DC_LAN);
-    int is_w5500 = adapter_is_w5500(ctx->installed_adapter);
-    int is_spi = adapter_is_spi(ctx->installed_adapter);
-
     printf("%s\n", ctx->remote_version_string);
 
     if(ctx->force_legacy) {
@@ -454,44 +471,41 @@ got_version:
         ctx->legacy_mode = 1;
     }
 
-    if(is_bba) {
-        if(!ctx->fast_mode) {
-            ctx->rx_fifo_delay = BBA_RX_FIFO_DELAY_TIME;
-            ctx->rx_fifo_delay_count = BBA_RX_FIFO_DELAY_COUNT;
-        } else {
-            ctx->rx_fifo_delay = 0;
-        }
-    } else if(is_lan) {
-        if(!ctx->fast_mode) {
-            ctx->rx_fifo_delay = LAN_RX_FIFO_DELAY_TIME;
-            ctx->rx_fifo_delay_count = LAN_RX_FIFO_DELAY_COUNT;
-        } else {
-            ctx->rx_fifo_delay = 0;
-        }
-    } else if(is_w5500) {
+    if(adapter_is_w5500(ctx->installed_adapter)) {
         ctx->rx_fifo_delay = W5500_RX_FIFO_DELAY_TIME;
         ctx->rx_fifo_delay_count = W5500_RX_FIFO_DELAY_COUNT;
-    } else if(is_spi) {
-        // if (!ctx->fast_mode) {
+    } else if(adapter_is_spi(ctx->installed_adapter)) {
         ctx->rx_fifo_delay = DEFAULT_RX_FIFO_DELAY;
         ctx->rx_fifo_delay_count = DEFAULT_RX_FIFO_COUNT;
-        // } else {
-        //     ctx->rx_fifo_delay = 0;
-        // }
+    } else if(adapter_is_dc_bba(ctx->installed_adapter)) {
+        if(!ctx->fast_mode) {
+            ctx->rx_fifo_delay = DC_BBA_RX_FIFO_DELAY_TIME;
+            ctx->rx_fifo_delay_count = DC_BBA_RX_FIFO_DELAY_COUNT;
+        } else {
+            ctx->rx_fifo_delay = 0;
+        }
+    } else if(adapter_is_dc_lan(ctx->installed_adapter)) {
+        if(!ctx->fast_mode) {
+            ctx->rx_fifo_delay = DC_LAN_RX_FIFO_DELAY_TIME;
+            ctx->rx_fifo_delay_count = DC_LAN_RX_FIFO_DELAY_COUNT;
+        } else {
+            ctx->rx_fifo_delay = 0;
+        }
+    } else if(adapter_is_gc_bba(ctx->installed_adapter)) {
+        if(!ctx->fast_mode) {
+            ctx->rx_fifo_delay = DC_BBA_RX_FIFO_DELAY_TIME;
+            ctx->rx_fifo_delay_count = DC_BBA_RX_FIFO_DELAY_COUNT;
+        } else {
+            ctx->rx_fifo_delay = 0;
+        }
     } else if(is_wii_loader(ctx)) {
-        /* Wii reports ADAPTER_WII_LAN_WIFI (0x0E58); none of the DC/GC/PS2
-         * is_bba/is_lan/is_spi predicates match, so without this branch
-         * we'd fall through and clobber the adapter ID to ADAPTER_DC_BBA.
-         * Keep the reported ID and apply Wii's structural IOS-IPC pacing:
-         * 4000us after every chunk, not relaxed by -F/fast_mode (legacy
-         * 1024-byte payloads). */
         ctx->legacy_mode = 1;
-        ctx->rx_fifo_delay = 4000;
-        ctx->rx_fifo_delay_count = 1;
+        ctx->rx_fifo_delay = WII_IPC_RX_DELAY_TIME;
+        ctx->rx_fifo_delay_count = WII_IPC_RX_DELAY_COUNT;
     } else if(is_xbox_loader(ctx)) {
         ctx->rx_fifo_delay = XBOX_NVNET_RX_DELAY_TIME;
         ctx->rx_fifo_delay_count = XBOX_NVNET_RX_DELAY_COUNT;
-    } else if(ctx->installed_adapter == ADAPTER_PS2_BBA) {
+    } else if(is_ps2_loader(ctx)) {
         ctx->rx_fifo_delay = PS2_BBA_RX_FIFO_DELAY_TIME;
         ctx->rx_fifo_delay_count = PS2_BBA_RX_FIFO_DELAY_COUNT;
     } else {
@@ -681,8 +695,7 @@ static int network_send_data_once(kostool_context_t *ctx, const uint8_t *data, u
      * measured on HW, an unpaced 49-chunk burst shed 45% and took 4x longer
      * in recovery than the same transfer paced. */
     int auto_fast = (!adapter_is_spi(ctx->installed_adapter) && !is_wii_loader(ctx) &&
-                     ctx->installed_adapter != ADAPTER_PS2_BBA &&
-                     num_chunks <= AUTO_FAST_CHUNK_THRESHOLD);
+                     !is_ps2_loader(ctx) && num_chunks <= AUTO_FAST_CHUNK_THRESHOLD);
     if(auto_fast)
         current_fifo_delay = 0;
 
