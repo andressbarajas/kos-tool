@@ -1011,8 +1011,13 @@ static int network_recv_data(kostool_context_t *ctx, uint8_t *data, uint32_t src
     if(ctx->diagnostics_enabled)
         diag_stream_end = ctx->time_ops->time_usec();
 
-    /* Re-request any missing chunks with retry limit */
+    /* Re-request missing chunks.  Spending the budget on `stalled`
+     * (consecutive no-progress passes) keeps big transfers from starving;
+     * `max_passes` still bounds an intermittent link. */
     int passes = 0;
+    int stalled = 0;
+    int incomplete = 0;
+    int max_passes = (int)num_chunks + max_rerequests;
     for(uint32_t c = 0; c < num_chunks; c++) {
         if(map[c])
             continue;
@@ -1058,13 +1063,19 @@ static int network_recv_data(kostool_context_t *ctx, uint8_t *data, uint32_t src
                 break;
         }
 
-        /* Restart check from beginning, but limit total passes */
+        /* Restart check from beginning, but limit unproductive passes */
         passes++;
-        if(passes >= max_rerequests) {
+        if(map[c])
+            stalled = 0;
+        else
+            stalled++;
+
+        if(stalled >= max_rerequests || passes >= max_passes) {
             fprintf(stderr,
-                    "recv_data: exceeded %d re-request passes, transfer may be "
-                    "incomplete\n",
-                    max_rerequests);
+                    "recv_data: gave up after %d re-request passes (%d "
+                    "consecutive with no reply), transfer is incomplete\n",
+                    passes, stalled);
+            incomplete = 1;
             break;
         }
         c = (uint32_t)-1;
@@ -1090,7 +1101,9 @@ static int network_recv_data(kostool_context_t *ctx, uint8_t *data, uint32_t src
                diag_mib_per_sec(size, diag_total_usec), diag_rerequests);
     }
 
-    return 0;
+    /* Chunks are still missing — `data` holds a partially-filled buffer.
+     * Report failure so the caller doesn't write it out as a good file. */
+    return incomplete ? -1 : 0;
 }
 
 static int network_send_command(kostool_context_t *ctx, const char cmd[4], uint32_t addr, uint32_t size,
