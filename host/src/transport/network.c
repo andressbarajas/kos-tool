@@ -499,7 +499,6 @@ got_version:
             ctx->rx_fifo_delay = 0;
         }
     } else if(is_wii_loader(ctx)) {
-        ctx->legacy_mode = 1;
         ctx->rx_fifo_delay = WII_IPC_RX_DELAY_TIME;
         ctx->rx_fifo_delay_count = WII_IPC_RX_DELAY_COUNT;
     } else if(is_xbox_loader(ctx)) {
