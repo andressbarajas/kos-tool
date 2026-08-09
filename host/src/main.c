@@ -604,7 +604,8 @@ int main(int argc, char *argv[]) {
             ret = 1;
             break;
         }
-        upload(&ctx, filename, ctx.load_address);
+        if(upload(&ctx, filename, ctx.load_address) == 0)
+            ret = 1;
         break;
     case 'd':
         if(!filename) {
