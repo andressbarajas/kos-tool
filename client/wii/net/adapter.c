@@ -123,7 +123,8 @@ static int wii_adapter_init(void) {
      * its "not yet initialized" sentinel — defeating the one-shot VERS
      * handshake cache, so it re-handshakes (and reprints the version
      * banner) on every round-trip. */
-    installed_adapter = ADAPTER_WII_LAN_WIFI;
+    installed_adapter = (config.interface_type == WII_NET_INTERFACE_WIRED) ? ADAPTER_WII_LAN
+                                                                          : ADAPTER_WII_WIFI;
     if(config.ip_source_dhcp)
         kosload_info.capabilities |= KOSLOAD_CAP_DHCP;
     escape_loop = 0;

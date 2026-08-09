@@ -240,7 +240,8 @@ typedef struct {
 #define ADAPTER_GC_ENC          0x2860 /* GameCube ENC28J60 (EXI-SPI) */
 #define ADAPTER_GC_W5500        0x5501 /* GameCube W5500 (EXI-SPI) */
 #define ADAPTER_PS2_BBA         0x0500 /* PlayStation 2 Broadband Adapter */
-#define ADAPTER_WII_LAN_WIFI    0x0E58 /* Wii IOS net — USB LAN Adapter (RVL-015) or internal Wi-Fi */
+#define ADAPTER_WII_LAN         0x0E58 /* Wii USB LAN Adapter (RVL-015) */
+#define ADAPTER_WII_WIFI        0x0E59 /* Wii Internal Wi-Fi */
 #define ADAPTER_XBOX_NFORCE     0x01C3 /* Xbox onboard nForce Ethernet MAC (NVnet) */
 
 /* ===== Serial Constants ===== */

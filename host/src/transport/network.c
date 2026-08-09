@@ -36,7 +36,8 @@
 #define W5500_RX_FIFO_DELAY_COUNT     3    /* packets per burst */
 #define W5500_BULK_RX_FIFO_DELAY_TIME 9000 /* microseconds */
 #define W5500_UPLOAD_WINDOW_SIZE      (32 * 1024)
-#define WII_IPC_RX_DELAY_TIME         4000 /* microseconds */
+#define WII_LAN_RX_DELAY_TIME         2000 /* microseconds */
+#define WII_WIFI_RX_DELAY_TIME        8000 /* microseconds */
 #define WII_IPC_RX_DELAY_COUNT        1    /* packets per burst */
 #define PS2_BBA_RX_FIFO_DELAY_TIME    1200 /* microseconds */
 #define PS2_BBA_RX_FIFO_DELAY_COUNT   1    /* packets per burst */
@@ -121,10 +122,23 @@ static int adapter_is_gc_bba(uint32_t adapter) {
  * non-4-byte-aligned UDP payloads after the first round of traffic.  These
  * call sites pad outbound commands and disable host-side auto_fast.  Keyed
  * on the VERS name as well as installed_adapter so it still works when the
- * post-VERS adapter-ID fallback hasn't recognised ADAPTER_WII_LAN_WIFI. */
+ * post-VERS adapter-ID fallback hasn't recognised either Wii adapter ID. */
 static int is_wii_loader(const kostool_context_t *ctx) {
-    return ctx && (ctx->installed_adapter == ADAPTER_WII_LAN_WIFI ||
+    return ctx && (ctx->installed_adapter == ADAPTER_WII_LAN ||
+                   ctx->installed_adapter == ADAPTER_WII_WIFI ||
                    strncmp(ctx->remote_version_string, "wii-load-ip ", 12) == 0);
+}
+
+/* Pre-split loaders report the wired ID for both interfaces, so fall back to
+ * the VERS adapter name.  Unknown means Wi-Fi — under-pacing it fails uploads. */
+static int is_wii_wifi(const kostool_context_t *ctx) {
+    if(!is_wii_loader(ctx))
+        return 0;
+
+    if(ctx->installed_adapter == ADAPTER_WII_WIFI)
+        return 1;
+
+    return strstr(ctx->remote_version_string, "LAN Adapter") == NULL;
 }
 
 /* The SMAP has no usable RX headroom, so the PS2 must never take the
@@ -149,8 +163,7 @@ static int is_xbox_loader(const kostool_context_t *ctx) {
  * "give up streaming and start re-requesting".  Other consoles keep the
  * legacy 250 ms. */
 static uint32_t recv_data_timeout_usec(const kostool_context_t *ctx) {
-    return ctx->installed_adapter == ADAPTER_WII_LAN_WIFI ? WII_RECV_REREQUEST_TIMEOUT_USEC
-                                                          : NET_PACKET_TIMEOUT_USEC;
+    return is_wii_loader(ctx) ? WII_RECV_REREQUEST_TIMEOUT_USEC : NET_PACKET_TIMEOUT_USEC;
 }
 
 /* Per-pass timeout for the re-request loop.  Wii uses fast 50 ms passes
@@ -158,7 +171,7 @@ static uint32_t recv_data_timeout_usec(const kostool_context_t *ctx) {
  * the conservative 250 ms for the last WII_RECV_SLOW_REREQUESTS.  All
  * other consoles stay on the unchanged 250 ms for every pass. */
 static uint32_t recv_data_rerequest_timeout_usec(const kostool_context_t *ctx, int pass) {
-    if(ctx->installed_adapter == ADAPTER_WII_LAN_WIFI && pass < WII_RECV_FAST_REREQUESTS)
+    if(is_wii_loader(ctx) && pass < WII_RECV_FAST_REREQUESTS)
         return WII_RECV_REREQUEST_TIMEOUT_USEC;
     return NET_PACKET_TIMEOUT_USEC;
 }
@@ -166,7 +179,7 @@ static uint32_t recv_data_rerequest_timeout_usec(const kostool_context_t *ctx, i
 /* Total rerequest-pass budget.  Wii gets the extra slow pass on top of
  * the fast batch; everyone else stays at MAX_RECV_REREQUESTS = 10. */
 static int recv_data_max_rerequests(const kostool_context_t *ctx) {
-    if(ctx->installed_adapter == ADAPTER_WII_LAN_WIFI)
+    if(is_wii_loader(ctx))
         return WII_RECV_FAST_REREQUESTS + WII_RECV_SLOW_REREQUESTS;
     return MAX_RECV_REREQUESTS;
 }
@@ -499,7 +512,8 @@ got_version:
             ctx->rx_fifo_delay = 0;
         }
     } else if(is_wii_loader(ctx)) {
-        ctx->rx_fifo_delay = WII_IPC_RX_DELAY_TIME;
+        ctx->rx_fifo_delay =
+            is_wii_wifi(ctx) ? WII_WIFI_RX_DELAY_TIME : WII_LAN_RX_DELAY_TIME;
         ctx->rx_fifo_delay_count = WII_IPC_RX_DELAY_COUNT;
     } else if(is_xbox_loader(ctx)) {
         ctx->rx_fifo_delay = XBOX_NVNET_RX_DELAY_TIME;
