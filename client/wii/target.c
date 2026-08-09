@@ -289,7 +289,9 @@ static uint64_t wii_get_ticks(void) {
 static void wii_restart_timer(void) {
 }
 
+#ifndef XFB_ADDR
 #define XFB_ADDR 0xC0050000
+#endif
 
 static void wii_fill_rect(int x, int y, int w, int h, uint32_t color) {
     uint32_t fill = gc_color_to_yuy2(color);

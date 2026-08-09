@@ -45,7 +45,11 @@
 /* ===== Framebuffer ===== */
 
 /* XFB in MEM1: 640*480*2 = 614400 bytes. Placed at a fixed high address. */
+/* Overridable per platform (the Wii moves it out of the payload area;
+ * see WII_XFB_BASE in mk/memory.mk). */
+#ifndef XFB_ADDR
 #define XFB_ADDR    0xC0050000
+#endif
 static uint8_t *xfb = (uint8_t *)XFB_ADDR;
 
 /* ===== Embedded 12x24 font ===== */

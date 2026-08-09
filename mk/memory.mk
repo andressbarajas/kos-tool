@@ -40,6 +40,16 @@ WII_LOADER_BASE  := 0x81330000  # = WII_MEM1_TOP - WII_LOADER_SIZE
 WII_BOOTSTRAP_BASE := 0x80003400  # fixed ES_LaunchTitle/HBC channel DOL entry (.stub)
 WII_HBC_BASE       := 0x80004000  # canonical devkitPPC/HBC homebrew base (.blob)
 
+# The XFB must not sit in the area an uploaded payload occupies.  GameCube is
+# safe with the default 0xC0050000 because its payloads load at 0x80100000,
+# above the framebuffer.  The Wii loads at WII_HBC_BASE (0x80004000), which is
+# BELOW it, so the default XFB is only ~311 KB clear of the load address and any
+# larger upload is silently overwritten by the loader's own status drawing.
+# Move it high instead, but keep the physical address under 16 MB so VI_TFBL can
+# stay on the POFF=0 (raw physical) encoding — see gc_video_init().
+# 0xC0F60000 = phys 0x00F60000, + 640*480*2 (0x96000) ends at 0x00FF6000.
+WII_XFB_BASE       := 0xC0F60000  # phys 0x00F60000, must stay < 16 MB
+
 # PS2 EE memory layout.  If you change these values, keep the matching
 # constants in include/kosload/protocol.h and the PS2 linker templates in sync.
 #
