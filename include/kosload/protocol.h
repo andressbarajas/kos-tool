@@ -233,9 +233,11 @@ typedef struct {
 /* ===== Adapter Type Constants ===== */
 
 #define ADAPTER_NONE            0x0000
-#define ADAPTER_DC_BBA          0x0400 /* Dreamcast Broadband Adapter (RTL8139C) */
-#define ADAPTER_DC_LAN          0x0300 /* Dreamcast LAN Adapter */
+#define ADAPTER_DC_SERIAL       0x0001 /* Dreamcast SCIF serial */
+#define ADAPTER_DC_BBA          0x0100 /* Dreamcast Broadband Adapter (RTL8139C), dcload 0400 */
+#define ADAPTER_DC_LAN          0x00C0 /* Dreamcast LAN Adapter, dcload 0300 */
 #define ADAPTER_DC_W5500        0x5500 /* Dreamcast W5500 (SCIF-SPI) */
+#define ADAPTER_GC_SERIAL       0x0002 /* GameCube USBGecko */
 #define ADAPTER_GC_BBA          0x0015 /* GameCube Broadband Adapter */
 #define ADAPTER_GC_ENC          0x2860 /* GameCube ENC28J60 (EXI-SPI) */
 #define ADAPTER_GC_W5500        0x5501 /* GameCube W5500 (EXI-SPI) */

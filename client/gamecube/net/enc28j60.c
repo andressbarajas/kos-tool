@@ -569,7 +569,7 @@ int enc28j60_detect(void) {
      */
     if(enc_probe(0, 0) || enc_probe(1, 0) || enc_probe(0, 2) || enc_probe(2, 0)) {
         global_bg_color = ENC_BG_COLOR;
-        installed_adapter = ENC_MODEL;
+        installed_adapter = ADAPTER_GC_ENC;
         return 0;
     }
 

@@ -20,4 +20,7 @@ void load_data_block_general(unsigned char *addr, unsigned int total, unsigned i
 /* LZO work memory — set by host 'F'/'G' commands or by assign_wrkmem syscall */
 extern unsigned char *wrkmem;
 
+/* Set by the platform's serial_io_init() to its ADAPTER_*_SERIAL pseudo-ID */
+extern volatile unsigned int installed_adapter;
+
 #endif /* SERIAL_INTERNAL_H */

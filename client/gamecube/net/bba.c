@@ -233,7 +233,7 @@ int bba_detect(void) {
 
     if(id == GCBBA_EXI_ID) {
         global_bg_color = BBA_BG_COLOR;
-        installed_adapter = BBA_MODEL;
+        installed_adapter = ADAPTER_GC_BBA;
         return 0;
     }
 

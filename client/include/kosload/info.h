@@ -6,8 +6,9 @@
  * programs can read version, capabilities, and network config without
  * making a syscall.
  *
- * The entry point header at entry+0x20 contains a pointer to the
+ * The entry point header at entry+0x0C contains a pointer to the
  * kosload_info_t struct.  Programs dereference it to access the data.
+ * (entry+0x20 is draw_string in the exception-handler block — see crt0.S.)
  * The 'size' field allows forward compatibility — if the struct grows
  * in a future version, programs can check size before accessing new fields.
  */
@@ -21,17 +22,13 @@
 #define KOSLOAD_INFO_MAGIC      0x4b4f5349  /* "KOSI" */
 #define KOSLOAD_MAX_ARGV_DATA   256
 
-/* Transport types */
-#define KOSLOAD_TRANSPORT_SERIAL   0
-#define KOSLOAD_TRANSPORT_NETWORK  1
-
 typedef struct {
     uint32_t magic;              /* KOSLOAD_INFO_MAGIC — validates pointer */
     uint32_t size;               /* sizeof(kosload_info_t) — forward compat */
     uint32_t version;            /* (major << 16) | (minor << 8) | patch */
     uint32_t capabilities;       /* Loader capabilities (KOSLOAD_CAP_*) bitmask */
     uint32_t host_capabilities;  /* Host capabilities (KOSTOOL_CAP_*) bitmask */
-    uint32_t transport;          /* KOSLOAD_TRANSPORT_SERIAL or _NETWORK */
+    uint32_t adapter;            /* ADAPTER_* of the link kosload is using */
 
     /* Network fields (zero for serial builds) */
     uint32_t console_ip;         /* Console IP address (network byte order) */

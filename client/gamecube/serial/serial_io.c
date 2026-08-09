@@ -7,11 +7,15 @@
  * since it operates at a fixed USB transfer rate.
  */
 
+#include <kosload/protocol.h>
 #include <kosload/serial_io.h>
 #include "usbgecko.h"
 
+extern volatile unsigned int installed_adapter;
+
 int serial_io_init(unsigned int speed) {
     (void)speed; /* USBGecko has fixed transfer rate */
+    installed_adapter = ADAPTER_GC_SERIAL;
     return usbgecko_init();
 }
 

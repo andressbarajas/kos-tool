@@ -112,8 +112,8 @@ typedef struct {
 
 /* ===== Display constants =====
  *
- * W5500_BG_COLOR and W5500_MODEL are defined per-platform in dcload.h.
- * The w5500.c driver uses them via dcload.h includes.
+ * W5500_BG_COLOR and W5500_MODEL are defined per-platform in each console's
+ * net/kosload.h; the shared w5500.c driver picks them up from there.
  */
 
 /* ===== Adapter driver functions ===== */

@@ -246,7 +246,7 @@ static int serial_transport_init(void)
     kosload_info.capabilities = KOSLOAD_CAP_SERIAL | KOSLOAD_CAP_ARGV;
     if (target_get_ops()->cdfs_redir_enable)
         kosload_info.capabilities |= KOSLOAD_CAP_CDFS_REDIR;
-    kosload_info.transport = KOSLOAD_TRANSPORT_SERIAL;
+    kosload_info.adapter = installed_adapter;
     kosload_info.baud_rate = SERIAL_DEFAULT_SPEED;
     screensaver_init(serial_restore_screen, WHITE);
     return 0;

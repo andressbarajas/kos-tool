@@ -8,6 +8,7 @@
 #define __KOSLOAD_H__
 
 #include <stdbool.h>
+#include <kosload/protocol.h>
 
 /* Performance counter configuration (maps to TBR on GC, used by adapter timeout loops) */
 #define KOSLOAD_PMCR 1
@@ -22,10 +23,7 @@
  * TBR runs at bus_clock/4 = 162MHz/4 = 40.5MHz. */
 #define PERFCOUNTER_SCALE GC_TBR_FREQUENCY
 
-/* Adapter model IDs */
-#define BBA_MODEL   0x0015
-#define ENC_MODEL   0x2860
-#define W5500_MODEL 0x5501
+#define W5500_MODEL ADAPTER_GC_W5500
 
 /* Global state (defined in entry.c) */
 extern volatile bool booted;

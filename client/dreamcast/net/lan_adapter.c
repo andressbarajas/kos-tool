@@ -184,7 +184,7 @@ int la_bb_detect(void) {
 
     if(bb_started > 0) {
         global_bg_color = LAN_BG_COLOR;
-        installed_adapter = LAN_MODEL;
+        installed_adapter = ADAPTER_DC_LAN;
         DEBUG("bb_detect exited, already started\r\n");
         return 0;
     }
@@ -215,7 +215,7 @@ int la_bb_detect(void) {
     DEBUG("bb_detect exited, success\r\n");
     bb_started = 1;
     global_bg_color = LAN_BG_COLOR;
-    installed_adapter = LAN_MODEL;
+    installed_adapter = ADAPTER_DC_LAN;
     return 0;
 }
 

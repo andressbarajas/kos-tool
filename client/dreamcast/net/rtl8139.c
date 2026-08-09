@@ -89,7 +89,7 @@ int rtl_bb_detect(void) {
     const char *str = (char *)REGC(0xa1001400);
     if(!memcmp_32bit_eq(str, GAPSPCI_ID, 16 / 4)) {
         global_bg_color = BBA_BG_COLOR;
-        installed_adapter = BBA_MODEL;
+        installed_adapter = ADAPTER_DC_BBA;
 
         g232[0x1414 / 4] = 0x00000000;  // Set this to 0 first thing
         g232[0x1418 / 4] = 0x5a14a500;  // Ensure GAPS is off

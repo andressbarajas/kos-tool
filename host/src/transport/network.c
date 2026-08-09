@@ -48,11 +48,6 @@
 #define DEFAULT_RX_FIFO_DELAY   (NET_PACKET_TIMEOUT_USEC / 51)
 #define DEFAULT_RX_FIFO_COUNT   15
 
-/* Legacy dcload adapter model IDs (octal).
- * Modern kosload uses ADAPTER_* constants from protocol.h. */
-#define LEGACY_BBA_MODEL   0400
-#define LEGACY_LAN_MODEL   0300
-
 /* Retry limits to prevent infinite loops on persistent failures */
 #define MAX_CMD_RETRIES            20       /* max retries for command ack (LOADBIN, DONEBIN, etc.) */
 #define MAX_RECV_REREQUESTS        10       /* max full passes over recv bitmap */
@@ -106,11 +101,11 @@ static int adapter_is_spi(uint32_t adapter) {
 }
 
 static int adapter_is_dc_bba(uint32_t adapter) {
-    return adapter == LEGACY_BBA_MODEL || adapter == ADAPTER_DC_BBA;
+    return adapter == ADAPTER_DC_BBA;
 }
 
 static int adapter_is_dc_lan(uint32_t adapter) {
-    return adapter == LEGACY_LAN_MODEL || adapter == ADAPTER_DC_LAN;
+    return adapter == ADAPTER_DC_LAN;
 }
 
 static int adapter_is_gc_bba(uint32_t adapter) {

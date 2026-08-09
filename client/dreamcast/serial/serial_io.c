@@ -4,11 +4,15 @@
  * Wraps the SH4 SCIF driver to provide the generic serial_io interface.
  */
 
+#include <kosload/protocol.h>
 #include <kosload/serial_io.h>
 #include "scif.h"
 
+extern volatile unsigned int installed_adapter;
+
 int serial_io_init(unsigned int speed) {
     scif_init((int)speed);
+    installed_adapter = ADAPTER_DC_SERIAL;
     return 0; /* SCIF is always present on Dreamcast */
 }
 

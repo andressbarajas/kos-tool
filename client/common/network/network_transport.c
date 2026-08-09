@@ -137,8 +137,6 @@ static int network_transport_init(void) {
     kosload_info.capabilities = KOSLOAD_CAP_NETWORK | KOSLOAD_CAP_GDB | KOSLOAD_CAP_ARGV;
     if(target_get_ops()->cdfs_redir_enable)
         kosload_info.capabilities |= KOSLOAD_CAP_CDFS_REDIR;
-    kosload_info.transport = KOSLOAD_TRANSPORT_NETWORK;
-
     set_network_init_error("NO ETHERNET ADAPTER DETECTED!");
 
     if(adapter_detect() < 0) {
@@ -146,7 +144,8 @@ static int network_transport_init(void) {
         return -1;
     }
 
-    /* Populate info block with adapter MAC */
+    /* Populate info block with adapter identity. */
+    kosload_info.adapter = installed_adapter;
     memcpy(kosload_info.mac, bb->mac, 6);
 
     /* Set initial IP address from patchable config block. */

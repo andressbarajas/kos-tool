@@ -10,6 +10,7 @@
 #define __KOSLOAD_H__
 
 #include <stdbool.h>
+#include <kosload/protocol.h>
 
 /* Performance counter configuration (used by adapter timeout loops and
  * cmd_pmcr) */
@@ -25,10 +26,7 @@
 #define SH4_FREQUENCY     (199496956)
 #define PERFCOUNTER_SCALE SH4_FREQUENCY
 
-/* Adapter model IDs — legacy BBA/LAN are octal dcload-ip values. */
-#define LAN_MODEL   0300
-#define BBA_MODEL   0400
-#define W5500_MODEL 0x5500
+#define W5500_MODEL ADAPTER_DC_W5500
 
 /* Global state */
 extern volatile bool booted;

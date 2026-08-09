@@ -32,7 +32,7 @@
 #include "../bootstrap/iop_bootstrap.h"
 
 /* clear_lines lives in video.h but that header declares setup_video
- * with a uint32_t-typed prototype that conflicts with dcload.h's
+ * with a uint32_t-typed prototype that conflicts with kosload.h's
  * unsigned-int-typed one under the MIPS ABI we use here.  Forward-
  * declare the one symbol we actually need so we don't have to drag
  * the entire video.h in. */
