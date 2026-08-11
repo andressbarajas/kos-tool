@@ -20,6 +20,7 @@ extern void go(uint32_t addr);
 extern void exception_init(void);
 extern void xbox_clean_rtc_init(void);
 extern void xbox_clean_set_rtc(uint32_t unix_timestamp);
+extern int  xbox_clean_get_rtc(uint32_t *unix_timestamp);
 
 /* Xbox CPU clock (Pentium III @ 733.33 MHz) — the TSC increments at this rate.
  * Approximate; only used for coarse timeouts and the ~1 Hz status/lease
@@ -261,6 +262,16 @@ static void xbox_set_rtc(uint32_t unix_timestamp) {
 }
 
 static uint32_t xbox_get_rtc(void) {
+    uint32_t now;
+
+    /* Prefer the CMOS RTC so this is a real Unix timestamp per the
+     * target_ops contract. */
+    if(xbox_clean_get_rtc(&now) == 0)
+        return now;
+
+    /* Unreadable: fall back to seconds since loader start.  Every consumer
+     * differences get_rtc (DHCP lease expiry), so a monotonic counter still
+     * works — it just isn't wall-clock.  RDTSC runs across guest execution. */
     return (uint32_t)((read_tsc() - monotonic_epoch_ticks) / XBOX_CPU_HZ);
 }
 

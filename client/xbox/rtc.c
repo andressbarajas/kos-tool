@@ -122,6 +122,33 @@ static uint8_t encode_value(uint32_t value, bool binary) {
     return (uint8_t)(((value / 10u) << 4) | (value % 10u));
 }
 
+static uint32_t decode_value(uint8_t value, bool binary) {
+    if(binary)
+        return value;
+    return (uint32_t)((value >> 4) * 10u + (value & 0x0fu));
+}
+
+/* Inverse of convert_timestamp(): calendar fields -> seconds since 1970. */
+static uint32_t make_timestamp(const struct rtc_fields *in) {
+    static const uint8_t month_days[12] =
+        { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+    uint32_t days = 0;
+    uint32_t year;
+    uint32_t month;
+
+    for(year = 1970u; year < in->year; ++year)
+        days += leap_year(year) ? 366u : 365u;
+    for(month = 0; month + 1u < in->month && month < 12u; ++month) {
+        days += month_days[month];
+        if(month == 1u && leap_year(in->year))
+            ++days;
+    }
+    days += (uint32_t)in->day - 1u;
+
+    return days * 86400u + (uint32_t)in->hour * 3600u +
+           (uint32_t)in->minute * 60u + in->second;
+}
+
 void xbox_clean_rtc_init(void) {
     uint32_t flags = irq_save_disable();
 
@@ -204,4 +231,93 @@ out_restore_index:
 out_unlock:
     lock_release();
     irq_restore(flags);
+}
+
+/* Read the CMOS RTC back as a Unix timestamp — the counterpart to
+ * xbox_clean_set_rtc(), so get_rtc() can report wall time like the other ports
+ * rather than uptime.  Same UIP-bounded, index-shadow-preserving sequence as
+ * the write path.  Returns 0 on success, -1 if unreadable (caller falls back).
+ * Does port I/O with interrupts disabled — not for hot paths. */
+int xbox_clean_get_rtc(uint32_t *unix_timestamp) {
+    struct rtc_fields value;
+    uint32_t flags;
+    uint8_t saved_index;
+    uint8_t reg_b;
+    uint8_t raw_hour;
+    bool binary;
+    bool hour24;
+    uint64_t started;
+    uint32_t polls = 2560000u;
+    int ret = -1;
+
+    flags = irq_save_disable();
+    lock_acquire();
+
+    if(!xbox_clean_rtc_index_shadow_valid) {
+        xbox_clean_rtc_last_status = XBOX_CLEAN_RTC_NO_SHADOW;
+        goto out_unlock;
+    }
+    saved_index = xbox_clean_rtc_index_shadow;
+
+    /* Wait out an update-in-progress so the fields are self-consistent. */
+    started = rdtsc_value();
+    while((rtc_read(0x0au) & 0x80u) != 0u) {
+        if(rdtsc_value() - started >=
+               (uint64_t)UIP_LIMIT_US * TSC_PER_US ||
+           --polls == 0u) {
+            xbox_clean_rtc_last_status = XBOX_CLEAN_RTC_UIP_TIMEOUT;
+            goto out_restore_index;
+        }
+        __asm__ volatile("pause" : : : "memory");
+    }
+
+    reg_b = rtc_read(0x0bu);
+
+    /* DSE is not fatal here either — see xbox_clean_set_rtc(). */
+
+    binary = (reg_b & 0x04u) != 0u;
+    hour24 = (reg_b & 0x02u) != 0u;
+
+    value.second = (uint8_t)decode_value(rtc_read(0x00u), binary);
+    value.minute = (uint8_t)decode_value(rtc_read(0x02u), binary);
+    raw_hour     = rtc_read(0x04u);
+    value.weekday = (uint8_t)decode_value(rtc_read(0x06u), binary);
+    value.day    = (uint8_t)decode_value(rtc_read(0x07u), binary);
+    value.month  = (uint8_t)decode_value(rtc_read(0x08u), binary);
+    value.year   = (uint16_t)(decode_value(rtc_read(0x7fu), binary) * 100u +
+                              decode_value(rtc_read(0x09u), binary));
+
+    if(hour24) {
+        value.hour = (uint8_t)decode_value(raw_hour, binary);
+    }
+    else {
+        /* 12-hour mode keeps PM in bit 7 of the encoded byte; strip before
+         * decoding, then fold 12 AM/PM onto 0/12. */
+        bool pm = (raw_hour & 0x80u) != 0u;
+        uint32_t hour12 = decode_value((uint8_t)(raw_hour & 0x7fu), binary);
+        if(hour12 == 12u)
+            hour12 = 0u;
+        value.hour = (uint8_t)(pm ? hour12 + 12u : hour12);
+    }
+
+    /* Reject implausible fields rather than converting them to a bogus
+     * timestamp (pre-1970 is unrepresentable; the rest catch bad BCD). */
+    if(value.year < 1970u || value.month < 1u || value.month > 12u ||
+       value.day < 1u || value.day > 31u || value.hour > 23u ||
+       value.minute > 59u || value.second > 59u) {
+        xbox_clean_rtc_last_status = XBOX_CLEAN_RTC_NO_SHADOW;
+        goto out_restore_index;
+    }
+
+    *unix_timestamp = make_timestamp(&value);
+    xbox_clean_rtc_last_status = XBOX_CLEAN_RTC_OK;
+    ret = 0;
+
+out_restore_index:
+    xbox_clean_rtc_index_shadow = saved_index;
+    out8(RTC_INDEX_PORT, saved_index);
+out_unlock:
+    lock_release();
+    irq_restore(flags);
+    return ret;
 }
