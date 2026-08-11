@@ -198,6 +198,10 @@ static time_t host_local_rtc_time(time_t now) {
         return now;
     gm_tm = *tm_ptr;
 
+    /* gmtime() leaves tm_isdst = 0; unmatched, mktime() uses the standard
+     * offset and clocks run an hour behind during DST. */
+    gm_tm.tm_isdst = local_tm.tm_isdst;
+
     local_secs = mktime(&local_tm);
     gm_secs = mktime(&gm_tm);
     if(local_secs == (time_t)-1 || gm_secs == (time_t)-1)
