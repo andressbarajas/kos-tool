@@ -40,9 +40,18 @@ else ifneq (,$(findstring CYGWIN,$(UNAME_S)))
   HOST_CC_DEFAULT := gcc
 endif
 
-# ---------- Output directory (same as main build) ----------
+# ---------- Output directories (per-console, same as the main build) ----------
+#
+# Disc images land in $(ROOT)/build/<console>/, beside the loader binaries the
+# top-level Makefile stages there.
 
 BUILDDIR := $(ROOT)/build
+
+DC_OUT   := $(BUILDDIR)/dc
+GC_OUT   := $(BUILDDIR)/gc
+WII_OUT  := $(BUILDDIR)/wii
+PS2_OUT  := $(BUILDDIR)/ps2
+XBOX_OUT := $(BUILDDIR)/xbox
 
 # ---------- Dreamcast toolchain ----------
 
@@ -81,12 +90,12 @@ GC_LOADER_LD   := gamecube/loader.ld
 
 # ---------- Firmware inputs (from main build) ----------
 
-DC_SER_BIN := $(BUILDDIR)/dc-load-ser.bin
-DC_IP_BIN  := $(BUILDDIR)/dc-load-ip.bin
-GC_SER_BIN := $(BUILDDIR)/gc-load-ser.bin
-GC_IP_BIN  := $(BUILDDIR)/gc-load-ip.bin
-WII_IP_DOL := $(BUILDDIR)/wii-load-ip.dol
-PS2_IP_ELF := $(BUILDDIR)/ps2-load-ip.elf
+DC_SER_BIN := $(DC_OUT)/dc-load-ser.bin
+DC_IP_BIN  := $(DC_OUT)/dc-load-ip.bin
+GC_SER_BIN := $(GC_OUT)/gc-load-ser.bin
+GC_IP_BIN  := $(GC_OUT)/gc-load-ip.bin
+WII_IP_DOL := $(WII_OUT)/wii-load-ip.dol
+PS2_IP_ELF := $(PS2_OUT)/ps2-load-ip.elf
 
 # ---------- Intermediate outputs ----------
 
@@ -109,21 +118,21 @@ GBI_HDR := tools/gbi.hdr
 
 # ---------- Final outputs ----------
 
-DC_SER_CDI := $(BUILDDIR)/dc-load-ser.cdi
-DC_IP_CDI  := $(BUILDDIR)/dc-load-ip.cdi
+DC_SER_CDI := $(DC_OUT)/dc-load-ser.cdi
+DC_IP_CDI  := $(DC_OUT)/dc-load-ip.cdi
 
-GC_SER_DOL := $(BUILDDIR)/gc-load-ser.dol
-GC_IP_DOL  := $(BUILDDIR)/gc-load-ip.dol
-GC_SER_ISO := $(BUILDDIR)/gc-load-ser.iso
-GC_IP_ISO  := $(BUILDDIR)/gc-load-ip.iso
+GC_SER_DOL := $(GC_OUT)/gc-load-ser.dol
+GC_IP_DOL  := $(GC_OUT)/gc-load-ip.dol
+GC_SER_ISO := $(GC_OUT)/gc-load-ser.iso
+GC_IP_ISO  := $(GC_OUT)/gc-load-ip.iso
 
 # Canonical (un-versioned) name like every other console deliverable; the
 # release version is stamped into the filename once, by scripts/package-release.sh.
-PS2_IP_ISO := $(BUILDDIR)/ps2-load-ip.iso
+PS2_IP_ISO := $(PS2_OUT)/ps2-load-ip.iso
 
 # Xbox XDVDFS (XISO) disc image wrapping the pe2xbe-packed default.xbe.
-XBOX_IP_XBE  := $(BUILDDIR)/default.xbe
-XBOX_IP_XISO := $(BUILDDIR)/xbox-load-ip.xiso
+XBOX_IP_XBE  := $(XBOX_OUT)/default.xbe
+XBOX_IP_XISO := $(XBOX_OUT)/xbox-load-ip.xiso
 XBOX_DISC_DIR := $(LOCALDIR)/xbox-ip-disc
 
 # PlayStation 2 SYSTEM.CNF is generated from this template with the kosload
@@ -149,7 +158,7 @@ PS2_DISC_ELF := $(PS2_DISC_DIR)/$(PS2_BOOT_NAME)
 # Wii channel WAD packed around wii-load-ip.dol.  Override on the command line:
 #   make -C make-dist wii WII_WAD_TITLE_ID=KOSL WII_WAD_IOS=58 \
 #       WII_WAD_NAME="wii-load-ip" WII_WAD_TITLE_VER=2
-WII_WAD           := $(BUILDDIR)/wii-load-ip.wad
+WII_WAD           := $(WII_OUT)/wii-load-ip.wad
 WII_WAD_TITLE_ID  ?= KOSL
 WII_WAD_IOS       ?= 58
 WII_WAD_NAME      ?= wii-load-ip
@@ -176,7 +185,7 @@ wii: $(WII_WAD)
 # Directory creation
 # ============================================================
 
-$(LOCALDIR) $(BUILDDIR):
+$(LOCALDIR) $(BUILDDIR) $(DC_OUT) $(GC_OUT) $(WII_OUT) $(PS2_OUT) $(XBOX_OUT):
 	@mkdir -p $@
 
 # ============================================================
@@ -243,12 +252,12 @@ $(DC_IP_1ST_BIN): $(DC_IP_1ST_READ) | $(LOCALDIR)
 	@echo "  OBJCOPY $@"
 	@$(DC_OBJCOPY) -O binary -j .text -j .rodata $< $@
 
-dc-serial: $(MKCDI_LITE) $(DC_SER_1ST_READ) $(DC_SER_1ST_BIN) | $(BUILDDIR)
+dc-serial: $(MKCDI_LITE) $(DC_SER_1ST_READ) $(DC_SER_1ST_BIN) | $(DC_OUT)
 	@echo "  1ST_READ $(DC_SER_1ST_READ)"
 	@echo "  CDI     $(DC_SER_CDI)"
 	@$(MKCDI_LITE) --input-bin $(DC_SER_1ST_BIN) --output $(DC_SER_CDI) --name "kosload-serial"
 
-dc-ip: $(MKCDI_LITE) $(DC_IP_1ST_READ) $(DC_IP_1ST_BIN) | $(BUILDDIR)
+dc-ip: $(MKCDI_LITE) $(DC_IP_1ST_READ) $(DC_IP_1ST_BIN) | $(DC_OUT)
 	@echo "  1ST_READ $(DC_IP_1ST_READ)"
 	@echo "  CDI     $(DC_IP_CDI)"
 	@$(MKCDI_LITE) --input-bin $(DC_IP_1ST_BIN) --output $(DC_IP_CDI) --name "kosload-ip"
@@ -287,7 +296,7 @@ $(MKWAD): tools/mkwad/wad.c tools/mkwad/banner.c tools/mkwad/banner.h tools/mkwa
 	    tools/wadcrypto/aes.c tools/wadcrypto/md5.c tools/wadcrypto/sha1.c
 
 # Wii channel WAD: pack the wii-load-ip boot DOL with mkwad.  The DOL input
-# is sourced from $(BUILDDIR)/wii-load-ip.dol, which the top-level `wii`
+# is sourced from $(WII_OUT)/wii-load-ip.dol, which the top-level `wii`
 # target stages from client/wii/build/ip/.
 #
 # mkwad reads ./common-key.bin from the cwd it was invoked in, so cd into
@@ -296,7 +305,7 @@ $(MKWAD): tools/mkwad/wad.c tools/mkwad/banner.c tools/mkwad/banner.h tools/mkwa
 # (mirroring the make-dist/tools/IP.BIN convention).  $(MKWAD), $(WII_IP_DOL),
 # and $@ are anchored at absolute paths via $(abspath ...), so the cd
 # doesn't break them.
-$(WII_WAD): $(MKWAD) $(WII_IP_DOL) | $(BUILDDIR)
+$(WII_WAD): $(MKWAD) $(WII_IP_DOL) | $(WII_OUT)
 	@echo "  WAD     $@"
 	@cd $(ROOT)/make-dist/tools/mkwad && $(abspath $(MKWAD)) --dol $(WII_IP_DOL) \
 	    --title-id $(WII_WAD_TITLE_ID) --ios $(WII_WAD_IOS) \
@@ -343,11 +352,11 @@ $(GC_IP_BOOTSTRAP): $(GC_LOADER_S) $(GC_LOADER_LD) $(LOCALDIR)/gc-ip/kosload.bin
 # GameCube: DOL conversion (from bootstrap ELF)
 # ============================================================
 
-$(GC_SER_DOL): $(ELF2DOL) $(GC_SER_BOOTSTRAP) | $(BUILDDIR)
+$(GC_SER_DOL): $(ELF2DOL) $(GC_SER_BOOTSTRAP) | $(GC_OUT)
 	@echo "  ELF2DOL $@"
 	@$(ELF2DOL) $(GC_SER_BOOTSTRAP) $@
 
-$(GC_IP_DOL): $(ELF2DOL) $(GC_IP_BOOTSTRAP) | $(BUILDDIR)
+$(GC_IP_DOL): $(ELF2DOL) $(GC_IP_BOOTSTRAP) | $(GC_OUT)
 	@echo "  ELF2DOL $@"
 	@$(ELF2DOL) $(GC_IP_BOOTSTRAP) $@
 
@@ -370,14 +379,14 @@ $(LOCALDIR)/gc-serial-disc/bootldr.dol: $(GC_SER_DOL) | $(LOCALDIR)/gc-serial-di
 $(LOCALDIR)/gc-ip-disc/bootldr.dol: $(GC_IP_DOL) | $(LOCALDIR)/gc-ip-disc
 	@cp $< $@
 
-gc-serial: $(MKISO_LITE) $(LOCALDIR)/gc-serial-disc/bootldr.dol $(GBI_HDR) | $(BUILDDIR)
+gc-serial: $(MKISO_LITE) $(LOCALDIR)/gc-serial-disc/bootldr.dol $(GBI_HDR) | $(GC_OUT)
 	@echo "  ISO     $(GC_SER_ISO)"
 	@$(MKISO_LITE) --quiet --output $(GC_SER_ISO) \
 	    --source-dir $(LOCALDIR)/gc-serial-disc \
 	    --system-area $(GBI_HDR) --eltorito-boot bootldr.dol \
 	    --volume-id KOSLOAD_SER
 
-gc-ip: $(MKISO_LITE) $(LOCALDIR)/gc-ip-disc/bootldr.dol $(GBI_HDR) | $(BUILDDIR)
+gc-ip: $(MKISO_LITE) $(LOCALDIR)/gc-ip-disc/bootldr.dol $(GBI_HDR) | $(GC_OUT)
 	@echo "  ISO     $(GC_IP_ISO)"
 	@$(MKISO_LITE) --quiet --output $(GC_IP_ISO) \
 	    --source-dir $(LOCALDIR)/gc-ip-disc \
@@ -417,7 +426,7 @@ $(PS2_DISC_CNF): $(PS2_SYSTEM_CNF_IN) $(ROOT)/mk/version.mk | $(PS2_DISC_DIR)
 $(PS2_DISC_ELF): $(PS2_IP_ELF) | $(PS2_DISC_DIR)
 	@cp $< $@
 
-ps2: $(MKISO_LITE) $(PS2_DISC_CNF) $(PS2_DISC_ELF) | $(BUILDDIR)
+ps2: $(MKISO_LITE) $(PS2_DISC_CNF) $(PS2_DISC_ELF) | $(PS2_OUT)
 	@echo "  ISO     $(PS2_IP_ISO)"
 	@$(MKISO_LITE) --quiet --output $(PS2_IP_ISO) \
 	    --source-dir $(PS2_DISC_DIR) \
@@ -430,7 +439,7 @@ ps2: $(MKISO_LITE) $(PS2_DISC_CNF) $(PS2_DISC_ELF) | $(BUILDDIR)
 # An Xbox disc is an XDVDFS image whose root holds default.xbe (produced by
 # pe2xbe in the main build).  The kernel/xemu auto-boots default.xbe from
 # the disc root.  The top-level `xbox` target stages default.xbe into
-# $(BUILDDIR); we copy it in under its boot name and pack with mkxiso-lite.
+# $(XBOX_OUT); we copy it in under its boot name and pack with mkxiso-lite.
 # ============================================================
 
 $(MKXISO_LITE): tools/mkxiso-lite.c | $(LOCALDIR)
@@ -443,7 +452,7 @@ $(XBOX_DISC_DIR):
 $(XBOX_DISC_DIR)/default.xbe: $(XBOX_IP_XBE) | $(XBOX_DISC_DIR)
 	@cp $< $@
 
-xbox: $(MKXISO_LITE) $(XBOX_DISC_DIR)/default.xbe | $(BUILDDIR)
+xbox: $(MKXISO_LITE) $(XBOX_DISC_DIR)/default.xbe | $(XBOX_OUT)
 	@echo "  XISO    $(XBOX_IP_XISO)"
 	@$(MKXISO_LITE) --quiet --source-dir $(XBOX_DISC_DIR) --output $(XBOX_IP_XISO)
 

@@ -201,11 +201,11 @@ jobs:
             echo "Skipping Wii WAD (no common key)"
           fi
 
-      - name: Verify Xbox outputs
+      - name: Verify build outputs
         run: |
-          test -s client/xbox/build/ip/xbox-load-ip.bin
-          test -s client/xbox/build/ip/default.xbe
-          test -s build/xbox-load-ip.xiso
+          # build/<console>/ per console, kos-tool at the top level.
+          test -x build/kos-tool
+          for c in dc gc wii ps2 xbox; do test -d "build/$c/examples"; done
 
       - name: Package release archives (Linux host + firmware bundle)
         run: scripts/package-release.sh --all

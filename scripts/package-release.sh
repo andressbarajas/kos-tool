@@ -11,8 +11,9 @@
 #
 #   Firmware bundle (OS-independent):
 #     kosload-<version>-firmware.zip
-#       -> per-console bootable images (CDI/ISO/DOL/WAD) and raw loader
-#          binaries (ELF/BIN/DOL), the example programs, and README + LICENSE
+#       -> one directory per console holding its bootable images
+#          (CDI/ISO/DOL/WAD/XISO), its raw loader binaries (ELF/BIN/DOL), and
+#          its examples/ programs, plus README + LICENSE at the top level
 #
 # This script only PACKAGES what is already in build/; it does not build.
 # The `make release*` targets declare the build dependencies.  CI's release
@@ -143,18 +144,29 @@ package_firmware() {
     mkdir -p "$stage/dreamcast" "$stage/gamecube" "$stage/wii" \
              "$stage/playstation2" "$stage/xbox"
 
-    # Bootable deliverables + raw loader binaries per console (each skipped if
-    # absent).  Dreamcast ships the .cdi boot image plus the raw .elf/.bin
-    # loaders (the DC analog of the GC/Wii .dol and PS2 .elf below).
-    copy_versioned "$stage/dreamcast"      "$BUILDDIR"/dc-load-*.cdi \
-                                           "$BUILDDIR"/dc-load-*.elf "$BUILDDIR"/dc-load-*.bin
-    copy_versioned "$stage/gamecube"       "$BUILDDIR"/gc-load-*.dol "$BUILDDIR"/gc-load-*.iso
-    copy_versioned "$stage/wii"            "$BUILDDIR"/wii-load-*.dol "$BUILDDIR"/wii-load-*.wad
-    copy_versioned "$stage/playstation2"   "$BUILDDIR"/ps2-load-ip*.iso "$BUILDDIR"/ps2-load-ip.elf
-    copy_into "$stage/xbox"                "$BUILDDIR"/default.xbe
-    copy_versioned "$stage/xbox"           "$BUILDDIR"/xbox-load-ip.xiso \
-                                           "$BUILDDIR"/xbox-load-ip.exe \
-                                           "$BUILDDIR"/xbox-load-ip.bin
+    # Bootable deliverables + raw loader binaries per console (skipped if
+    # absent).  Sources are build/<short>/; the bundle keeps the long console
+    # names.  Dreamcast ships .cdi plus raw .elf/.bin (its analog of the
+    # GC/Wii .dol and PS2 .elf).
+    copy_versioned "$stage/dreamcast"      "$BUILDDIR"/dc/dc-load-*.cdi \
+                                           "$BUILDDIR"/dc/dc-load-*.elf "$BUILDDIR"/dc/dc-load-*.bin
+    copy_versioned "$stage/gamecube"       "$BUILDDIR"/gc/gc-load-*.dol "$BUILDDIR"/gc/gc-load-*.iso
+    copy_versioned "$stage/wii"            "$BUILDDIR"/wii/wii-load-*.dol "$BUILDDIR"/wii/wii-load-*.wad
+    copy_versioned "$stage/playstation2"   "$BUILDDIR"/ps2/ps2-load-ip*.iso "$BUILDDIR"/ps2/ps2-load-ip.elf
+    copy_into "$stage/xbox"                "$BUILDDIR"/xbox/default.xbe
+    copy_versioned "$stage/xbox"           "$BUILDDIR"/xbox/xbox-load-ip.xiso \
+                                           "$BUILDDIR"/xbox/xbox-load-ip.exe \
+                                           "$BUILDDIR"/xbox/xbox-load-ip.bin
+
+    # build/<short>/examples/ -> <stage>/<long>/examples/
+    local pair short long
+    for pair in dc:dreamcast gc:gamecube wii:wii ps2:playstation2 xbox:xbox; do
+        short="${pair%%:*}"
+        long="${pair##*:}"
+        if [ -d "$BUILDDIR/$short/examples" ]; then
+            copy_into "$stage/$long" "$BUILDDIR/$short/examples"
+        fi
+    done
 
     # Drop any console dir that ended up empty (toolchain wasn't installed).
     local d
@@ -162,8 +174,6 @@ package_firmware() {
         rmdir "$stage/$d" 2>/dev/null || true
     done
 
-    # Example programs and top-level docs.
-    copy_into "$stage" "$BUILDDIR/examples"
     copy_into "$stage" "$ROOT/README.md" "$ROOT/LICENSE"
 
     archive_dir "$OUTDIR/.stage-fw" "$name" zip

@@ -152,26 +152,33 @@ installed under the default paths, edit that file before running `make dc`,
 make        # builds DC firmware, GC firmware, PS2 firmware, Wii firmware, Xbox firmware, host tool, and examples
 ```
 
-Output goes to `build/`:
+Output goes to `build/`, one directory per console plus the host tool:
 ```
 build/
-├── kos-tool                  # host tool (with embedded firmware)
-├── dc-load-ser.{elf,bin}     # Dreamcast serial firmware
-├── dc-load-ip.{elf,bin}      # Dreamcast network firmware
-├── gc-load-ser.{elf,bin}     # GameCube serial firmware
-├── gc-load-ip.{elf,bin}      # GameCube network firmware
-├── ps2-load-ip.elf           # PlayStation 2 network firmware
-├── wii-load-ip.{elf,bin,dol} # Wii network firmware (.dol boots from Homebrew Channel)
-├── wii-load-ip.wad           # Wii installable channel (built by `make dist-wii`/`make dist`)
-├── xbox-load-ip.{exe,bin}    # Xbox network firmware
-├── default.xbe               # Xbox loader as a launchable XBE (pe2xbe-packed, unsigned)
-├── xbox-load-ip.xiso         # Xbox bootable disc image (built by `make dist-xbox`/`make dist`)
-└── examples/
-    ├── dc/                   # Dreamcast example ELFs
-    ├── gc/                   # GameCube example ELFs
-    ├── ps2/                  # PlayStation 2 example ELFs
-    ├── wii/                  # Wii example ELFs
-    └── xbox/                 # Xbox example ELFs
+├── kos-tool                      # host tool (with embedded firmware)
+├── dc/
+│   ├── dc-load-ser.{elf,bin}     # Dreamcast serial firmware
+│   ├── dc-load-ip.{elf,bin}      # Dreamcast network firmware
+│   ├── dc-load-{ser,ip}.cdi      # bootable CDI images (`make dist-dc`/`make dist`)
+│   └── examples/                 # Dreamcast example ELFs
+├── gc/
+│   ├── gc-load-ser.{elf,bin}     # GameCube serial firmware
+│   ├── gc-load-ip.{elf,bin}      # GameCube network firmware
+│   ├── gc-load-{ser,ip}.{dol,iso} # bootable DOL/ISO (`make dist-gc`/`make gc-dol`)
+│   └── examples/                 # GameCube example ELFs
+├── wii/
+│   ├── wii-load-ip.{elf,bin,dol} # Wii network firmware (.dol boots from Homebrew Channel)
+│   ├── wii-load-ip.wad           # installable channel (`make dist-wii`/`make dist`)
+│   └── examples/                 # Wii example ELFs
+├── ps2/
+│   ├── ps2-load-ip.elf           # PlayStation 2 network firmware
+│   ├── ps2-load-ip.iso           # bootable ISO (`make dist-ps2`/`make dist`)
+│   └── examples/                 # PlayStation 2 example ELFs
+└── xbox/
+    ├── xbox-load-ip.{exe,bin}    # Xbox network firmware
+    ├── default.xbe               # Xbox loader as a launchable XBE (pe2xbe-packed, unsigned)
+    ├── xbox-load-ip.xiso         # bootable disc image (`make dist-xbox`/`make dist`)
+    └── examples/                 # Xbox example ELFs
 ```
 
 ### Individual Targets

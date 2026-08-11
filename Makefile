@@ -18,6 +18,10 @@
 #   make release-host  Package the host-tool archive for this OS
 #   make release-firmware  Package the firmware bundle
 #   make clean         Remove all build artifacts
+#
+# Output layout: build/kos-tool plus one directory per console,
+# build/<dc|gc|wii|ps2|xbox>/ holding that console's loader binaries and disc
+# images with its examples/ alongside.  See the BUILDDIR block below.
 
 ROOT := $(CURDIR)
 include mk/version.mk
@@ -52,10 +56,23 @@ $(VERSION_H): $(VERSION_H_IN) mk/version.mk
 	 if ! cmp -s $$t $@ 2>/dev/null; then mv $$t $@; echo "  GEN     $@"; else rm -f $$t; fi
 
 # ---------- Output directory ----------
+#
+#   build/kos-tool             host tool (console-independent)
+#   build/<console>/           loader binaries + disc images
+#   build/<console>/examples/  example programs
+#
+# <console> is the make target name (dc, gc, wii, ps2, xbox); make-dist and
+# package-release.sh derive their paths from the same names.
 
 BUILDDIR := build
 
-$(BUILDDIR):
+DC_OUT   := $(BUILDDIR)/dc
+GC_OUT   := $(BUILDDIR)/gc
+WII_OUT  := $(BUILDDIR)/wii
+PS2_OUT  := $(BUILDDIR)/ps2
+XBOX_OUT := $(BUILDDIR)/xbox
+
+$(BUILDDIR) $(DC_OUT) $(GC_OUT) $(WII_OUT) $(PS2_OUT) $(XBOX_OUT):
 	@mkdir -p $@
 
 # ---------- Wii channel WAD ----------
@@ -205,62 +222,62 @@ host: $(VERSION_H) | $(BUILDDIR)
 	@cp host/build/kos-tool $(BUILDDIR)/ 2>/dev/null || cp host/build/kos-tool.exe $(BUILDDIR)/
 	@echo "  COPY    $(BUILDDIR)/kos-tool"
 
-dc: check-dc-toolchain $(VERSION_H) | $(BUILDDIR)
+dc: check-dc-toolchain $(VERSION_H) | $(DC_OUT)
 	$(MAKE) -C client/dreamcast ROOT=$(ROOT) all
-	@cp client/dreamcast/build/serial/dc-load-ser.elf $(BUILDDIR)/
-	@cp client/dreamcast/build/serial/dc-load-ser.bin $(BUILDDIR)/
-	@cp client/dreamcast/build/ip/dc-load-ip.elf $(BUILDDIR)/
-	@cp client/dreamcast/build/ip/dc-load-ip.bin $(BUILDDIR)/
-	@echo "  COPY    $(BUILDDIR)/dc-load-ser.{elf,bin} dc-load-ip.{elf,bin}"
-	@mkdir -p $(BUILDDIR)/examples/dc
-	@cp client/dreamcast/build/examples/*.elf $(BUILDDIR)/examples/dc/
+	@cp client/dreamcast/build/serial/dc-load-ser.elf $(DC_OUT)/
+	@cp client/dreamcast/build/serial/dc-load-ser.bin $(DC_OUT)/
+	@cp client/dreamcast/build/ip/dc-load-ip.elf $(DC_OUT)/
+	@cp client/dreamcast/build/ip/dc-load-ip.bin $(DC_OUT)/
+	@echo "  COPY    $(DC_OUT)/dc-load-ser.{elf,bin} dc-load-ip.{elf,bin}"
+	@mkdir -p $(DC_OUT)/examples
+	@cp client/dreamcast/build/examples/*.elf $(DC_OUT)/examples/
 	@if ls client/dreamcast/build/examples/*.iso >/dev/null 2>&1; then \
-	    cp client/dreamcast/build/examples/*.iso $(BUILDDIR)/examples/dc/; \
+	    cp client/dreamcast/build/examples/*.iso $(DC_OUT)/examples/; \
 	fi
-	@echo "  COPY    $(BUILDDIR)/examples/dc/"
+	@echo "  COPY    $(DC_OUT)/examples/"
 	$(MAKE) host
 
-gc: check-gc-toolchain $(VERSION_H) | $(BUILDDIR)
+gc: check-gc-toolchain $(VERSION_H) | $(GC_OUT)
 	$(MAKE) -C client/gamecube ROOT=$(ROOT) all
-	@cp client/gamecube/build/serial/gc-load-ser.elf $(BUILDDIR)/
-	@cp client/gamecube/build/serial/gc-load-ser.bin $(BUILDDIR)/
-	@cp client/gamecube/build/ip/gc-load-ip.elf $(BUILDDIR)/
-	@cp client/gamecube/build/ip/gc-load-ip.bin $(BUILDDIR)/
-	@echo "  COPY    $(BUILDDIR)/gc-load-ser.{elf,bin} gc-load-ip.{elf,bin}"
-	@mkdir -p $(BUILDDIR)/examples/gc
-	@cp client/gamecube/build/examples/*.elf $(BUILDDIR)/examples/gc/
-	@echo "  COPY    $(BUILDDIR)/examples/gc/*.elf"
+	@cp client/gamecube/build/serial/gc-load-ser.elf $(GC_OUT)/
+	@cp client/gamecube/build/serial/gc-load-ser.bin $(GC_OUT)/
+	@cp client/gamecube/build/ip/gc-load-ip.elf $(GC_OUT)/
+	@cp client/gamecube/build/ip/gc-load-ip.bin $(GC_OUT)/
+	@echo "  COPY    $(GC_OUT)/gc-load-ser.{elf,bin} gc-load-ip.{elf,bin}"
+	@mkdir -p $(GC_OUT)/examples
+	@cp client/gamecube/build/examples/*.elf $(GC_OUT)/examples/
+	@echo "  COPY    $(GC_OUT)/examples/*.elf"
 	$(MAKE) host
 
-wii: check-wii-toolchain $(VERSION_H) | $(BUILDDIR)
+wii: check-wii-toolchain $(VERSION_H) | $(WII_OUT)
 	$(MAKE) -C client/wii ROOT=$(ROOT) all
-	@cp client/wii/build/ip/wii-load-ip.elf $(BUILDDIR)/
-	@cp client/wii/build/ip/wii-load-ip.bin $(BUILDDIR)/
-	@cp client/wii/build/ip/wii-load-ip.dol $(BUILDDIR)/
-	@echo "  COPY    $(BUILDDIR)/wii-load-ip.{elf,bin,dol}"
-	@mkdir -p $(BUILDDIR)/examples/wii
-	@cp client/wii/build/examples/*.elf $(BUILDDIR)/examples/wii/
-	@echo "  COPY    $(BUILDDIR)/examples/wii/*.elf"
+	@cp client/wii/build/ip/wii-load-ip.elf $(WII_OUT)/
+	@cp client/wii/build/ip/wii-load-ip.bin $(WII_OUT)/
+	@cp client/wii/build/ip/wii-load-ip.dol $(WII_OUT)/
+	@echo "  COPY    $(WII_OUT)/wii-load-ip.{elf,bin,dol}"
+	@mkdir -p $(WII_OUT)/examples
+	@cp client/wii/build/examples/*.elf $(WII_OUT)/examples/
+	@echo "  COPY    $(WII_OUT)/examples/*.elf"
 	$(MAKE) host
 
-ps2: check-ps2-toolchain $(VERSION_H) | $(BUILDDIR)
+ps2: check-ps2-toolchain $(VERSION_H) | $(PS2_OUT)
 	$(MAKE) -C client/playstation2 ROOT=$(ROOT) all
-	@cp client/playstation2/build/ip/ps2-load-ip.elf $(BUILDDIR)/
-	@echo "  COPY    $(BUILDDIR)/ps2-load-ip.elf"
-	@mkdir -p $(BUILDDIR)/examples/ps2
-	@cp client/playstation2/build/examples/*.elf $(BUILDDIR)/examples/ps2/
-	@echo "  COPY    $(BUILDDIR)/examples/ps2/*.elf"
+	@cp client/playstation2/build/ip/ps2-load-ip.elf $(PS2_OUT)/
+	@echo "  COPY    $(PS2_OUT)/ps2-load-ip.elf"
+	@mkdir -p $(PS2_OUT)/examples
+	@cp client/playstation2/build/examples/*.elf $(PS2_OUT)/examples/
+	@echo "  COPY    $(PS2_OUT)/examples/*.elf"
 	$(MAKE) host
 
-xbox: check-xbox-toolchain $(VERSION_H) | $(BUILDDIR)
+xbox: check-xbox-toolchain $(VERSION_H) | $(XBOX_OUT)
 	$(MAKE) -C client/xbox ROOT=$(ROOT) all
-	@cp client/xbox/build/ip/xbox-load-ip.exe $(BUILDDIR)/
-	@cp client/xbox/build/ip/xbox-load-ip.bin $(BUILDDIR)/
-	@cp client/xbox/build/ip/default.xbe $(BUILDDIR)/default.xbe
-	@echo "  COPY    $(BUILDDIR)/xbox-load-ip.{exe,bin} $(BUILDDIR)/default.xbe"
-	@mkdir -p $(BUILDDIR)/examples/xbox
-	@cp client/xbox/build/examples/*.elf $(BUILDDIR)/examples/xbox/
-	@echo "  COPY    $(BUILDDIR)/examples/xbox/*.elf"
+	@cp client/xbox/build/ip/xbox-load-ip.exe $(XBOX_OUT)/
+	@cp client/xbox/build/ip/xbox-load-ip.bin $(XBOX_OUT)/
+	@cp client/xbox/build/ip/default.xbe $(XBOX_OUT)/default.xbe
+	@echo "  COPY    $(XBOX_OUT)/xbox-load-ip.{exe,bin} $(XBOX_OUT)/default.xbe"
+	@mkdir -p $(XBOX_OUT)/examples
+	@cp client/xbox/build/examples/*.elf $(XBOX_OUT)/examples/
+	@echo "  COPY    $(XBOX_OUT)/examples/*.elf"
 	$(MAKE) host
 
 # ---------- Distribution artifact targets ----------
