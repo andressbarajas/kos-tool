@@ -516,6 +516,52 @@ static const char *ps2_exception_code_to_string(uint32_t excode) {
     }
 }
 
+/* x86 CPU exception vector to string (Intel SDM vectors 0..19). */
+static const char *xbox_exception_code_to_string(uint32_t vector) {
+    switch(vector) {
+    case 0:
+        return "Divide error";
+    case 1:
+        return "Debug";
+    case 2:
+        return "NMI";
+    case 3:
+        return "Breakpoint";
+    case 4:
+        return "Overflow";
+    case 5:
+        return "BOUND range exceeded";
+    case 6:
+        return "Invalid opcode";
+    case 7:
+        return "Device not available";
+    case 8:
+        return "Double fault";
+    case 9:
+        return "Coprocessor segment overrun";
+    case 10:
+        return "Invalid TSS";
+    case 11:
+        return "Segment not present";
+    case 12:
+        return "Stack-segment fault";
+    case 13:
+        return "General protection fault";
+    case 14:
+        return "Page fault";
+    case 16:
+        return "x87 floating-point error";
+    case 17:
+        return "Alignment check";
+    case 18:
+        return "Machine check";
+    case 19:
+        return "SIMD floating-point error";
+    default:
+        return "Unknown exception";
+    }
+}
+
 static const char *dc_register_names[66] = {
     "PC", "PR", "SR", "GBR", "VBR", "DBR", "MACH", "MACL",
     "R0B0", "R1B0", "R2B0", "R3B0", "R4B0", "R5B0", "R6B0", "R7B0",
@@ -552,6 +598,16 @@ static const char *ps2_register_names[32] = {
     "a4",   "a5", "a6", "a7", "t0", "t1", "t2", "t3",
     "s0",   "s1", "s2", "s3", "s4", "s5", "s6", "s7",
     "t8",   "t9", "k0", "k1", "gp", "sp", "fp", "ra",
+};
+
+/* x86 register names.  The order must match the named block of
+ * x86_exception_frame_t (include/kosload/types.h). */
+static const char *x86_register_names[XBOX_EXC_NUM_REGS] = {
+    "EIP", "EFLAGS",
+    "EAX", "EBX", "ECX", "EDX",
+    "ESI", "EDI", "EBP", "ESP",
+    "CS",  "DS",  "ES",  "SS",  "FS", "GS",
+    "CR0", "CR2", "CR3", "CR4",
 };
 
 /* Swap bytes of a uint32 from little-endian to host order */
@@ -615,6 +671,139 @@ static void print_ps2_registers(FILE *fp, const uint32_t *gpr_lo, uint32_t epc, 
     for(int i = 0; i < 32; i++)
         fprintf(fp, "  f%-5d 0x%08x\n", i, fpr[i]);
     fprintf(fp, "  %-6s 0x%08x\n", "FCR31", fcr31);
+}
+
+/* All registers already byte-swapped to host order by the caller. */
+static void print_x86_registers(FILE *fp, const uint32_t *regs, uint32_t errcode,
+                                const uint32_t *stack) {
+    int i;
+
+    fprintf(fp, "  %-6s 0x%08x\n", "ERR", errcode);
+    for(i = 0; i < XBOX_EXC_NUM_REGS; i++)
+        fprintf(fp, "  %-6s 0x%08x\n", x86_register_names[i], regs[i]);
+
+    fprintf(fp, "\nStack (%d words from ESP):\n", XBOX_EXC_STACK_WORDS);
+    for(i = 0; i < XBOX_EXC_STACK_WORDS; i++)
+        fprintf(fp, "  [esp+%-3d] 0x%08x\n", i * 4, stack[i]);
+}
+
+/* Xbox has no walkable EBP chain (see x86_exception_frame_t), so the client
+ * ships a raw stack sample and the backtrace is reconstructed here: sampled
+ * words landing in the guest arena that addr2line resolves, in stack order.
+ * Over-reports — a leftover data pointer can look like a frame, and does in
+ * practice — but never invents an address.  Entries with no function name
+ * ("at file:?") are the tell. */
+static void print_xbox_stack_trace(FILE *fp, const char *a2l, const char *elf,
+                                   const uint32_t *stack) {
+    int i, printed = 0;
+
+    for(i = 0; i < XBOX_EXC_STACK_WORDS; i++) {
+        char decoded[256];
+
+        if(stack[i] < XBOX_DEFAULT_LOAD_ADDR || stack[i] >= XBOX_GUEST_ARENA_TOP)
+            continue;
+
+        decode_address(a2l, elf, stack[i], decoded, sizeof(decoded));
+        if(!decoded[0] || decoded[0] == '?')
+            continue;
+
+        if(!printed) {
+            fprintf(fp, "\nStack trace (scanned, most recent first):\n");
+            printed = 1;
+        }
+        fprintf(fp, "  [esp+%-3d] 0x%08x  %s\n", i * 4, stack[i], decoded);
+    }
+
+    if(!printed)
+        fprintf(fp, "\nStack trace: no resolvable return addresses in the sample\n");
+}
+
+static void handle_xbox_exception(kostool_context_t *ctx, const uint8_t *data, uint32_t count) {
+    if(count < sizeof(x86_exception_frame_t)) {
+        fprintf(stderr, "\nIncomplete Xbox exception frame (%u bytes)\n", count);
+        return;
+    }
+
+    /* Byte-swap from x86 (LE) to host order; named block starts at
+     * XBOX_EXC_REGS_OFFSET. */
+    const x86_exception_frame_t *f = (const x86_exception_frame_t *)data;
+    uint32_t regs[XBOX_EXC_NUM_REGS];
+    uint32_t stack[XBOX_EXC_STACK_WORDS];
+    int i;
+
+    memcpy(regs, data + XBOX_EXC_REGS_OFFSET, sizeof(regs));
+    for(i = 0; i < XBOX_EXC_NUM_REGS; i++)
+        regs[i] = le32_to_host(regs[i]);
+    for(i = 0; i < XBOX_EXC_STACK_WORDS; i++)
+        stack[i] = le32_to_host(f->stack[i]);
+
+    uint32_t vector  = le32_to_host(f->expt_code);
+    uint32_t errcode = le32_to_host(f->errcode);
+
+    const char *expt_str = xbox_exception_code_to_string(vector);
+
+    fprintf(stderr, "\n=== Xbox Exception: %s (vector %u) ===\n", expt_str, vector);
+
+    /* Always print key registers */
+    fprintf(stderr, "  %-6s 0x%08x\n", "EIP", regs[0]);
+    fprintf(stderr, "  %-6s 0x%08x\n", "EFLAGS", regs[1]);
+    fprintf(stderr, "  %-6s 0x%08x\n", "ESP", regs[9]);
+    fprintf(stderr, "  %-6s 0x%08x\n", "EBP", regs[8]);
+    fprintf(stderr, "  %-6s 0x%08x\n", "ERR", errcode);
+
+    /* Page fault: CR2 (index 17) holds the faulting linear address. */
+    if(vector == 14)
+        fprintf(stderr, "  %-6s 0x%08x\n", "CR2", regs[17]);
+
+    const char *a2l = addr2line_for_console(ctx);
+
+    /* addr2line on valid addresses, or fall back to full register dump */
+    if(addr2line_available < 0) {
+        addr2line_available = ctx->loaded_binary_path && a2l[0] && access(a2l, X_OK) == 0 &&
+                              is_elf_file(ctx->loaded_binary_path);
+#ifndef _WIN32
+        if(addr2line_available)
+            start_addr2line_process(a2l, ctx->loaded_binary_path);
+#endif
+    }
+
+    if(addr2line_available) {
+        for(i = 0; i < XBOX_EXC_NUM_REGS; i++) {
+            if(regs[i] >= XBOX_DEFAULT_LOAD_ADDR && regs[i] < XBOX_GUEST_ARENA_TOP) {
+                char decoded[256];
+                decode_address(a2l, ctx->loaded_binary_path, regs[i], decoded, sizeof(decoded));
+                if(decoded[0] && decoded[0] != '?')
+                    fprintf(stderr, "  %-6s -> %s\n", x86_register_names[i], decoded);
+            }
+        }
+        print_xbox_stack_trace(stderr, a2l, ctx->loaded_binary_path, stack);
+    } else {
+        print_x86_registers(stderr, regs, errcode, stack);
+    }
+
+    /* Save full register dump to text file */
+    char filename[128];
+    make_dump_filename("xbox", filename, sizeof(filename));
+    FILE *dump = fopen(filename, "w");
+    if(dump) {
+        fprintf(dump, "=== Xbox Exception: %s (vector %u) ===\n\n", expt_str, vector);
+        fprintf(dump, "Registers:\n");
+        print_x86_registers(dump, regs, errcode, stack);
+        if(addr2line_available) {
+            fprintf(dump, "\nSymbols:\n");
+            for(i = 0; i < XBOX_EXC_NUM_REGS; i++) {
+                if(regs[i] >= XBOX_DEFAULT_LOAD_ADDR && regs[i] < XBOX_GUEST_ARENA_TOP) {
+                    char decoded[256];
+                    decode_address(a2l, ctx->loaded_binary_path, regs[i], decoded, sizeof(decoded));
+                    if(decoded[0] && decoded[0] != '?')
+                        fprintf(dump, "  %-6s -> %s\n", x86_register_names[i], decoded);
+                }
+            }
+            print_xbox_stack_trace(dump, a2l, ctx->loaded_binary_path, stack);
+        }
+        fclose(dump);
+        fprintf(stderr, "  Saved to %s\n", filename);
+    }
 }
 
 static void handle_dc_exception(kostool_context_t *ctx, const uint8_t *data, uint32_t count) {
@@ -1171,6 +1360,9 @@ static void ser_syscall_write(kostool_context_t *ctx) {
             case CONSOLE_GC:
             case CONSOLE_WII:
                 handle_gc_exception(ctx, data, count);
+                break;
+            case CONSOLE_XBOX:
+                handle_xbox_exception(ctx, data, count);
                 break;
             case CONSOLE_DC:
             default:
@@ -1815,6 +2007,9 @@ static void net_syscall_write(kostool_context_t *ctx, uint8_t *pkt, int pkt_len)
             case CONSOLE_GC:
             case CONSOLE_WII:
                 handle_gc_exception(ctx, data, count);
+                break;
+            case CONSOLE_XBOX:
+                handle_xbox_exception(ctx, data, count);
                 break;
             case CONSOLE_DC:
             default:

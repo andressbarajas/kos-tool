@@ -267,6 +267,12 @@ typedef struct {
 #define GC_RAM_TOP     0x81800000 /* 24 MB MEM1 */
 #define PS2_RAM_TOP    0x02000000 /* 32 MB EE RAM */
 
+/* Guest arena the Xbox loader maps; must match the ASSERT in
+ * client/xbox/kosload-ip.ld.in.  Bound guest addresses by this, not physical
+ * RAM — that varies (64 MB retail, 128 MB debug kits and modded units). */
+#define XBOX_GUEST_ARENA_SIZE  0x02000000 /* 32 MiB */
+#define XBOX_GUEST_ARENA_TOP   (XBOX_DEFAULT_LOAD_ADDR + XBOX_GUEST_ARENA_SIZE)
+
 /* Loader bases.  These are fallbacks: the build passes the authoritative
  * values from mk/memory.mk via -D (see host/Makefile and the client
  * Makefiles), so these #ifndef defaults only apply to ad-hoc builds. */

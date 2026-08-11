@@ -1,14 +1,20 @@
 /* client/xbox/exception.c — x86 IDT setup + crash handler for the Xbox loader.
  *
- * Installs an interrupt descriptor table covering the CPU exception vectors
- * (0..19) with the asm stubs in exception.S.  On a fault the handler renders a
- * register dump to the framebuffer and spins, re-asserting the display mode so
- * the dump stays visible — enough for bring-up.  (The
- * host-side "EXPT" symbolized crash protocol the other ports use is future
- * work for Xbox.)
- */
+ * IDT covering CPU vectors 0..19, with the asm stubs in exception.S.  On a
+ * fault: draw the register dump to the framebuffer first (so a crash that also
+ * kills the network still shows something), then send an x86_exception_frame_t
+ * to the host via write(1, ...) as DC/GC/PS2 do.
+ *
+ * Then it spins re-asserting the display mode to keep the dump visible, so the
+ * console does NOT return to the loader and needs a power cycle (HW-confirmed:
+ * no ICMP afterwards).  GC/PS2 instead jump back to the loader entry; doing the
+ * same here means re-entering from ISR context, which re-runs the kernel
+ * takeover and identity relocation. */
 
 #include <stdint.h>
+#include <string.h>
+#include <kosload/protocol.h>
+#include <kosload/types.h>
 #include "video.h"
 
 /* Frame pushed by exception.S (isr_common): pusha regs, then the vector +
@@ -52,6 +58,72 @@ static void (*const isr_table[IDT_ENTRIES])(void) = {
     isr_0,  isr_1,  isr_2,  isr_3,  isr_4,  isr_5,  isr_6,  isr_7,  isr_8,  isr_9,
     isr_10, isr_11, isr_12, isr_13, isr_14, isr_15, isr_16, isr_17, isr_18, isr_19,
 };
+
+/* Loader syscall path back to the host (client/common/network). */
+extern int  write(int fd, const void *buf, unsigned int count);
+extern void progexit(int ret_code);
+
+/* ESP must land in mapped memory before the handler dereferences it: the loader
+ * window plus the guest arena, not physical RAM (which varies by console). */
+#define XBOX_MAPPED_BOTTOM 0x00001000u
+#define XBOX_MAPPED_TOP    ((uint32_t)XBOX_GUEST_ARENA_TOP)
+
+/* A fault inside the reporting path must not re-enter write() — that turns a
+ * debuggable crash into a hang.  Second entry only draws. */
+static volatile int in_exception;
+
+/* Read a stack word if `addr` is a dword-aligned address inside RAM. */
+static uint32_t safe_read32(uint32_t addr) {
+    if(addr < XBOX_MAPPED_BOTTOM || addr > XBOX_MAPPED_TOP - 4u || (addr & 3u))
+        return 0;
+    return *(const volatile uint32_t *)(uintptr_t)addr;
+}
+
+/* Pack the fault state into the wire frame and hand it to the host. */
+static void report_exception(const x86_frame_t *f, uint32_t esp, uint32_t ds, uint32_t es,
+                             uint32_t ss, uint32_t fs, uint32_t gs, uint32_t cr0, uint32_t cr2,
+                             uint32_t cr3, uint32_t cr4) {
+    x86_exception_frame_t frame;
+    int i;
+
+    memset(&frame, 0, sizeof(frame));
+    frame.id[0] = 'E';
+    frame.id[1] = 'X';
+    frame.id[2] = 'P';
+    frame.id[3] = 'T';
+    frame.expt_code = f->vector;
+    frame.errcode   = f->errcode;
+    frame.eip       = f->eip;
+    frame.eflags    = f->eflags;
+    frame.eax       = f->eax;
+    frame.ebx       = f->ebx;
+    frame.ecx       = f->ecx;
+    frame.edx       = f->edx;
+    frame.esi       = f->esi;
+    frame.edi       = f->edi;
+    frame.ebp       = f->ebp;
+    frame.esp       = esp;
+    frame.cs        = f->cs;
+    frame.ds        = ds;
+    frame.es        = es;
+    frame.ss        = ss;
+    frame.fs        = fs;
+    frame.gs        = gs;
+    frame.cr0       = cr0;
+    frame.cr2       = cr2;
+    frame.cr3       = cr3;
+    frame.cr4       = cr4;
+
+    /* Stack sample for the host-side backtrace scan; unreadable slots stay 0. */
+    for(i = 0; i < XBOX_EXC_STACK_WORDS; i++)
+        frame.stack[i] = safe_read32(esp + (uint32_t)i * 4u);
+
+    write(1, &frame, sizeof(frame));
+
+    /* As GC/PS2: KOS installs its own vectors, so this only fires for
+     * bare-metal guests and loader faults. */
+    progexit(0);
+}
 
 static void hex_word(char *dst, uint32_t v) {
     static const char h[] = "0123456789ABCDEF";
@@ -185,6 +257,12 @@ void exception_handler_c(x86_frame_t *f) {
         hex_word(line + 28, nvnet_dbg_bad_desc);
         hex_word(line + 40, nvnet_dbg_tx_timeout);
         draw_string(30, 160, line, 0x00FFFFFF);
+    }
+
+    /* Screen dump is up; now hand the host a symbolizable frame. */
+    if(!in_exception) {
+        in_exception = 1;
+        report_exception(f, esp, ds, es, ss, fs, gs, cr0, cr2, cr3, cr4);
     }
 
     /* Keep the crash screen up: the kernel tears the display mode down after

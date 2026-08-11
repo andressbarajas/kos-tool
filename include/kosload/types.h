@@ -109,6 +109,38 @@ typedef struct {
     uint32_t pad[3];     /* padding to the 416-byte save area */
 } __attribute__((packed)) ps2_exception_frame_t;
 
+/* x86 (Pentium III) exception frame for the Xbox port.
+ *
+ * Assembled in C by client/xbox/exception.c, not dumped raw by the asm stub:
+ * the x86 fault state is split across the CPU frame, pusha, and the segment
+ * and control registers.
+ *
+ * The stack sample replaces an EBP walk: the loader is -fomit-frame-pointer and
+ * the examples -O2 (same effect), so most functions leave EBP as a plain
+ * callee-saved register and a walk would derail at the first such frame.  The
+ * host scans these words instead — no unwind info needed. */
+#define XBOX_EXC_STACK_WORDS 32
+
+typedef struct {
+    uint8_t  id[4];     /* "EXPT" */
+    uint32_t expt_code; /* CPU exception vector (0..19) */
+    uint32_t errcode;   /* CPU error code, 0 for vectors that push none */
+    /* 20 registers; the order must match x86_register_names[] in the host. */
+    uint32_t eip, eflags;
+    uint32_t eax, ebx, ecx, edx;
+    uint32_t esi, edi, ebp, esp;
+    uint32_t cs, ds, es, ss, fs, gs;
+    uint32_t cr0, cr2, cr3, cr4;
+    /* Words read from the faulting stack starting at ESP.  Unreadable slots
+     * are zero-filled (the client range-checks ESP before dereferencing). */
+    uint32_t stack[XBOX_EXC_STACK_WORDS];
+} __attribute__((packed)) x86_exception_frame_t;
+
+/* Number of uint32 registers in x86_exception_frame_t's named block. */
+#define XBOX_EXC_NUM_REGS 20
+/* Byte offset of that block from the start of the frame. */
+#define XBOX_EXC_REGS_OFFSET 12
+
 /* Dirent offset used by KOS (anything under 100 is treated as invalid) */
 #define DIRENT_OFFSET   1337
 
