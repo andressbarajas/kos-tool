@@ -2,18 +2,16 @@
 /*
  * exception-test - kosload exception handler test
  *
- * Deliberately triggers an exception to verify kosload's exception
- * handler displays a proper register dump on screen.
+ * Triggers a real CPU exception to verify the loader's handler.  Each console
+ * needs a different trigger:
  *
- * On DC: triggers an Address Error by doing a misaligned 32-bit read.
- *        This works regardless of MMU state (kosload runs with MMU off).
- * On GC: triggers a DSI (data storage interrupt) by reading from
- *         an invalid address
- * On PS2: triggers an Address Error on Load (AdEL, excode=4) by doing a
- *         misaligned 32-bit read.  Same approach as DC.
+ *   DC    misaligned 32-bit read -> Address Error (inline asm; see below)
+ *   GC    unmapped address read  -> DSI
+ *   PS2   `break`                -> Breakpoint (the R5900 does NOT trap on the
+ *                                   misaligned load DC uses)
  *
- * The expected result is the exception handler displaying register
- * values on the video output, then returning to kosload.
+ * Expect a register dump on video plus an "EXPT" frame symbolized host-side.
+ * DC/GC/PS2 return to kosload.
  *
  * Load and run:
  *   kostool -x exception-test.elf
@@ -94,15 +92,19 @@ void start(void) {
      */
 #if defined(__mips__) || defined(__mips)
     __asm__ volatile("break");
-#else
-    volatile unsigned int *bad_addr;
-#if defined(__sh__) || defined(__SH4_SINGLE__)
-    bad_addr = (volatile unsigned int *)0x8c000002; /* misaligned */
+#elif defined(__sh__) || defined(__SH4_SINGLE__)
+    /* MUST be inline asm: as a plain `(void)*(volatile unsigned int *)` GCC
+     * narrowed the discarded read to a 16-bit `mov.w`, which is aligned and
+     * never faults — the test silently passed while testing nothing
+     * (HW-confirmed on a real DC).  Only SH4 needs this; PPC/x86 faults don't
+     * depend on access width. */
+    unsigned int sink;
+    __asm__ volatile("mov.l @%1, %0"
+                     : "=r"(sink)
+                     : "r"((unsigned int)0x8c000002));
+    (void)sink;
 #elif defined(__PPC__) || defined(__powerpc__)
-    bad_addr = (volatile unsigned int *)0xC0000000; /* unmapped */
-#endif
-    /* This read should trigger the exception */
-    (void)*bad_addr;
+    (void)*(volatile unsigned int *)0xC0000000;   /* unmapped -> DSI */
 #endif
 
     /* Should not reach here if exception handler works */
