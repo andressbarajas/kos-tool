@@ -19,7 +19,8 @@ typedef enum {
     CONSOLE_GC,
     CONSOLE_PS2,
     CONSOLE_WII,
-    CONSOLE_XBOX
+    CONSOLE_XBOX,
+    CONSOLE_PSP
 } console_type_t;
 
 console_type_t detect_console(const char *name);
@@ -119,6 +120,11 @@ typedef struct kostool_context {
 
     /* Program execution state */
     int program_executed;
+    /* Set only while firmware_update.c is launching an update trampoline, so
+     * the serial transport can flag the EXEC as a handoff rather than a user
+     * program.  The network transport carries the same information in the
+     * command's size field instead. */
+    int fw_update_in_progress;
 
     /* addr2line (paths derived from the toolchain location in config_load) */
     const char *loaded_binary_path;
@@ -126,6 +132,7 @@ typedef struct kostool_context {
     char ppc_addr2line[512];        /* Full path to PPC addr2line  (GC/Wii) */
     char mips_addr2line[512];       /* Full path to MIPS addr2line (PS2) */
     char xbox_addr2line[512];       /* Full path to i386 addr2line (Xbox) */
+    char psp_addr2line[512];        /* Full path to Allegrex addr2line (PSP) */
 
     /* Target profiles (configured via kos-tool.cfg) */
     char config_path[512];

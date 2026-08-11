@@ -69,17 +69,20 @@ CFLAGS  := -O2 -Wall -Wextra -std=c11 \
 CFLAGS  += -MMD -MP
 
 # addr2line defaults derived from the cross-toolchain config (mk/toolchains.mk),
-# so they track DC_TOOLCHAIN/GC_TOOLCHAIN/PS2_EE_TOOLCHAIN (CLI > env > default).
+# so they track DC_TOOLCHAIN/GC_TOOLCHAIN/PS2_EE_TOOLCHAIN/XBOX_TOOLCHAIN/PSP_TOOLCHAIN
+# (CLI > env > default).
 # The *_TOOL_PREFIX defines let config.c rebuild the path from $*_TOOLCHAIN set
 # in the tool's own runtime environment.
 CFLAGS  += -DDEFAULT_SH4_ADDR2LINE=\"$(DC_TOOLCHAIN)/$(DC_PREFIX)addr2line\" \
            -DDEFAULT_PPC_ADDR2LINE=\"$(GC_TOOLCHAIN)/$(GC_PREFIX)addr2line\" \
            -DDEFAULT_MIPS_ADDR2LINE=\"$(PS2_EE_TOOLCHAIN)/$(PS2_PREFIX)addr2line\" \
            -DDEFAULT_XBOX_ADDR2LINE=\"$(XBOX_TOOLCHAIN)/$(XBOX_PREFIX)addr2line\" \
+           -DDEFAULT_PSP_ADDR2LINE=\"$(PSP_TOOLCHAIN)/$(PSP_PREFIX)addr2line\" \
            -DSH4_TOOL_PREFIX=\"$(DC_PREFIX)\" \
            -DPPC_TOOL_PREFIX=\"$(GC_PREFIX)\" \
            -DMIPS_TOOL_PREFIX=\"$(PS2_PREFIX)\" \
-           -DXBOX_TOOL_PREFIX=\"$(XBOX_PREFIX)\"
+           -DXBOX_TOOL_PREFIX=\"$(XBOX_PREFIX)\" \
+           -DPSP_TOOL_PREFIX=\"$(PSP_PREFIX)\"
 
 # Loader base/load addresses for the firmware-update trampolines, from
 # mk/memory.mk (the source of truth).  These override the protocol.h fallbacks.
@@ -89,9 +92,33 @@ CFLAGS  += -DDC_LOADER_BASE=$(DC_LOADER_BASE) \
            -DPS2_LOADER_BASE=$(PS2_LOADER_BASE) \
            -DXBOX_LOADER_BASE=$(XBOX_LOADER_BASE) \
            -DXBOX_KOSLOAD_BASE=$(XBOX_KOSLOAD_BASE) \
-           -DXBOX_DEFAULT_LOAD_ADDR=$(XBOX_DEFAULT_LOAD_ADDR)
+           -DXBOX_DEFAULT_LOAD_ADDR=$(XBOX_DEFAULT_LOAD_ADDR) \
+           -DPSP_LOADER_BASE=$(PSP_LOADER_BASE) \
+           -DPSP_LOADER_SIZE=$(PSP_LOADER_SIZE)
 
-LDFLAGS := $(LIBELF_LDFLAGS) $(EXTRA_LDLIBS)
+# ---------- Optional libusb (PSP `-t usb` transport) ----------
+# Autodetected: on macOS via `brew --prefix libusb`, elsewhere via pkg-config.
+# When present, HAVE_LIBUSB is defined and src/transport/usb.c is compiled;
+# otherwise `-t usb` prints a clear "requires libusb" error at runtime.
+ifeq ($(UNAME_S),Darwin)
+  LIBUSB_PREFIX := $(shell brew --prefix libusb 2>/dev/null)
+  ifneq ($(LIBUSB_PREFIX),)
+    LIBUSB_CFLAGS  := -I$(LIBUSB_PREFIX)/include -I$(LIBUSB_PREFIX)/include/libusb-1.0
+    LIBUSB_LDFLAGS := -L$(LIBUSB_PREFIX)/lib -lusb-1.0
+  endif
+else
+  ifeq ($(shell pkg-config --exists libusb-1.0 2>/dev/null && echo yes),yes)
+    LIBUSB_CFLAGS  := $(shell pkg-config --cflags libusb-1.0)
+    LIBUSB_LDFLAGS := $(shell pkg-config --libs libusb-1.0)
+  endif
+endif
+
+ifneq ($(LIBUSB_LDFLAGS),)
+  CFLAGS  += -DHAVE_LIBUSB $(LIBUSB_CFLAGS)
+  USB_SRC := src/transport/usb.c
+endif
+
+LDFLAGS := $(LIBELF_LDFLAGS) $(EXTRA_LDLIBS) $(LIBUSB_LDFLAGS)
 
 # ---------- Firmware embedding ----------
 # If client firmware .bin files exist, embed them into kos-tool for
@@ -107,6 +134,7 @@ GC_IP_BIN  := $(ROOT)/client/gamecube/build/ip/gc-load-ip.bin
 PS2_IP_BIN := $(ROOT)/client/playstation2/build/ip/ps2-load-ip-image.bin
 WII_IP_BIN := $(ROOT)/client/wii/build/ip/wii-load-ip.bin
 XBOX_IP_BIN := $(ROOT)/client/xbox/build/ip/xbox-load-ip.bin
+PSP_USB_BIN := $(ROOT)/client/psp/build/usb/psp-load-usb.bin
 
 FW_OBJS :=
 FW_DEFS :=
@@ -139,6 +167,10 @@ ifneq ($(wildcard $(XBOX_IP_BIN)),)
   FW_OBJS += $(BUILDDIR)/firmware_xbox_ip_data.o
   FW_DEFS += -DHAS_FIRMWARE_XBOX_IP
 endif
+ifneq ($(wildcard $(PSP_USB_BIN)),)
+  FW_OBJS += $(BUILDDIR)/firmware_psp_usb_data.o
+  FW_DEFS += -DHAS_FIRMWARE_PSP_USB
+endif
 
 CFLAGS += $(FW_DEFS)
 
@@ -167,7 +199,8 @@ CORE_SRCS := \
     src/binary/bfd.c \
     src/binary/srec.c \
     src/binary/dol.c \
-    src/binary/raw.c
+    src/binary/raw.c \
+    $(USB_SRC)
 
 ALL_SRCS := $(CORE_SRCS) $(PLATFORM_SRCS)
 OBJS     := $(patsubst src/%.c,$(BUILDDIR)/%.o,$(ALL_SRCS))
@@ -260,6 +293,10 @@ $(BUILDDIR)/firmware_wii_ip_data.c: $(WII_IP_BIN) $(BIN2C) | $(BUILDDIR)
 $(BUILDDIR)/firmware_xbox_ip_data.c: $(XBOX_IP_BIN) $(BIN2C) | $(BUILDDIR)
 	@echo "  BIN2C   $<"
 	@$(BIN2C) $< firmware_xbox_ip $@
+
+$(BUILDDIR)/firmware_psp_usb_data.c: $(PSP_USB_BIN) $(BIN2C) | $(BUILDDIR)
+	@echo "  BIN2C   $<"
+	@$(BIN2C) $< firmware_psp_usb $@
 
 $(BUILDDIR)/firmware_%_data.o: $(BUILDDIR)/firmware_%_data.c
 	@$(CC) $(CFLAGS) -c $< -o $@

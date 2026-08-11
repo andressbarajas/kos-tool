@@ -1,6 +1,6 @@
 # kos-tool 3.0.0
 
-**kos-tool** is a unified console loader for the **Sega Dreamcast**, **Nintendo GameCube**, **Sony PlayStation 2**, **Nintendo Wii**, and **Microsoft Xbox**, combining the functionality of [dcload-serial](https://github.com/KallistiOS/dcload-serial) and [dcload-ip](https://github.com/KallistiOS/dcload-ip) into a single, clean codebase. It is a derivative of the original **dcload** by [Andrew Kieschnick](http://napalm-x.thegypsy.com/andrewk/dc/) (ADK/Napalm).
+**kos-tool** is a unified console loader for the **Sega Dreamcast**, **Nintendo GameCube**, **Sony PlayStation 2**, **Nintendo Wii**, **Microsoft Xbox**, and **Sony PSP**, combining the functionality of [dcload-serial](https://github.com/KallistiOS/dcload-serial) and [dcload-ip](https://github.com/KallistiOS/dcload-ip) into a single, clean codebase. It is a derivative of the original **dcload** by [Andrew Kieschnick](http://napalm-x.thegypsy.com/andrewk/dc/) (ADK/Napalm).
 
 **kos-tool** is a set of programs used to send and receive data between your computer and your console. The classic use case is uploading and debugging homebrew programs. It consists of two parts:
 
@@ -10,6 +10,7 @@
 * `ps2-load-ip` — the PlayStation 2 client firmware
 * `wii-load-ip` — the Wii client firmware
 * `xbox-load-ip` — the Xbox client firmware
+* `psp-load-usb` — the PSP client firmware
 
 ## Supported Hardware
 
@@ -58,16 +59,38 @@ Boot `default.xbe` from a homebrew-capable dashboard, or boot
 unsigned, so a retail console with unmodified signature enforcement cannot run
 it.
 
+Softmodding installs such a dashboard without opening the console:
+[xbox-softmodding-tool](https://github.com/rocky5/xbox-softmodding-tool)
+exploits a savegame to install one to the hard drive, after which unsigned
+XBEs — including `default.xbe` — launch from it directly.
+
+### PSP
+
+| Connection | Client Firmware | Adapter |
+|---|---|---|
+| USB | `psp-load-usb` | Built-in USB port (no adapter) |
+
+The PSP is the one console with no network path: `psp-load-usb` exposes a
+vendor-specific bulk IN/OUT endpoint pair and tunnels the same byte protocol
+the serial consoles use, so the host selects it with `-t usb` rather than a
+device path or an IP. That requires `libusb` on the host — a `kos-tool` built
+without it rejects `-t usb`.
+
+Copy `EBOOT.PBP` to `ms0:/PSP/GAME/kosload/EBOOT.PBP` and launch it from the
+XMB. The EBOOT is unsigned, so it needs homebrew-enabled firmware —
+[ARK-5](https://github.com/PSP-Arkfive/ARK-5) is the actively maintained custom
+firmware, and it is what the port is developed and tested against.
+
 ## Improvements over dcload-serial / dcload-ip
 
 ### Unified Codebase
 * **Single host tool** — `kos-tool` replaces both `dc-tool-ser` and `dc-tool-ip` with one binary that handles serial and network transports across supported consoles
 * **Shared client code** — common client logic (main loop, screensaver, exception handler, CDFS, syscall table) is shared across client firmware variants via a platform abstraction layer (`target_ops_t`)
-* **Unified build system** — one `make` builds everything: DC firmware, GC firmware, PS2 firmware, Xbox firmware, host tool, examples, and delivery artifacts (CDI/ISO/WAD/XISO)
+* **Unified build system** — one `make` builds everything: DC firmware, GC firmware, PS2 firmware, Xbox firmware, PSP firmware, host tool, examples, and delivery artifacts (CDI/ISO/WAD/XISO/PBP)
 * **Documented extension points** — see [`docs/architecture.md`](docs/architecture.md) for the console and transport boundaries used by new ports
 
 ### Firmware Update
-* **Embedded firmware** — all client firmware binaries (DC serial, DC IP, GC serial, GC IP, PS2 IP, Wii IP, Xbox IP) are embedded directly in the `kos-tool` host binary
+* **Embedded firmware** — all client firmware binaries (DC serial, DC IP, GC serial, GC IP, PS2 IP, Wii IP, Xbox IP, PSP USB) are embedded directly in the `kos-tool` host binary
 * **Opt-in auto-update** — with `-F`, when `kos-tool` connects to a console running an older (or legacy dcload) firmware, it uploads and installs the new firmware via architecture-specific trampolines (SH4, PPC, MIPS R5900, and x86)
 * **IP config preservation** — during network firmware updates, DHCP/static IP settings are detected and patched into the new firmware so the console stays reachable
 * **Legacy dcload compatibility** — auto-update works on consoles still running the original `dcload-serial` or `dcload-ip`, upgrading them in-place
@@ -96,10 +119,14 @@ it.
 * **Shared protocol** — Xbox uses the same network upload/download command protocol as the other consoles
 * **DHCP and static IP support** — Xbox network firmware can discover an address with DHCP or be built with a fixed IP
 
+### PSP Support
+* **PSP USB loader** — the console's own USB port carries the loader; no adapter, no network hardware, and nothing to configure
+* **Shared protocol** — the USB bulk pipe is a byte pipe, so the PSP reuses the serial transport (LZO, checksums, commands, syscalls) unchanged
+
 ### Host Tool Enhancements
-* **Automatic transport detection** — `kos-tool` infers serial vs network from `-t <device|ip|dhcp>`
+* **Automatic transport detection** — `kos-tool` infers serial, network, or USB from `-t <device|ip|dhcp|usb>`
 * **Network DHCP discovery** — `-t dhcp` broadcasts on the LAN to find consoles (tries both legacy port 31313 and new port 53535)
-* **Automatic addr2line integration** — when an uploaded ELF emits a supported console trace, stack addresses are annotated automatically for SH4 (DC), PPC (GC/Wii), MIPS (PS2), or i386 (Xbox). The `addr2line` path is derived from the toolchain location (`$DC_TOOLCHAIN`/`$GC_TOOLCHAIN`/`$PS2_EE_TOOLCHAIN`/`$XBOX_TOOLCHAIN`, else the build-time default)
+* **Automatic addr2line integration** — when an uploaded ELF emits a supported console trace, stack addresses are annotated automatically for SH4 (DC), PPC (GC/Wii), MIPS (PS2), i386 (Xbox), or Allegrex (PSP). The `addr2line` path is derived from the toolchain location (`$DC_TOOLCHAIN`/`$GC_TOOLCHAIN`/`$PS2_EE_TOOLCHAIN`/`$XBOX_TOOLCHAIN`/`$PSP_TOOLCHAIN`, else the build-time default)
 * **RTC sync** — `-w` flag sets the console's real-time clock to the host's local time
 * **Program arguments** — `-- arg1 arg2` passes arguments to the loaded program
 * **Performance diagnostics** — `-P` / `--diag` prints transfer timing and recovery statistics
@@ -112,7 +139,7 @@ it.
 
 ### Build System
 * **Simple Makefiles** — no CMake dependency; just `make` with the cross-compiler toolchains in PATH
-* **Delivery artifact generation** — `make dist` produces bootable CDI (Dreamcast) and ISO (GameCube) disc images, an installable Wii channel WAD, and an Xbox XISO, using in-tree image builders
+* **Delivery artifact generation** — `make dist` produces bootable CDI (Dreamcast) and ISO (GameCube) disc images, an installable Wii channel WAD, an Xbox XISO, and a PSP `EBOOT.PBP`, using in-tree image builders
 * **Example programs** — freestanding test programs (console, rainbow, syscall, CDFS, exception, maple, etc.) built automatically
 
 ## Features
@@ -123,7 +150,7 @@ it.
 * GDB remote debugging via GDB-over-dcload
 * Exception handler with full register dump
 * DHCP/network discovery (`-t dhcp`)
-* Network firmware supports BBA/LAN/W5500 on Dreamcast, BBA/ENC28J60/W5500 on GameCube, DEV9 SMAP on PlayStation 2, LAN Adapter / Wi-Fi (experimental) on Wii, and onboard nForce Ethernet (NVnet) on Xbox
+* Network firmware supports BBA/LAN/W5500 on Dreamcast, BBA/ENC28J60/W5500 on GameCube, DEV9 SMAP on PlayStation 2, LAN Adapter / Wi-Fi (experimental) on Wii, and onboard nForce Ethernet (NVnet) on Xbox; the PSP instead uses its built-in USB port (`-t usb`)
 * Runtime baud rate negotiation up to 1.5Mbaud (Dreamcast serial)
 * Cross-platform host tool: Linux, macOS, Windows (MSYS2)
 
@@ -133,6 +160,8 @@ it.
 
 * A C compiler for the host (GCC, Clang, or MinGW)
 * `libelf` development headers
+* `libusb` 1.0 development headers — optional, but the `-t usb` transport (and
+  therefore all PSP support) is compiled out without them
 * Cross-compiler toolchains for client builds:
   * Dreamcast: `sh-elf-gcc`
   * GameCube: `powerpc-eabi-gcc`
@@ -140,16 +169,17 @@ it.
   * PlayStation 2 EE: `mips64r5900el-ps2-elf-gcc`
   * PlayStation 2 IOP: `mipsel-elf-gcc`
   * Xbox: `i686-pc-xbox-gcc`
+  * PSP: `mipsel-psp-elf-gcc`
 
 Toolchain locations are configured in [`mk/toolchains.mk`](mk/toolchains.mk).
-If your Dreamcast, GameCube, Wii, PlayStation 2, or Xbox toolchains are not
-installed under the default paths, edit that file before running `make dc`,
-`make gc`, `make wii`, `make ps2`, or `make xbox`.
+If your Dreamcast, GameCube, Wii, PlayStation 2, Xbox, or PSP toolchains are
+not installed under the default paths, edit that file before running `make dc`,
+`make gc`, `make wii`, `make ps2`, `make xbox`, or `make psp`.
 
 ### Build Everything
 
 ```bash
-make        # builds DC firmware, GC firmware, PS2 firmware, Wii firmware, Xbox firmware, host tool, and examples
+make        # builds DC firmware, GC firmware, PS2 firmware, Wii firmware, Xbox firmware, PSP firmware, host tool, and examples
 ```
 
 Output goes to `build/`, one directory per console plus the host tool:
@@ -174,12 +204,19 @@ build/
 │   ├── ps2-load-ip.elf           # PlayStation 2 network firmware
 │   ├── ps2-load-ip.iso           # bootable ISO (`make dist-ps2`/`make dist`)
 │   └── examples/                 # PlayStation 2 example ELFs
-└── xbox/
-    ├── xbox-load-ip.{exe,bin}    # Xbox network firmware
-    ├── default.xbe               # Xbox loader as a launchable XBE (pe2xbe-packed, unsigned)
-    ├── xbox-load-ip.xiso         # bootable disc image (`make dist-xbox`/`make dist`)
-    └── examples/                 # Xbox example ELFs
+├── xbox/
+│   ├── xbox-load-ip.{exe,bin}    # Xbox network firmware
+│   ├── default.xbe               # Xbox loader as a launchable XBE (pe2xbe-packed, unsigned)
+│   ├── xbox-load-ip.xiso         # bootable disc image (`make dist-xbox`/`make dist`)
+│   └── examples/                 # Xbox example ELFs
+└── psp/
+    ├── psp-load-usb.{elf,bin}    # PSP USB firmware (stage 2)
+    ├── EBOOT.PBP                 # launchable EBOOT — copy to ms0:/PSP/GAME/kosload/
+    └── examples/                 # PSP example ELFs
 ```
+
+`EBOOT.PBP` keeps that exact name: the PSP firmware only boots
+`ms0:/PSP/GAME/<dir>/EBOOT.PBP`, so it can be moved but never renamed.
 
 ### Individual Targets
 
@@ -189,13 +226,15 @@ make gc       # GameCube firmware + examples + rebuild kos-tool
 make ps2      # PlayStation 2 firmware + examples + rebuild kos-tool
 make wii      # Wii firmware + examples + rebuild kos-tool
 make xbox     # Xbox firmware + examples + rebuild kos-tool
+make psp      # PSP firmware + EBOOT.PBP + examples + rebuild kos-tool
 make host     # Host tool only (embeds whatever firmware bins exist)
-make dist     # Delivery artifacts: CDI (DC), ISO (GC), Wii channel WAD, PS2 ISO, and Xbox XISO
+make dist     # Delivery artifacts: CDI (DC), ISO (GC), Wii channel WAD, PS2 ISO, Xbox XISO, and PSP EBOOT.PBP
 make dist-dc  # Dreamcast-only bootable CDI images
 make dist-gc  # GameCube-only bootable ISO images
 make dist-wii # Wii-only installable channel WAD
 make dist-ps2 # PlayStation 2-only bootable ISO
 make dist-xbox # Xbox-only bootable XISO
+make dist-psp # PSP-only EBOOT.PBP
 make gc-dol   # GameCube DOL files only (no ISO)
 ```
 
@@ -207,19 +246,20 @@ make dc DC_TOOLCHAIN=/path/to/sh-elf/bin
 make wii GC_TOOLCHAIN=/path/to/powerpc-eabi/bin
 make ps2 PS2_EE_TOOLCHAIN=/path/to/mips64r5900el-ps2-elf/bin PS2_IOP_TOOLCHAIN=/path/to/mipsel-elf/bin
 make xbox XBOX_TOOLCHAIN=/path/to/i686-pc-xbox/bin
+make psp PSP_TOOLCHAIN=/path/to/mipsel-psp-elf/bin
 ```
 
 ### Platform-Specific Notes
 
 ```bash
 # Debian / Ubuntu
-sudo apt-get install build-essential pkg-config libelf-dev
+sudo apt-get install build-essential pkg-config libelf-dev libusb-1.0-0-dev
 
 # macOS
-brew install libelf
+brew install libelf libusb
 
 # Windows (MSYS2 MINGW64)
-pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-libelf make vim
+pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-libelf mingw-w64-x86_64-libusb make vim
 ```
 
 ### Windows
@@ -263,7 +303,7 @@ use a DHCP reservation on your router.
 ## Usage
 
 ```
-kos-tool [options] -t <device|ip|dhcp>
+kos-tool [options] -t <device|ip|dhcp|usb>
 kos-tool [options] -T <profile>
 
 Commands:
@@ -276,7 +316,7 @@ Commands:
 Options:
   -a <addr>    Set address (target default if omitted)
   -s <size>    Set size for download
-  -t <device>  Serial device, IP address, or 'dhcp'
+  -t <device>  Serial device, IP address, 'dhcp', or 'usb' (PSP)
   -T <profile> Use configured target profile (dc_serial, gc_serial, dc_ip, gc_ip, ps2_ip, wii_ip, xbox_ip)
   -b <baud>    Serial baud rate (default: 57600)
   -n           Disable console/fileserver
@@ -334,21 +374,26 @@ kos-tool -T xbox_ip -x program.elf
 `-t` overrides `-T` when both are present. `serial_baud` is used only for
 serial targets, and `-b` overrides it.
 
+There is no PSP profile: `-t usb` names the transport rather than a device,
+and the host claims the loader by USB VID:PID, so there is nothing for a
+profile to hold.
+
 > **Note:** `-b` / `serial_baud` apply only to UART serial (e.g. the Dreamcast
 > coder's cable). The GameCube USB Gecko is an EXI/USB device with no baud
 > divisor — it runs at the EXI bus maximum (32 MHz) — so `-b` is ignored for it.
 
 ### Examples
 
-The target (`-t`) selects the transport; the console (DC, GC, PS2, Wii, Xbox) is
-auto-detected, so the same invocation works across all of them. On the Wii,
-network covers both the LAN Adapter and internal Wi-Fi.
+The target (`-t`) selects the transport; the console (DC, GC, PS2, Wii, Xbox,
+PSP) is auto-detected, so the same invocation works across all of them. On the
+Wii, network covers both the LAN Adapter and internal Wi-Fi.
 
 ```bash
 # Upload and run a program — the target picks the transport:
 kos-tool -t /dev/ttyUSB0 -x program.elf     # serial (device path)
 kos-tool -t 192.168.1.100 -x program.elf    # network (IP address)
 kos-tool -t dhcp -x program.elf             # network (discover device on LAN)
+kos-tool -t usb -x program.elf              # USB (PSP)
 
 # Serial baud rate (-b) and platform-specific device names:
 kos-tool -t /dev/cu.usbserial-A50285BI -b 1500000 -x program.elf   # macOS
@@ -412,11 +457,13 @@ kos-tool/
 │   ├── playstation2/    # PS2 platform (DEV9, SMAP, IOP modules, video)
 │   ├── wii/             # Wii platform (IOS net sockets, HBC stub, video)
 │   ├── xbox/            # Xbox platform (NVnet, NV2A video, kernel takeover)
+│   ├── psp/             # PSP platform (USB device controller, syscon, video, PRX stub)
 │   └── examples/        # Freestanding test programs
 ├── host/                # Host tool (kos-tool)
 │   ├── src/             # Main, console, upload/download, discovery
 │   ├── include/         # Host headers
-│   └── tools/           # pe2xbe (Xbox XBE packer), elf2irx (PS2 IRX converter)
+│   └── tools/           # pe2xbe (Xbox XBE packer), elf2irx (PS2 IRX converter),
+│                         #   elf2prx + pbp (PSP EBOOT builders)
 ├── include/             # Shared protocol headers
 ├── make-dist/           # Delivery artifact tools (CDI, ISO/DOL, WAD, XISO)
 ├── third_party/         # minilzo, mingw-libelf
@@ -436,7 +483,7 @@ kos-tool is derived from the original dcload by Andrew Kieschnick (ADK/Napalm), 
 * **Paul Boese** (Axlen) — serial protocol endian fixes
 * **Eric Fradella** (darcagn) — DHCP retry
 * **Lawrence Sebald**, **Donald Haase**, **Falco Girgis** — KallistiOS team contributions
-* **Andy Barajas** (BBHoodsta) — kos-tool unification and GameCube, PlayStation 2, Wii, and Xbox support
+* **Andy Barajas** (BBHoodsta) — kos-tool unification and GameCube, PlayStation 2, Wii, Xbox, and PSP support
 * **Paul Cercueil** (pcercuei) - Testing, feedback, bug fixes for PS2
 * **Ruslan Rostovtsev** (DC-SWAT) - W5500 driver
 * **Extrems**, **emukidid** - Swiss

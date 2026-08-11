@@ -21,8 +21,23 @@
 #define KOSLOAD_CLEAR_SCREEN_OFF 0x14
 #define KOSLOAD_DRAW_STRING_OFF  0x18
 #define TICKS_PER_SEC 40500000u  /* PPC timebase (mftb) */
+#elif defined(PSP_KOSLOAD_BASE)
+#define KOSLOAD_BASE PSP_KOSLOAD_BASE
+/* The PSP crt0 header has no SIF-broker slot, so its video callbacks sit at
+ * the same offsets as GC/Wii: +0x14 clear_screen, +0x18 draw_string (see
+ * client/psp/crt0.S).  Sharing the PS2 offsets here made draw_string() call
+ * uint_to_string() with a colour where it expected an output buffer, which
+ * bus-errors the console (HW-confirmed). */
+#define KOSLOAD_CLEAR_SCREEN_OFF 0x14
+#define KOSLOAD_DRAW_STRING_OFF  0x18
+/* Allegrex COP0 Count.  Must match PSP_TICKS_PER_SEC in client/psp/target.c,
+ * which was MEASURED on a PSP-1000 at ~331 MHz (the loader runs at the 333 MHz
+ * clock, not the 222 MHz game-mode default).  This file carried the disproven
+ * 222000000 long after target.c was corrected, so every wait here ran 1.5x
+ * long: the "30 second" hold below actually took ~45 s. */
+#define TICKS_PER_SEC 333000000
 #elif defined(__mips__) || defined(__mips)
-#ifdef PS2_KOSLOAD_BASE
+#if defined(PS2_KOSLOAD_BASE)
 #define KOSLOAD_BASE PS2_KOSLOAD_BASE
 #else
 #define KOSLOAD_BASE 0x80000284
@@ -34,7 +49,7 @@
 #define KOSLOAD_DRAW_STRING_OFF  0x1C
 #define TICKS_PER_SEC 294912000u /* R5900 COP0 Count (mfc0 $9) */
 #else
-#error "font-test is GameCube/Wii/PS2-only"
+#error "font-test is GameCube/Wii/PS2/PSP-only"
 #endif
 
 #define KOSLOAD_MAGIC_ADDR   (*(volatile unsigned int *)(KOSLOAD_BASE + 4))
@@ -139,6 +154,23 @@ static void draw_font_page(void) {
 
     clear_screen(COLOR_BG);
 
+#if defined(PSP_KOSLOAD_BASE)
+    /* The PSP panel is 480x272, not 640x480: at 12x24 that is exactly 40
+     * columns by 11 rows, so the page starts hard left with no vertical gaps
+     * and the two long captions are shortened to fit 40 columns. */
+    draw_string(0, 0, "PSP 12x24 FONT TEST", COLOR_TITLE);
+    draw_string(0, 24, "Printable ASCII 32-126, by kosload", COLOR_DIM);
+
+    draw_string(0, 72, "32-47:  !\"#$%&'()*+,-./", COLOR_TEXT);
+    draw_string(0, 96, "48-63: 0123456789:;<=>?", COLOR_TEXT);
+    draw_string(0, 120, "64-79: @ABCDEFGHIJKLMNO", COLOR_TEXT);
+    draw_string(0, 144, "80-95: PQRSTUVWXYZ[\\]^_", COLOR_TEXT);
+    draw_string(0, 168, "96-111: `abcdefghijklmno", COLOR_TEXT);
+    draw_string(0, 192, "112-126: pqrstuvwxyz{|}~", COLOR_TEXT);
+
+    draw_string(0, 216, "Space = blank glyph in row 1.", COLOR_DIM);
+    draw_string(0, 240, "Holding 30 seconds.", COLOR_DIM);
+#else
     draw_string(24, 24, "GC/Wii/PS2 12x24 FONT TEST", COLOR_TITLE);
     draw_string(24, 56, "Printable ASCII 32-126, drawn by kosload", COLOR_DIM);
 
@@ -151,16 +183,17 @@ static void draw_font_page(void) {
 
     draw_string(24, 328, "Space is the blank glyph after the 32-47 colon.", COLOR_DIM);
     draw_string(24, 360, "Holding this screen for 30 seconds.", COLOR_DIM);
+#endif
 }
 
 void start(void) __attribute__((section(".text.start")));
 void start(void) {
-    print("\n=== GC/Wii/PS2 font test ===\n");
+    print("\n=== kosload 12x24 font test ===\n");
     print("Displaying printable ASCII for 30 seconds.\n");
 
     draw_font_page();
     wait_seconds(DISPLAY_SECONDS);
 
-    print("GC/Wii/PS2 font test complete.\n");
+    print("font test complete.\n");
     kl_exit();
 }

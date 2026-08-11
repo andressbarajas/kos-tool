@@ -1,18 +1,20 @@
 # Makefile — kosload top-level build dispatcher
 #
 # Usage:
-#   make all           Build host tool + DC + GC + Wii + PS2 + Xbox firmware
+#   make all           Build host tool + DC + GC + Wii + PS2 + Xbox + PSP firmware
 #   make dc            Build Dreamcast firmware
 #   make gc            Build GameCube firmware
 #   make wii           Build Wii firmware
 #   make ps2           Build PlayStation 2 firmware
 #   make xbox          Build Xbox firmware
-#   make dist          Build all delivery artifacts (CDI + ISO + WAD + XISO)
+#   make psp           Build PSP firmware
+#   make dist          Build all delivery artifacts (CDI + ISO + WAD + XISO + PBP)
 #   make dist-dc       Build Dreamcast CDI images
 #   make dist-gc       Build GameCube ISO images
 #   make dist-wii      Build Wii channel WAD
 #   make dist-ps2      Build PlayStation 2 ISO
 #   make dist-xbox     Build Xbox XISO
+#   make dist-psp      Build PSP EBOOT.PBP
 #   make gc-dol        Build GameCube DOL files only (no ISO)
 #   make release       Build everything + package release archives (build/release/)
 #   make release-host  Package the host-tool archive for this OS
@@ -20,8 +22,8 @@
 #   make clean         Remove all build artifacts
 #
 # Output layout: build/kos-tool plus one directory per console,
-# build/<dc|gc|wii|ps2|xbox>/ holding that console's loader binaries and disc
-# images with its examples/ alongside.  See the BUILDDIR block below.
+# build/<dc|gc|wii|ps2|xbox|psp>/ holding that console's loader binaries and
+# disc images with its examples/ alongside.  See the BUILDDIR block below.
 
 ROOT := $(CURDIR)
 include mk/version.mk
@@ -61,7 +63,7 @@ $(VERSION_H): $(VERSION_H_IN) mk/version.mk
 #   build/<console>/           loader binaries + disc images
 #   build/<console>/examples/  example programs
 #
-# <console> is the make target name (dc, gc, wii, ps2, xbox); make-dist and
+# <console> is the make target name (dc, gc, wii, ps2, xbox, psp); make-dist and
 # package-release.sh derive their paths from the same names.  Each examples/ is
 # wiped before staging — the copy is a plain `cp *.elf`, so otherwise an example
 # deleted from client/examples/ lingers and ships in the release bundle.
@@ -73,8 +75,9 @@ GC_OUT   := $(BUILDDIR)/gc
 WII_OUT  := $(BUILDDIR)/wii
 PS2_OUT  := $(BUILDDIR)/ps2
 XBOX_OUT := $(BUILDDIR)/xbox
+PSP_OUT  := $(BUILDDIR)/psp
 
-$(BUILDDIR) $(DC_OUT) $(GC_OUT) $(WII_OUT) $(PS2_OUT) $(XBOX_OUT):
+$(BUILDDIR) $(DC_OUT) $(GC_OUT) $(WII_OUT) $(PS2_OUT) $(XBOX_OUT) $(PSP_OUT):
 	@mkdir -p $@
 
 # ---------- Wii channel WAD ----------
@@ -112,6 +115,11 @@ XBOX_AR      := $(XBOX_TOOLCHAIN)/$(XBOX_PREFIX)ar
 XBOX_OBJCOPY := $(XBOX_TOOLCHAIN)/$(XBOX_PREFIX)objcopy
 XBOX_SIZE    := $(XBOX_TOOLCHAIN)/$(XBOX_PREFIX)size
 
+PSP_CC       := $(PSP_TOOLCHAIN)/$(PSP_PREFIX)gcc
+PSP_AR       := $(PSP_TOOLCHAIN)/$(PSP_PREFIX)ar
+PSP_OBJCOPY  := $(PSP_TOOLCHAIN)/$(PSP_PREFIX)objcopy
+PSP_SIZE     := $(PSP_TOOLCHAIN)/$(PSP_PREFIX)size
+
 define require_host_tool
 	@if [ ! -x "$(1)" ] && [ ! -x "$(1).exe" ]; then \
 		echo "Error: missing $(2): $(1)"; \
@@ -126,12 +134,13 @@ endef
 
 # ---------- Targets ----------
 
-.PHONY: all host dc gc wii ps2 xbox dist dist-dc dist-gc dist-wii dist-ps2 dist-xbox gc-dol \
-        auto-dc auto-gc auto-wii auto-ps2 auto-xbox \
+.PHONY: all host dc gc wii ps2 xbox psp dist dist-dc dist-gc dist-wii dist-ps2 dist-xbox dist-psp gc-dol \
+        auto-dc auto-gc auto-wii auto-ps2 auto-xbox auto-psp \
         dist-auto-dc dist-auto-gc dist-auto-wii dist-auto-ps2 dist-auto-xbox \
+        dist-auto-psp \
         release release-host release-firmware print-version clean \
         check-dc-toolchain check-gc-toolchain check-wii-toolchain check-ps2-toolchain \
-        check-xbox-toolchain
+        check-xbox-toolchain check-psp-toolchain
 
 # Single source of truth for the version string (e.g. for release tooling/CI).
 # `make -s print-version` -> 3.0.0
@@ -162,12 +171,18 @@ check-xbox-toolchain:
 	$(call require_host_tool,$(XBOX_OBJCOPY),Xbox objcopy (i686-pc-xbox-objcopy),Xbox,XBOX_TOOLCHAIN)
 	$(call require_host_tool,$(XBOX_SIZE),Xbox size tool (i686-pc-xbox-size),Xbox,XBOX_TOOLCHAIN)
 
+check-psp-toolchain:
+	$(call require_host_tool,$(PSP_CC),PSP compiler (mipsel-psp-elf-gcc),PSP,PSP_TOOLCHAIN)
+	$(call require_host_tool,$(PSP_AR),PSP archiver (mipsel-psp-elf-ar),PSP,PSP_TOOLCHAIN)
+	$(call require_host_tool,$(PSP_OBJCOPY),PSP objcopy (mipsel-psp-elf-objcopy),PSP,PSP_TOOLCHAIN)
+	$(call require_host_tool,$(PSP_SIZE),PSP size tool (mipsel-psp-elf-size),PSP,PSP_TOOLCHAIN)
+
 # `make all` builds every console whose cross-toolchain is installed, skipping
 # the rest with a SKIP notice, then always builds the host tool.  Use the
 # explicit per-console targets (make dc/gc/wii/ps2/xbox) for a hard error when a
 # toolchain is missing.  Real compile failures still abort — only a missing
 # toolchain is skipped.
-all: auto-dc auto-gc auto-wii auto-ps2 auto-xbox host
+all: auto-dc auto-gc auto-wii auto-ps2 auto-xbox auto-psp host
 
 # Skip-if-missing wrappers (mirror dist-auto-*).  Wii uses the GameCube
 # (powerpc-eabi) toolchain; PS2 needs both the EE and IOP compilers.
@@ -217,6 +232,16 @@ auto-xbox:
 		$(MAKE) xbox; \
 	else \
 		echo "  SKIP    Xbox firmware (toolchain not found)"; \
+	fi
+
+auto-psp:
+	@if $(call has_host_tool,$(PSP_CC)) && \
+	    $(call has_host_tool,$(PSP_AR)) && \
+	    $(call has_host_tool,$(PSP_OBJCOPY)) && \
+	    $(call has_host_tool,$(PSP_SIZE)); then \
+		$(MAKE) psp; \
+	else \
+		echo "  SKIP    PSP firmware (toolchain not found)"; \
 	fi
 
 host: $(VERSION_H) | $(BUILDDIR)
@@ -282,9 +307,23 @@ xbox: check-xbox-toolchain $(VERSION_H) | $(XBOX_OUT)
 	@echo "  COPY    $(XBOX_OUT)/examples/*.elf"
 	$(MAKE) host
 
+# EBOOT.PBP keeps its exact name: the PSP firmware only boots
+# ms0:/PSP/GAME/<dir>/EBOOT.PBP, so it can be moved but never renamed.
+psp: check-psp-toolchain $(VERSION_H) | $(PSP_OUT)
+	$(MAKE) -C client/psp ROOT=$(ROOT) all
+	@cp client/psp/build/usb/psp-load-usb.elf $(PSP_OUT)/
+	@cp client/psp/build/usb/psp-load-usb.bin $(PSP_OUT)/
+	@cp client/psp/build/usb/EBOOT.PBP $(PSP_OUT)/EBOOT.PBP
+	@echo "  COPY    $(PSP_OUT)/psp-load-usb.{elf,bin} $(PSP_OUT)/EBOOT.PBP"
+	@rm -rf $(PSP_OUT)/examples && mkdir -p $(PSP_OUT)/examples
+	@cp client/psp/build/examples/*.elf $(PSP_OUT)/examples/
+	@echo "  COPY    $(PSP_OUT)/examples/*.elf"
+	$(MAKE) host
+
 # ---------- Distribution artifact targets ----------
 
-dist: dist-auto-dc dist-auto-gc dist-auto-wii dist-auto-ps2 dist-auto-xbox
+dist: dist-auto-dc dist-auto-gc dist-auto-wii dist-auto-ps2 dist-auto-xbox \
+      dist-auto-psp
 
 dist-auto-dc:
 	@if $(call has_host_tool,$(DC_CC)) && \
@@ -326,6 +365,16 @@ dist-auto-ps2:
 		echo "  SKIP    PlayStation 2 ISO (toolchain not found)"; \
 	fi
 
+dist-auto-psp:
+	@if $(call has_host_tool,$(PSP_CC)) && \
+	    $(call has_host_tool,$(PSP_AR)) && \
+	    $(call has_host_tool,$(PSP_OBJCOPY)) && \
+	    $(call has_host_tool,$(PSP_SIZE)); then \
+		$(MAKE) dist-psp; \
+	else \
+		echo "  SKIP    PSP EBOOT.PBP (toolchain not found)"; \
+	fi
+
 dist-auto-xbox:
 	@if $(call has_host_tool,$(XBOX_CC)) && \
 	    $(call has_host_tool,$(XBOX_AR)) && \
@@ -350,6 +399,13 @@ dist-ps2: check-ps2-toolchain ps2
 
 dist-xbox: check-xbox-toolchain xbox
 	$(MAKE) -C make-dist xbox ROOT=$(ROOT)
+
+# PSP has no make-dist step: the distributable artifact IS the EBOOT.PBP, which
+# the `psp` target already builds and copies into build/.  There is no disc
+# image to author, so this exists purely so `make dist` produces the PSP
+# artifact like every other console.  Without it, only `make all` (and hence
+# `make release`) built the EBOOT, and a bare `make dist` silently omitted it.
+dist-psp: check-psp-toolchain psp
 
 gc-dol: check-gc-toolchain gc
 	$(MAKE) -C make-dist gc-dol ROOT=$(ROOT)

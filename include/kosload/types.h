@@ -109,6 +109,30 @@ typedef struct {
     uint32_t pad[3];     /* padding to the 416-byte save area */
 } __attribute__((packed)) ps2_exception_frame_t;
 
+/* PSP Allegrex exception frame (for exception reporting).
+ * Layout: 4-byte "EXPT" header + the 176-byte psp_exc_frame from
+ * client/psp/exception.S.  Like the PS2 there is no separate expt_code — the
+ * exception class comes from COP0 Cause.ExcCode — but unlike the PS2 the GPRs
+ * are 32-bit (the Allegrex has no 64-bit register file) and the tail carries
+ * the NMI-only evidence the Allegrex crash path collects, which is zero for an
+ * ordinary fault. */
+typedef struct {
+    uint8_t  id[4];      /* "EXPT" */
+    uint32_t gpr[32];    /* r0-r31; k0/k1 are the handler's, not the faulter's */
+    uint32_t cause;      /* COP0 Cause ($13) */
+    uint32_t epc;        /* COP0 EPC ($14) */
+    uint32_t status;     /* COP0 Status ($12) */
+    uint32_t badvaddr;   /* COP0 BadVAddr ($8) */
+    uint32_t is_nmi;     /* 1 if this came in through the NMI vector */
+    uint32_t errorepc;   /* COP0 ErrorEPC ($30) — authoritative NMI PC */
+    uint32_t nmi_mask;   /* sysreg 0xBC100000 — NMI source bitmap */
+    uint32_t nmi_flags;  /* sysreg 0xBC100004 */
+    uint32_t core_id;    /* COP0 $22 */
+    uint32_t cop0_24;    /* COP0 $24 */
+    uint32_t nmi_d14;    /* sysreg 0xBC100014 — source detail for index 9 */
+    uint32_t usb_80;     /* sysreg 0xBC100080 — USB connect + cause bits */
+} __attribute__((packed)) psp_exception_frame_t;
+
 /* x86 (Pentium III) exception frame for the Xbox port.
  *
  * Assembled in C by client/xbox/exception.c, not dumped raw by the asm stub:

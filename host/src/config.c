@@ -61,6 +61,10 @@
 #define MIPS_TOOL_PREFIX "mips64r5900el-ps2-elf-"
 #endif
 
+#ifndef DEFAULT_MIPS_ADDR2LINE
+#define DEFAULT_MIPS_ADDR2LINE "/opt/toolchains/ps2/mips-elf/bin/mips64r5900el-ps2-elf-addr2line"
+#endif
+
 #ifndef XBOX_TOOL_PREFIX
 #define XBOX_TOOL_PREFIX "i686-pc-xbox-"
 #endif
@@ -69,8 +73,12 @@
 #define DEFAULT_XBOX_ADDR2LINE "/opt/toolchains/xbox/i686-pc-xbox/bin/i686-pc-xbox-addr2line"
 #endif
 
-#ifndef DEFAULT_MIPS_ADDR2LINE
-#define DEFAULT_MIPS_ADDR2LINE "/opt/toolchains/ps2/mips-elf/bin/mips64r5900el-ps2-elf-addr2line"
+#ifndef PSP_TOOL_PREFIX
+#define PSP_TOOL_PREFIX "mipsel-psp-elf-"
+#endif
+
+#ifndef DEFAULT_PSP_ADDR2LINE
+#define DEFAULT_PSP_ADDR2LINE "/opt/toolchains/psp/mipsel-psp-elf/bin/mipsel-psp-elf-addr2line"
 #endif
 
 
@@ -211,6 +219,8 @@ void config_load(struct kostool_context *ctx) {
                      DEFAULT_MIPS_ADDR2LINE);
     derive_addr2line(ctx->xbox_addr2line, sizeof(ctx->xbox_addr2line), "XBOX_TOOLCHAIN", XBOX_TOOL_PREFIX,
                      DEFAULT_XBOX_ADDR2LINE);
+    derive_addr2line(ctx->psp_addr2line, sizeof(ctx->psp_addr2line), "PSP_TOOLCHAIN", PSP_TOOL_PREFIX,
+                     DEFAULT_PSP_ADDR2LINE);
 
     FILE *fp = NULL;
 

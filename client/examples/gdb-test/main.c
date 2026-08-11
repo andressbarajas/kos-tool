@@ -30,7 +30,9 @@
 #define KOSLOAD_BASE 0x817EC000
 #endif
 #elif defined(__mips__) || defined(__mips)
-#ifdef PS2_KOSLOAD_BASE
+#if defined(PSP_KOSLOAD_BASE)
+#define KOSLOAD_BASE PSP_KOSLOAD_BASE
+#elif defined(PS2_KOSLOAD_BASE)
 #define KOSLOAD_BASE PS2_KOSLOAD_BASE
 #else
 /* crt0 layout: j(+0) nop(+4) magic(+8) syscall_ptr(+12).

@@ -30,7 +30,9 @@
 #define KOSLOAD_BASE 0x817EC000
 #endif
 #elif defined(__mips__) || defined(__mips)
-#ifdef PS2_KOSLOAD_BASE
+#if defined(PSP_KOSLOAD_BASE)
+#define KOSLOAD_BASE PSP_KOSLOAD_BASE
+#elif defined(PS2_KOSLOAD_BASE)
 #define KOSLOAD_BASE PS2_KOSLOAD_BASE
 #else
 /* crt0 layout: j(+0) nop(+4) magic(+8) syscall_ptr(+12).
@@ -95,10 +97,11 @@ void start(void) {
      * On PPC (GC): Reading from 0xC0000000 causes a DSI exception
      *              (unmapped virtual address)
      *
-     * On MIPS (PS2): the R5900 completes the classic misaligned-load
+     * On MIPS (PS2/PSP): the R5900 completes the classic misaligned-load
      *              trick without trapping, so we raise a Breakpoint
      *              exception directly via `break` — it vectors
-     *              unconditionally through the common handler.
+     *              unconditionally through the common handler.  The
+     *              Allegrex takes the same path, through COP0 $25.
      */
 #if defined(__mips__) || defined(__mips)
     __asm__ volatile("break");

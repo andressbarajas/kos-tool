@@ -104,3 +104,92 @@ XBOX_LOADER_SIZE       := 0x0002C000  # max XBE header + loader window, ending a
 XBOX_HEADER_RESERVE    := 0x1000      # XBE header page (must match pe2xbe HEADER_RESERVE)
 XBOX_KOSLOAD_BASE      := 0x00011000  # = XBOX_LOADER_BASE + XBOX_HEADER_RESERVE
 XBOX_DEFAULT_LOAD_ADDR := 0x0003C000  # first guest VA, immediately after loader window
+
+# Sony PSP (Allegrex / MIPS32-ish, single-float).  The PSP main RAM window is
+# 0x08000000..0x09FFFFFF (32 MB on PSP-1000).  VRAM is the separate 2 MB block
+# at 0x04000000 (used by the framebuffer console).
+#
+# There is one supported layout.  Stage 1 takes both exception vectors and opens
+# the Tachyon protection table before its first low store, reclaiming the
+# firmware's kernel + volatile partitions, so stage 2 lives at the very bottom
+# of RAM and the guest gets ONE contiguous extent:
+#
+#   0x08000000..0x0801FFFF  psp-load-usb loader image (~125 KiB)
+#   0x08020000..0x080EFFFF  slack inside the loader reservation
+#   0x080F0000..0x080FFFFF  LZO work memory (top of the loader window)
+#   0x08100000..0x09FFFFFF  guest extent (31.00 MiB contiguous, to the top of RAM)
+#
+# Putting the loader at the bottom rather than in the user partition does not
+# change the total free byte count -- it removes the split.  Largest single
+# allocation goes from 23.94 MiB to 31.00 MiB.  Folding the LZO work memory into
+# the loader's own reservation removes the last carve-out: the guest extent runs
+# unbroken to PSP_RAM_TOP and no download has to be checked against it.
+#
+# PSP_DEFAULT_LOAD_ADDR is 0x08804000, the address the firmware itself hands a
+# user module (user partition + the 16 KB it reserves for usersystemlib).  The
+# reservation is meaningless once stage 1 has reclaimed the partitions -- the
+# whole extent is ours -- but keeping the convention means homebrew linked with
+# a stock PSP script lands where it expects.  A guest that wants the entire
+# 31 MiB extent asks for 0x08100000 explicitly.
+PSP_RAM_TOP           := 0x0A000000  # end of 32 MB main RAM
+PSP_DEFAULT_LOAD_ADDR := 0x08804000  # uploaded guest programs load here
+PSP_VRAM_BASE         := 0x04000000  # framebuffer VRAM (uncached alias 0x44000000)
+
+# Loader window: the bottom megabyte of main RAM.
+#
+# This overlaps the firmware's exception-handler BODIES at the base of the
+# kernel partition, which is safe only because stage 1 points COP0 $25 and
+# control $9 at its own stub before its first low store.  Masking Status.IE is
+# not sufficient on its own: IE masks interrupts, not exceptions, and NMI
+# through control $9 is not maskable at all, so without that takeover a bus or
+# address error during the copy would vector into memory stage 1 had just
+# overwritten.  Do not move the loader here without keeping that ordering.
+#
+# Stage 1's own PRX is loaded in the user partition, so source, copier and
+# destination are disjoint; the guard below rejects any base that would put
+# them back in the same region.
+#
+# The host needs the same answer: its -F trampoline copies to PSP_LOADER_BASE.
+# Both makefiles include this file, and perform_update() re-verifies the
+# embedded image against the base, so a stale pairing is refused, not executed.
+PSP_LOADER_BASE       := 0x08000000
+PSP_LOADER_SIZE       := 0x00100000
+
+# Lowest address the firmware can hand a user module.  Stage 1 runs from
+# wherever the firmware put the PRX, which is at or above this, so keeping the
+# loader window strictly below it is what makes source, copier and destination
+# three disjoint intervals -- the copy can then never overwrite the code running
+# it, whatever base the firmware picked.  stub.S still re-derives its own
+# address and re-checks before the first store, because only the runtime knows
+# the real base.
+PSP_USER_MODULE_MIN   := 0x08800000
+
+ifneq ($(shell test $$(($(PSP_LOADER_BASE) + $(PSP_LOADER_SIZE))) -le $$(($(PSP_USER_MODULE_MIN))) && echo ok),ok)
+  $(error PSP loader window $(PSP_LOADER_BASE)+$(PSP_LOADER_SIZE) reaches the user partition at $(PSP_USER_MODULE_MIN); stage 1 would overwrite the range it runs from)
+endif
+
+# LZO work memory for compressed downloads lives in the TOP of the loader
+# window, not below the top of RAM.  The image is ~125 KiB of a 1 MiB
+# reservation, so it is free real estate, and it leaves the guest extent
+# unbroken all the way to PSP_RAM_TOP.  Must equal LZO_WRKMEM_SIZE in
+# include/kosload/protocol.h; target.c static-asserts that.
+PSP_LZO_WRKMEM_SIZE   := 0x10000
+
+# Firmware partition boundaries (verified against the PSP kernel memory manager;
+# see AGENT/psp-memory-map.md).
+PSP_KERNEL_BASE       := 0x08000000  # firmware kernel partition, 4 MB
+PSP_VOLATILE_BASE     := 0x08400000  # firmware volatile partition, 4 MB
+PSP_USER_BASE         := 0x08800000  # firmware user partition
+
+# Guest arena: the full 0x08000000..0x0A000000 main-RAM window = 32 MiB.
+# Stage 1 (client/psp/stub/stub.S) performs the unlock before its first low
+# store -- ME reset, four F writes, four readbacks, then a whole-8-MiB cache
+# purge -- because it copies stage 2 into the reclaimed range.  Stage 2's
+# exception_init() re-verifies the same state idempotently and fails closed.
+#
+# PSP-1000 hardware proof (2026-08-10): inherited protection was C,C,0,0.
+# After the four F writes, KU0/KU1/K0/K1 all responded for both partitions.  A
+# deterministic 8-MiB image was uploaded through K1, downloaded byte-identically
+# through KU1 and K1, and the original 8 MiB was restored and verified through
+# both aliases.  See AGENT/psp-low-ram-protection.md for hashes and RE provenance.
+PSP_RAM_BYTES         := 33554432

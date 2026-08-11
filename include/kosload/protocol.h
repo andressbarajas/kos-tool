@@ -113,11 +113,24 @@
 #define KOSLOAD_CAP_DHCP       (1 << 3)
 #define KOSLOAD_CAP_CDFS_REDIR (1 << 4)
 #define KOSLOAD_CAP_ARGV       (1 << 5)
+#define KOSLOAD_CAP_FW_PREPARE (1 << 6) /* honours KOSLOAD_SERIAL_EXEC_FW_UPDATE */
 
 /* ===== Host-side capabilities (kos-tool -> kosload) */
 #define KOSTOOL_CAP_GDB_ACTIVE (1 << 0) /* kos-tool started with -g */
 
 #define KOSLOAD_EXCEPTION_TAG "EXPT" /* Exception frame marker (both serial and network) */
+
+/* ===== Serial EXECUTE console-word flag bits =====
+ *
+ * The serial protocol has no command->size field to carry the NET_CMD_EXECUTE
+ * flags below, so the two it needs ride in the high bits of the console word,
+ * which is otherwise a bool.  Legacy dc-tool-ser sends a bare 0 or 1 and legacy
+ * loaders do `if(console)`, so both bits are invisible to either side of an old
+ * pairing -- but a new host must still gate FW_UPDATE on KOSLOAD_CAP_FW_PREPARE,
+ * because an old loader would read the bit as "console enabled". */
+
+#define KOSLOAD_SERIAL_EXEC_ARGV      (1u << 31) /* argc + argv data follow */
+#define KOSLOAD_SERIAL_EXEC_FW_UPDATE (1u << 30) /* target is a fw-update trampoline */
 
 /* ===== NET_CMD_EXECUTE flag bits (carried in command->size) ===== */
 
@@ -245,11 +258,26 @@ typedef struct {
 #define ADAPTER_WII_LAN         0x0E58 /* Wii USB LAN Adapter (RVL-015) */
 #define ADAPTER_WII_WIFI        0x0E59 /* Wii Internal Wi-Fi */
 #define ADAPTER_XBOX_NFORCE     0x01C3 /* Xbox onboard nForce Ethernet MAC (NVnet) */
+#define ADAPTER_PSP_USB         0x0003 /* PSP USB */
 
 /* ===== Serial Constants ===== */
 
 #define SERIAL_DEFAULT_SPEED    57600
 #define SERIAL_BUFFER_SIZE      16384
+
+/* ===== USB transport (PSP) =====
+ *
+ * The PSP loader presents a vendor-specific USB device carrying the kosload
+ * serial byte protocol over a bulk IN/OUT endpoint pair.  IDs are shared so
+ * the host (host/transport/usb.c, libusb) and the PSP device driver agree.
+ * VID 0x1209 is the pid.codes open-source vendor space; PID "KS" (0x4B53). */
+#define KOSLOAD_USB_VID         0x1209
+#define KOSLOAD_USB_PID         0x4B53
+#define KOSLOAD_USB_IFACE       0
+#define KOSLOAD_USB_CONFIG      1      /* bConfigurationValue in cfg_desc */
+#define KOSLOAD_USB_EP_OUT      0x01   /* host -> PSP (bulk OUT) */
+#define KOSLOAD_USB_EP_IN       0x81   /* PSP  -> host (bulk IN) */
+#define KOSLOAD_USB_MAXPKT      512
 
 /* Default load addresses */
 #define DC_DEFAULT_LOAD_ADDR    0x8c010000
@@ -257,6 +285,7 @@ typedef struct {
 #define WII_DEFAULT_LOAD_ADDR   0x80004000
 #define PS2_DEFAULT_LOAD_ADDR   0x00100000
 #define XBOX_DEFAULT_LOAD_ADDR  0x0003C000
+#define PSP_DEFAULT_LOAD_ADDR   0x08804000
 
 /* Memory layout constants.  Wii MEM1/MEM2 ceilings deliberately omitted:
  * the build system passes the channel-safe loader ceiling via -DWII_MEM1_TOP
@@ -294,6 +323,17 @@ typedef struct {
 #ifndef XBOX_KOSLOAD_BASE
 #define XBOX_KOSLOAD_BASE      0x00011000 /* first loaded section/runtime base */
 #endif
+#ifndef PSP_RAM_TOP
+#define PSP_RAM_TOP            0x0A000000 /* end of 32 MB main RAM */
+#endif
+/* PSP_LOADER_BASE/SIZE follow PSP_RECLAIM_KERNEL, so these fallbacks are the
+ * default (reclaim) window only.  mk/memory.mk is authoritative for both. */
+#ifndef PSP_LOADER_BASE
+#define PSP_LOADER_BASE        0x08000000
+#endif
+#ifndef PSP_LOADER_SIZE
+#define PSP_LOADER_SIZE        0x00100000
+#endif
 
 #define LZO_WRKMEM_SIZE    0x10000 /* 64 KB — LZO1X_1_MEM_COMPRESS */
 
@@ -301,6 +341,12 @@ typedef struct {
  * Placed just below the top of usable RAM on each console. */
 #define DC_LZO_WRKMEM_ADDR   (DC_RAM_TOP - LZO_WRKMEM_SIZE)     /* 0x8cff0000 */
 #define GC_LZO_WRKMEM_ADDR   (GC_LOADER_BASE - LZO_WRKMEM_SIZE) /* 0x817DC000 */
+/* PSP puts it INSIDE the loader's own reserved window instead of below the top
+ * of RAM.  The loader image is ~125 KiB of a 1 MiB reservation, so the work
+ * memory costs nothing that was not already reserved, and the guest extent runs
+ * unbroken to PSP_RAM_TOP with no carve-out to explain or overlap-check.
+ * kosload-usb.ld.in asserts the loader image cannot grow into it. */
+#define PSP_LZO_WRKMEM_ADDR  (PSP_LOADER_BASE + PSP_LOADER_SIZE - LZO_WRKMEM_SIZE)
 
 /* ===== KOS Open Flags (for flag translation) ===== */
 

@@ -12,7 +12,7 @@
 #   Firmware bundle (OS-independent):
 #     kosload-<version>-firmware.zip
 #       -> one directory per console holding its bootable images
-#          (CDI/ISO/DOL/WAD/XISO), its raw loader binaries (ELF/BIN/DOL), and
+#          (CDI/ISO/DOL/WAD/XISO/PBP), its raw loader binaries (ELF/BIN/DOL), and
 #          its examples/ programs, plus README + LICENSE at the top level
 #
 # This script only PACKAGES what is already in build/; it does not build.
@@ -142,7 +142,7 @@ package_firmware() {
     local stage="$OUTDIR/.stage-fw/$name"
     rm -rf "$OUTDIR/.stage-fw"
     mkdir -p "$stage/dreamcast" "$stage/gamecube" "$stage/wii" \
-             "$stage/playstation2" "$stage/xbox"
+             "$stage/playstation2" "$stage/xbox" "$stage/psp"
 
     # Bootable deliverables + raw loader binaries per console (skipped if
     # absent).  Sources are build/<short>/; the bundle keeps the long console
@@ -157,10 +157,15 @@ package_firmware() {
     copy_versioned "$stage/xbox"           "$BUILDDIR"/xbox/xbox-load-ip.xiso \
                                            "$BUILDDIR"/xbox/xbox-load-ip.exe \
                                            "$BUILDDIR"/xbox/xbox-load-ip.bin
+    # EBOOT.PBP is unversioned like default.xbe: the PSP only boots a file by
+    # that exact name under ms0:/PSP/GAME/<dir>/.
+    copy_into "$stage/psp"                 "$BUILDDIR"/psp/EBOOT.PBP
+    copy_versioned "$stage/psp"            "$BUILDDIR"/psp/psp-load-usb.elf \
+                                           "$BUILDDIR"/psp/psp-load-usb.bin
 
     # build/<short>/examples/ -> <stage>/<long>/examples/
     local pair short long
-    for pair in dc:dreamcast gc:gamecube wii:wii ps2:playstation2 xbox:xbox; do
+    for pair in dc:dreamcast gc:gamecube wii:wii ps2:playstation2 xbox:xbox psp:psp; do
         short="${pair%%:*}"
         long="${pair##*:}"
         if [ -d "$BUILDDIR/$short/examples" ]; then
@@ -170,7 +175,7 @@ package_firmware() {
 
     # Drop any console dir that ended up empty (toolchain wasn't installed).
     local d
-    for d in dreamcast gamecube wii playstation2 xbox; do
+    for d in dreamcast gamecube wii playstation2 xbox psp; do
         rmdir "$stage/$d" 2>/dev/null || true
     done
 
