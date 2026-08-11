@@ -71,6 +71,11 @@ const uint8_t firmware_xbox_ip_data[] = {0};
 const uint32_t firmware_xbox_ip_size = 0;
 #endif
 
+#ifndef HAS_FIRMWARE_PSP_USB
+const uint8_t firmware_psp_usb_data[] = {0};
+const uint32_t firmware_psp_usb_size = 0;
+#endif
+
 /* ===== Console detection (console_type_t declared in kostool/context.h) ===== */
 
 console_type_t detect_console(const char *name) {
@@ -84,6 +89,8 @@ console_type_t detect_console(const char *name) {
         return CONSOLE_WII;
     if(strncmp(name, "xbox-load-", 10) == 0)
         return CONSOLE_XBOX;
+    if(strncmp(name, "psp-load-", 9) == 0)
+        return CONSOLE_PSP;
 
     return CONSOLE_UNKNOWN;
 }
@@ -581,6 +588,318 @@ static const arch_update_params_t mips_r5900_params = {
     .big_endian = 0,
 };
 
+/* ===== Allegrex Trampoline (PSP) ===== */
+
+/*
+ * Pre-assembled Allegrex trampoline (512 bytes: 0x000-0x1FF code and patched
+ * constants, firmware payload appended at 0x200).
+ *
+ * Position independent and relocation-free by construction, so the assembled
+ * .text.tramp bytes drop in verbatim.  The constants at 0x1F0 and 0x1F8 are
+ * patched by the host; keep them in step with allegrex_params.
+ *
+ * Unlike stage 1, whose source, copier and destination are disjoint, the
+ * running loader IS this copy's destination, so a second relocating stub is
+ * genuinely required here.  It runs from PSP_DEFAULT_LOAD_ADDR in the guest
+ * extent, far above PSP_LOADER_BASE.
+ *
+ * Behavior:
+ *   1. Clear Status.IE (already clear; holds regardless of how we were entered)
+ *   2. Derive its own base from the PC -- position independent, no assumed
+ *      load address
+ *   3. Take COP0 $25 and control $9 BEFORE the first store.  The loader's
+ *      handlers live in the region about to be overwritten, IE masks interrupts
+ *      but not exceptions, and NMI is not maskable at all.
+ *   4. Read destination and size from patched constants through the uncached
+ *      alias, copy the firmware from base+0x100
+ *   5. Publish with cache 0x1b + 0x08 over the destination, then sync
+ *   6. Jump to the destination
+ *
+ * The ME reset and the Tachyon protection table are NOT re-established here:
+ * the running loader already opened them and nothing closes them, and the new
+ * loader's exception_init() re-verifies both and fails closed.
+ *
+ * Memory layout when uploaded to PSP_DEFAULT_LOAD_ADDR:
+ *   [0x000-0x1FF]  Trampoline code + patched constants
+ *   [0x200-...]    Firmware .bin data
+ */
+static const uint8_t allegrex_trampoline[512] = {
+    /* 0x000: _start: mfc0 t6,$12 */
+    0x00, 0x60, 0x0E, 0x40,
+    /* 0x004: li t7,-2 */
+    0xFE, 0xFF, 0x0F, 0x24,
+    /* 0x008: and t6,t6,t7 */
+    0x24, 0x70, 0xCF, 0x01,
+    /* 0x00C: mtc0 t6,$12 */
+    0x00, 0x60, 0x8E, 0x40,
+    /* 0x010: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x014: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x018: bal 20 <tramp_here> */
+    0x01, 0x00, 0x11, 0x04,
+    /* 0x01C: nop */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x020: tramp_here: li t6,32 */
+    0x20, 0x00, 0x0E, 0x24,
+    /* 0x024: subu t0,ra,t6 */
+    0x23, 0x40, 0xEE, 0x03,
+    /* 0x028: lui t6,0x1fff */
+    0xFF, 0x1F, 0x0E, 0x3C,
+    /* 0x02C: ori t6,t6,0xffff */
+    0xFF, 0xFF, 0xCE, 0x35,
+    /* 0x030: and t2,t0,t6 */
+    0x24, 0x50, 0x0E, 0x01,
+    /* 0x034: lui t6,0x4000 */
+    0x00, 0x40, 0x0E, 0x3C,
+    /* 0x038: or t2,t2,t6 */
+    0x25, 0x50, 0x4E, 0x01,
+    /* 0x03C: li t6,268 */
+    0x0C, 0x01, 0x0E, 0x24,
+    /* 0x040: addu t6,t0,t6 */
+    0x21, 0x70, 0x0E, 0x01,
+    /* 0x044: mtc0 t6,$25 */
+    0x00, 0xC8, 0x8E, 0x40,
+    /* 0x048: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x04C: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x050: ctc0 t6,$9 */
+    0x00, 0x48, 0xCE, 0x40,
+    /* 0x054: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x058: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x05C: lw s0,496(t2) */
+    0xF0, 0x01, 0x50, 0x8D,
+    /* 0x060: lw t3,504(t2) */
+    0xF8, 0x01, 0x4B, 0x8D,
+    /* 0x064: addiu t5,t2,512 */
+    0x00, 0x02, 0x4D, 0x25,
+    /* 0x068: lui t6,0x800 */
+    0x00, 0x08, 0x0E, 0x3C,
+    /* 0x06C: sltu t7,s0,t6 */
+    0x2B, 0x78, 0x0E, 0x02,
+    /* 0x070: bnez t7,114 <tramp_bad> */
+    0x28, 0x00, 0xE0, 0x15,
+    /* 0x074: nop */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x078: lui t6,0xa00 */
+    0x00, 0x0A, 0x0E, 0x3C,
+    /* 0x07C: sltu t7,s0,t6 */
+    0x2B, 0x78, 0x0E, 0x02,
+    /* 0x080: beqz t7,114 <tramp_bad> */
+    0x24, 0x00, 0xE0, 0x11,
+    /* 0x084: nop */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x088: beqz t3,114 <tramp_bad> */
+    0x22, 0x00, 0x60, 0x11,
+    /* 0x08C: nop */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x090: lui t6,0x10 */
+    0x10, 0x00, 0x0E, 0x3C,
+    /* 0x094: sltu t7,t6,t3 */
+    0x2B, 0x78, 0xCB, 0x01,
+    /* 0x098: bnez t7,114 <tramp_bad> */
+    0x1E, 0x00, 0xE0, 0x15,
+    /* 0x09C: nop */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x0A0: move t4,s0 */
+    0x25, 0x60, 0x00, 0x02,
+    /* 0x0A4: move t7,s0 */
+    0x25, 0x78, 0x00, 0x02,
+    /* 0x0A8: addiu t3,t3,3 */
+    0x03, 0x00, 0x6B, 0x25,
+    /* 0x0AC: li t6,-4 */
+    0xFC, 0xFF, 0x0E, 0x24,
+    /* 0x0B0: and t3,t3,t6 */
+    0x24, 0x58, 0x6E, 0x01,
+    /* 0x0B4: move t8,t3 */
+    0x25, 0xC0, 0x60, 0x01,
+    /* 0x0B8: beqz t3,dc <tramp_copied> */
+    0x08, 0x00, 0x60, 0x11,
+    /* 0x0BC: nop */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x0C0: tramp_copy: lw t6,0(t5) */
+    0x00, 0x00, 0xAE, 0x8D,
+    /* 0x0C4: sw t6,0(t4) */
+    0x00, 0x00, 0x8E, 0xAD,
+    /* 0x0C8: addiu t5,t5,4 */
+    0x04, 0x00, 0xAD, 0x25,
+    /* 0x0CC: addiu t4,t4,4 */
+    0x04, 0x00, 0x8C, 0x25,
+    /* 0x0D0: addiu t3,t3,-4 */
+    0xFC, 0xFF, 0x6B, 0x25,
+    /* 0x0D4: bnez t3,c0 <tramp_copy> */
+    0xFA, 0xFF, 0x60, 0x15,
+    /* 0x0D8: nop */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x0DC: tramp_copied: addu t9,t7,t8 */
+    0x21, 0xC8, 0xF8, 0x01,
+    /* 0x0E0: beqz t8,100 <tramp_flushed> */
+    0x07, 0x00, 0x00, 0x13,
+    /* 0x0E4: nop */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x0E8: tramp_flush: cache 0x1b, 0($t7)  D: hit writeback+invalidate */
+    0x00, 0x00, 0xFB, 0xBD,
+    /* 0x0EC: cache 0x08, 0($t7)  I: hit invalidate */
+    0x00, 0x00, 0xE8, 0xBD,
+    /* 0x0F0: addiu t7,t7,64 */
+    0x40, 0x00, 0xEF, 0x25,
+    /* 0x0F4: sltu t6,t7,t9 */
+    0x2B, 0x70, 0xF9, 0x01,
+    /* 0x0F8: bnez t6,e8 <tramp_flush> */
+    0xFB, 0xFF, 0xC0, 0x15,
+    /* 0x0FC: nop */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x100: tramp_flushed: sync */
+    0x0F, 0x00, 0x00, 0x00,
+    /* 0x104: jr s0 */
+    0x08, 0x00, 0x00, 0x02,
+    /* 0x108: nop */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x10C: tramp_exc: b 10c <tramp_exc> */
+    0xFF, 0xFF, 0x00, 0x10,
+    /* 0x110: nop */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x114: tramp_bad: b 114 <tramp_bad> */
+    0xFF, 0xFF, 0x00, 0x10,
+    /* 0x118: nop */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x11C: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x120: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x124: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x128: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x12C: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x130: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x134: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x138: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x13C: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x140: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x144: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x148: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x14C: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x150: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x154: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x158: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x15C: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x160: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x164: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x168: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x16C: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x170: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x174: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x178: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x17C: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x180: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x184: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x188: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x18C: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x190: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x194: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x198: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x19C: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x1A0: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x1A4: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x1A8: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x1AC: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x1B0: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x1B4: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x1B8: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x1BC: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x1C0: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x1C4: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x1C8: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x1CC: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x1D0: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x1D4: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x1D8: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x1DC: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x1E0: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x1E4: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x1E8: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x1EC: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x1F0: destination base.  Baked in rather than patched: PSP_LOADER_BASE
+     * is a single fixed value (mk/memory.mk), so there is nothing to vary.
+     * Little-endian 0x08000000; the _Static_assert below keeps it honest. */
+    0x00, 0x00, 0x00, 0x08,
+    /* 0x1F4: padding */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x1F8: firmware size (PATCHED by host) */
+    0x00, 0x00, 0x00, 0x00,
+    /* 0x1FC: padding */
+    0x00, 0x00, 0x00, 0x00,
+
+};
+
+/* The destination lives in the trampoline's data word at 0x1F0, not in a
+ * host-side patch, so the blob only works for the base it was built with. */
+_Static_assert(PSP_LOADER_BASE == 0x08000000,
+               "allegrex_trampoline bakes its destination at offset 0x1F0; "
+               "update those four bytes if PSP_LOADER_BASE moves");
+
+static const arch_update_params_t allegrex_params = {
+    .trampoline = allegrex_trampoline,
+    .trampoline_size = 512,
+    .size_patch_offset = 0x1F8,
+    .load_addr = PSP_DEFAULT_LOAD_ADDR, /* 0x08804000 */
+    .loader_base = PSP_LOADER_BASE,     /* from mk/memory.mk, via host/Makefile */
+    .big_endian = 0,
+};
+
 /* ===== i386 Trampoline (Xbox) ===== */
 
 /*
@@ -748,6 +1067,13 @@ static uint8_t *load_firmware_file(const char *path, uint32_t *out_size) {
     return buf;
 }
 
+/* How long to let a reflashed PSP bring its USB device controller back up
+ * before the host speaks to it, and how long to wait between further tries.
+ * Measured on PSP-1000: the loader answers well inside the settle window, and
+ * the retries exist for a slow boot rather than the normal path. */
+#define PSP_REFLASH_SETTLE_USEC  1500000  /* 1.5 s before the first attempt */
+#define PSP_REFLASH_RETRY_USEC    400000  /* 400 ms between attempts */
+
 /* ===== Core update logic ===== */
 
 static int perform_update(kostool_context_t *ctx, const uint8_t *fw_data, uint32_t fw_size,
@@ -810,7 +1136,9 @@ static int perform_update(kostool_context_t *ctx, const uint8_t *fw_data, uint32
     } else {
         uint32_t saved_prog_argc = ctx->prog_argc;
         ctx->prog_argc = 0;
+        ctx->fw_update_in_progress = 1;
         ret = ctx->transport->execute(ctx, arch->load_addr, 0, 0);
+        ctx->fw_update_in_progress = 0;
         ctx->prog_argc = saved_prog_argc;
     }
     if(ret != 0) {
@@ -832,7 +1160,49 @@ static int perform_update(kostool_context_t *ctx, const uint8_t *fw_data, uint32
         ctx->remote_capabilities = 0;
         memset(ctx->remote_version_string, 0, sizeof(ctx->remote_version_string));
 
-        if(ctx->transport->init(ctx) != 0) {
+        /* PSP needs a settle delay before the host talks to it again.  The
+         * device never leaves the bus, so there is no disconnect to wait on:
+         * the handle reopens while the new loader is still re-initializing the
+         * USB controller and no endpoint answers.  serial_init() calls that
+         * success and hands back an empty version string, and every read
+         * against the dead handle costs USB_IO_TIMEOUT_MS.  Other serial
+         * consoles keep the single immediate attempt -- repeated
+         * shutdown/init cycles on a live serial link are their own hazard. */
+        int is_psp = (arch == &allegrex_params);
+        int attempts = is_psp ? 12 : 1;
+
+        int reconnected = 0;
+
+        for(int i = 0; i < attempts; i++) {
+            if(is_psp && ctx->time_ops && ctx->time_ops->sleep_usec)
+                ctx->time_ops->sleep_usec(i == 0 ? PSP_REFLASH_SETTLE_USEC
+                                                 : PSP_REFLASH_RETRY_USEC);
+
+            /* A failed open just means the loader is not back on the bus yet;
+             * the check after the loop is what decides the update failed. */
+            if(ctx->transport->init(ctx) != 0)
+                continue;
+
+            if(ctx->remote_version_string[0] != '\0') {
+                reconnected = 1;
+                break; /* handshake really completed */
+            }
+
+            /* Opened, but the loader is not answering yet.  Drop the handle so
+             * the next attempt re-opens whatever is actually on the bus. */
+            if(i + 1 < attempts) {
+                ctx->current_speed = SERIAL_DEFAULT_SPEED;
+                ctx->transport->shutdown(ctx);
+                ctx->remote_capabilities = 0;
+                memset(ctx->remote_version_string, 0, sizeof(ctx->remote_version_string));
+            }
+        }
+
+        /* Every attempt either failed to open or opened without completing the
+         * handshake.  Falling through to the success return here would make a
+         * failed flash read as a good one, which is exactly how a bad update
+         * used to surface later as an unrelated "blread: read error". */
+        if(!reconnected) {
             fprintf(stderr, "Failed to reconnect after firmware update\n");
             return -1;
         }
@@ -884,6 +1254,8 @@ int auto_update_firmware(kostool_context_t *ctx) {
         arch = &ppc_wii_params;
     else if(console == CONSOLE_PS2)
         arch = &mips_r5900_params;
+    else if(console == CONSOLE_PSP)
+        arch = &allegrex_params;
     else if(console == CONSOLE_XBOX)
         arch = &i386_xbox_params;
     else
@@ -915,7 +1287,14 @@ int auto_update_firmware(kostool_context_t *ctx) {
                          : (console == CONSOLE_GC)   ? "gc"
                          : (console == CONSOLE_WII)  ? "wii"
                          : (console == CONSOLE_XBOX) ? "xbox"
+                         : (console == CONSOLE_PSP)  ? "psp"
                                                      : "ps2";
+
+    /* Transport suffix in the loader name.  Everything else is serial-or-ip;
+     * PSP is neither.  It reports "psp-load-usb" and its transport reports
+     * "serial" because the USB pipe reuses the serial protocol, so the
+     * serial/ip test below would look for "psp-load-serial" and skip. */
+    const char *suffix = (console == CONSOLE_PSP) ? "usb" : (is_serial ? "serial" : "ip");
 
     /* Select embedded firmware based on console + transport */
     if(console == CONSOLE_DC) {
@@ -942,6 +1321,10 @@ int auto_update_firmware(kostool_context_t *ctx) {
         /* Xbox: network only (onboard NVnet). */
         fw_data = firmware_xbox_ip_data;
         fw_size = firmware_xbox_ip_size;
+    } else if(console == CONSOLE_PSP) {
+        /* PSP: USB only (serial protocol over a vendor bulk pipe). */
+        fw_data = firmware_psp_usb_data;
+        fw_size = firmware_psp_usb_size;
     } else {
         /* PS2: network only, no serial transport */
         fw_data = firmware_ps2_ip_data;
@@ -957,18 +1340,24 @@ int auto_update_firmware(kostool_context_t *ctx) {
      * - Same name but older version: update
      * - Same name and same/newer version: skip */
     char expected_name[32];
-    snprintf(expected_name, sizeof(expected_name), "%s-load-%s", prefix, is_serial ? "serial" : "ip");
+    snprintf(expected_name, sizeof(expected_name), "%s-load-%s", prefix, suffix);
     int need_update = 0;
 
     if(strcmp(remote_name, expected_name) != 0) {
         /* Different name — either dcload → dc-load upgrade,
          * or serial/ip mismatch.  Check if types match. */
-        if(is_serial && !is_serial_loader(remote_name)) {
-            /* Serial transport but remote is IP loader?  Skip. */
-            return 0;
-        }
-        if(!is_serial && !is_ip_loader(remote_name)) {
-            /* Network transport but remote is serial loader?  Skip. */
+        if(console != CONSOLE_PSP) {
+            if(is_serial && !is_serial_loader(remote_name)) {
+                /* Serial transport but remote is IP loader?  Skip. */
+                return 0;
+            }
+            if(!is_serial && !is_ip_loader(remote_name)) {
+                /* Network transport but remote is serial loader?  Skip. */
+                return 0;
+            }
+        } else {
+            /* PSP has exactly one transport, so a name mismatch here means a
+             * different console's loader answered -- never reflash that. */
             return 0;
         }
         need_update = 1;

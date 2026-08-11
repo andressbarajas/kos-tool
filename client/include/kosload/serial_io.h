@@ -5,6 +5,7 @@
  * Platform-specific implementations:
  *   - Dreamcast: client/dreamcast/serial_io.c (wraps SCIF)
  *   - GameCube:  client/gamecube/serial_io.c  (wraps USBGecko)
+ *   - PSP:       client/psp/serial_io.c       (wraps the USB device controller)
  */
 
 #ifndef KOSLOAD_SERIAL_IO_H

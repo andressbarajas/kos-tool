@@ -36,7 +36,10 @@
 #define KOSLOAD_BASE 0x817EC000
 #endif
 #elif defined(__mips__) || defined(__mips)
-#ifdef PS2_KOSLOAD_BASE
+#if defined(PSP_KOSLOAD_BASE)
+#define KOSLOAD_BASE PSP_KOSLOAD_BASE
+#define KOSLOAD_TARGET_PSP 1
+#elif defined(PS2_KOSLOAD_BASE)
 #define KOSLOAD_BASE PS2_KOSLOAD_BASE
 #else
 #define KOSLOAD_BASE 0x80000284
@@ -247,7 +250,7 @@ static void send_gc_frame(void) {
 }
 #endif
 
-#if defined(__mips__) || defined(__mips)
+#if (defined(__mips__) || defined(__mips)) && !defined(KOSLOAD_TARGET_PSP)
 /*
  * R5900 (EE) exception frame layout (420 bytes), matching
  * ps2_exception_frame_t on the host:
@@ -298,6 +301,64 @@ static void send_ps2_frame(void) {
 
     print("Sending PS2 exception frame (420 bytes)...\n");
     kl_write(1, frame, PS2_FRAME_BYTES);
+    print("Done.\n");
+}
+#endif
+
+#if defined(KOSLOAD_TARGET_PSP)
+/*
+ * Allegrex exception frame layout (180 bytes), matching
+ * psp_exception_frame_t on the host:
+ *   [0]       "EXPT" tag (4 bytes)
+ *   [1..32]   32 GPRs, one word each (no 64-bit halves, unlike the EE)
+ *   [33]      COP0 Cause
+ *   [34]      COP0 EPC
+ *   [35]      COP0 Status
+ *   [36]      COP0 BadVAddr
+ *   [37]      is_nmi
+ *   [38]      COP0 ErrorEPC
+ *   [39..44]  NMI-only evidence: sysreg +0x00, +0x04, COP0 $22, $24,
+ *             sysreg +0x14, +0x80 — all zero for an ordinary fault
+ *
+ * NOTE the COP0 order: Cause comes BEFORE EPC here, the opposite of the PS2
+ * frame, because the Allegrex save area is laid out by exception.S rather
+ * than copied from a COP0 register order.
+ */
+#define PSP_FRAME_WORDS 45
+#define PSP_FRAME_BYTES 180
+
+static void send_psp_frame(void) {
+    unsigned int   frame[PSP_FRAME_WORDS];
+    unsigned char *tag = (unsigned char *)&frame[0];
+    int i;
+
+    for(i = 0; i < PSP_FRAME_WORDS; i++)
+        frame[i] = 0;
+
+    /* EXPT tag */
+    tag[0] = 'E';
+    tag[1] = 'X';
+    tag[2] = 'P';
+    tag[3] = 'T';
+
+    /* GPRs r0-r31, one word each. */
+    for(i = 0; i < 32; i++)
+        frame[1 + i] = 0xAA000000 | (unsigned int)i;
+    frame[1 + 28] = 0x08804000;               /* gp */
+    frame[1 + 29] = 0x088FFFF0;               /* sp */
+    frame[1 + 31] = (unsigned int)&start;     /* ra */
+
+    /* COP0: Cause.ExcCode (bits 6:2) = 4 -> Address error (load/fetch). */
+    frame[33] = 4u << 2;                      /* Cause  */
+    frame[34] = (unsigned int)&crash_site;    /* EPC    */
+    frame[35] = 0x00400000;                   /* Status */
+    frame[36] = 0x00000002;                   /* BadVAddr (misaligned) */
+
+    /* is_nmi = 0, so the host reports an ordinary fault and the NMI tail
+     * stays zero — the same shape the firmware sends for a guest crash. */
+
+    print("Sending PSP exception frame (180 bytes)...\n");
+    kl_write(1, frame, PSP_FRAME_BYTES);
     print("Done.\n");
 }
 #endif
@@ -378,6 +439,8 @@ void start(void) {
     send_dc_frame();
 #elif defined(__PPC__) || defined(__powerpc__)
     send_gc_frame();
+#elif defined(KOSLOAD_TARGET_PSP)
+    send_psp_frame();
 #elif defined(__mips__) || defined(__mips)
     send_ps2_frame();
 #elif defined(__i386__)

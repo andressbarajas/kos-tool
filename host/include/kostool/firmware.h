@@ -21,6 +21,8 @@ extern const uint8_t firmware_wii_ip_data[];
 extern const uint32_t firmware_wii_ip_size;
 extern const uint8_t firmware_xbox_ip_data[];
 extern const uint32_t firmware_xbox_ip_size;
+extern const uint8_t firmware_psp_usb_data[];
+extern const uint32_t firmware_psp_usb_size;
 
 /*
  * Check remote loader version and auto-update if needed.

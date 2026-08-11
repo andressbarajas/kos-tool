@@ -322,6 +322,8 @@ static const char *addr2line_for_console(const kostool_context_t *ctx) {
         return ctx->mips_addr2line;
     case CONSOLE_XBOX:
         return ctx->xbox_addr2line;
+    case CONSOLE_PSP:
+        return ctx->psp_addr2line;
     default:
         /* Unrecognized loader: fall back to the endianness heuristic. */
         return ctx->target_big_endian ? ctx->ppc_addr2line : ctx->sh4_addr2line;
@@ -516,6 +518,11 @@ static const char *ps2_exception_code_to_string(uint32_t excode) {
     }
 }
 
+/* The Allegrex uses the standard MIPS Cause.ExcCode encoding, so the PS2's
+ * table applies unchanged; only codes 1-3 differ in practice (the PSP's TLB is
+ * not used by this loader) and their names are still correct. */
+#define psp_exception_code_to_string ps2_exception_code_to_string
+
 /* x86 CPU exception vector to string (Intel SDM vectors 0..19). */
 static const char *xbox_exception_code_to_string(uint32_t vector) {
     switch(vector) {
@@ -596,6 +603,15 @@ static const char *gc_fpr_names[32] = {
 static const char *ps2_register_names[32] = {
     "zero", "at", "v0", "v1", "a0", "a1", "a2", "a3",
     "a4",   "a5", "a6", "a7", "t0", "t1", "t2", "t3",
+    "s0",   "s1", "s2", "s3", "s4", "s5", "s6", "s7",
+    "t8",   "t9", "k0", "k1", "gp", "sp", "fp", "ra",
+};
+
+/* Allegrex GPR names, o32 ABI — the PSP toolchain keeps the classic
+ * t0-t7/t8-t9 split, unlike the PS2's n32 aliasing above. */
+static const char *psp_register_names[32] = {
+    "zero", "at", "v0", "v1", "a0", "a1", "a2", "a3",
+    "t0",   "t1", "t2", "t3", "t4", "t5", "t6", "t7",
     "s0",   "s1", "s2", "s3", "s4", "s5", "s6", "s7",
     "t8",   "t9", "k0", "k1", "gp", "sp", "fp", "ra",
 };
@@ -1060,6 +1076,108 @@ static void handle_ps2_exception(kostool_context_t *ctx, const uint8_t *data, ui
     }
 }
 
+/* All registers already byte-swapped to host order by the caller. */
+static void print_psp_registers(FILE *fp, const uint32_t *gpr, uint32_t epc, uint32_t status,
+                                uint32_t cause, uint32_t badvaddr) {
+    for(int i = 0; i < 32; i++)
+        fprintf(fp, "  %-6s 0x%08x\n", psp_register_names[i], gpr[i]);
+    fprintf(fp, "  %-6s 0x%08x\n", "EPC", epc);
+    fprintf(fp, "  %-6s 0x%08x\n", "Status", status);
+    fprintf(fp, "  %-6s 0x%08x\n", "Cause", cause);
+    fprintf(fp, "  %-6s 0x%08x\n", "BadV", badvaddr);
+}
+
+static void handle_psp_exception(kostool_context_t *ctx, const uint8_t *data, uint32_t count) {
+    if(count < sizeof(psp_exception_frame_t)) {
+        fprintf(stderr, "\nIncomplete PSP exception frame (%u bytes)\n", count);
+        return;
+    }
+
+    /* Byte-swap from the Allegrex (little-endian) to host order.  Unlike the
+     * PS2 the GPRs are plain 32-bit words. */
+    const psp_exception_frame_t *f = (const psp_exception_frame_t *)data;
+    uint32_t gpr[32];
+    for(int i = 0; i < 32; i++)
+        gpr[i] = le32_to_host(f->gpr[i]);
+    uint32_t epc      = le32_to_host(f->epc);
+    uint32_t status   = le32_to_host(f->status);
+    uint32_t cause    = le32_to_host(f->cause);
+    uint32_t badvaddr = le32_to_host(f->badvaddr);
+
+    uint32_t excode = (cause >> 2) & 0x1f;
+    const char *expt_str = psp_exception_code_to_string(excode);
+
+    fprintf(stderr, "\n=== PSP Exception: %s (ExcCode %u) ===\n", expt_str, excode);
+
+    /* Always print key registers */
+    fprintf(stderr, "  %-6s 0x%08x\n", "EPC", epc);
+    fprintf(stderr, "  %-6s 0x%08x\n", "Cause", cause);
+    fprintf(stderr, "  %-6s 0x%08x\n", "Status", status);
+    fprintf(stderr, "  %-6s 0x%08x\n", "BadV", badvaddr);
+    fprintf(stderr, "  %-6s 0x%08x\n", "sp", gpr[29]);
+    fprintf(stderr, "  %-6s 0x%08x\n", "ra", gpr[31]);
+
+    const char *a2l = addr2line_for_console(ctx);
+
+    /* addr2line on valid addresses, or fall back to full register dump */
+    if(addr2line_available < 0) {
+        addr2line_available = ctx->loaded_binary_path && a2l[0] && access(a2l, X_OK) == 0 &&
+                              is_elf_file(ctx->loaded_binary_path);
+#ifndef _WIN32
+        if(addr2line_available)
+            start_addr2line_process(a2l, ctx->loaded_binary_path);
+#endif
+    }
+
+    if(addr2line_available) {
+        if(epc >= PSP_DEFAULT_LOAD_ADDR && epc < PSP_RAM_TOP) {
+            char decoded[256];
+            decode_address(a2l, ctx->loaded_binary_path, epc, decoded, sizeof(decoded));
+            if(decoded[0] && decoded[0] != '?')
+                fprintf(stderr, "  %-6s -> %s\n", "EPC", decoded);
+        }
+        for(int i = 0; i < 32; i++) {
+            if(gpr[i] >= PSP_DEFAULT_LOAD_ADDR && gpr[i] < PSP_RAM_TOP) {
+                char decoded[256];
+                decode_address(a2l, ctx->loaded_binary_path, gpr[i], decoded, sizeof(decoded));
+                if(decoded[0] && decoded[0] != '?')
+                    fprintf(stderr, "  %-6s -> %s\n", psp_register_names[i], decoded);
+            }
+        }
+    } else {
+        print_psp_registers(stderr, gpr, epc, status, cause, badvaddr);
+    }
+
+    /* Save full register dump to text file */
+    char filename[128];
+    make_dump_filename("psp", filename, sizeof(filename));
+    FILE *dump = fopen(filename, "w");
+    if(dump) {
+        fprintf(dump, "=== PSP Exception: %s (ExcCode %u) ===\n\n", expt_str, excode);
+        fprintf(dump, "Registers:\n");
+        print_psp_registers(dump, gpr, epc, status, cause, badvaddr);
+        if(addr2line_available) {
+            fprintf(dump, "\nSymbols:\n");
+            if(epc >= PSP_DEFAULT_LOAD_ADDR && epc < PSP_RAM_TOP) {
+                char decoded[256];
+                decode_address(a2l, ctx->loaded_binary_path, epc, decoded, sizeof(decoded));
+                if(decoded[0] && decoded[0] != '?')
+                    fprintf(dump, "  %-6s -> %s\n", "EPC", decoded);
+            }
+            for(int i = 0; i < 32; i++) {
+                if(gpr[i] >= PSP_DEFAULT_LOAD_ADDR && gpr[i] < PSP_RAM_TOP) {
+                    char decoded[256];
+                    decode_address(a2l, ctx->loaded_binary_path, gpr[i], decoded, sizeof(decoded));
+                    if(decoded[0] && decoded[0] != '?')
+                        fprintf(dump, "  %-6s -> %s\n", psp_register_names[i], decoded);
+                }
+            }
+        }
+        fclose(dump);
+        fprintf(stderr, "  Saved to %s\n", filename);
+    }
+}
+
 static DIR *opendirs[MAX_OPEN_DIRS];
 
 /* ===== Byte order helpers for target wire format ===== */
@@ -1103,9 +1221,9 @@ static int ser_link_dead;
 /* Blocking read of exactly count bytes.  Returns 0 on success, -1 if the link
  * failed before all of them arrived -- in which case buf is left partly or
  * wholly uninitialised, so a caller that cannot tolerate garbage must check.
- * Transports are expected to block rather than return 0 on an idle link;
- * reaching here with 0 means the connection is gone, not that the target is
- * merely quiet. */
+ * Transports are expected to block rather than return 0 on an idle link (see
+ * the note in host/src/transport/usb.c); reaching here with 0 means the
+ * connection is gone, not that the target is merely quiet. */
 static int ser_blread(kostool_context_t *ctx, void *buf, int count) {
     uint8_t *tmp = buf;
 
@@ -1406,6 +1524,9 @@ static void ser_syscall_write(kostool_context_t *ctx) {
         switch(ctx->console_type) {
             case CONSOLE_PS2:
                 handle_ps2_exception(ctx, data, count);
+                break;
+            case CONSOLE_PSP:
+                handle_psp_exception(ctx, data, count);
                 break;
             case CONSOLE_GC:
             case CONSOLE_WII:
@@ -2053,6 +2174,9 @@ static void net_syscall_write(kostool_context_t *ctx, uint8_t *pkt, int pkt_len)
         switch(ctx->console_type) {
             case CONSOLE_PS2:
                 handle_ps2_exception(ctx, data, count);
+                break;
+            case CONSOLE_PSP:
+                handle_psp_exception(ctx, data, count);
                 break;
             case CONSOLE_GC:
             case CONSOLE_WII:

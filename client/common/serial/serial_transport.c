@@ -258,6 +258,8 @@ static int serial_transport_init(void)
     kosload_info.capabilities = KOSLOAD_CAP_SERIAL | KOSLOAD_CAP_ARGV;
     if (target_get_ops()->cdfs_redir_enable)
         kosload_info.capabilities |= KOSLOAD_CAP_CDFS_REDIR;
+    if (target_get_ops()->fw_update_prepare)
+        kosload_info.capabilities |= KOSLOAD_CAP_FW_PREPARE;
     kosload_info.adapter = installed_adapter;
     kosload_info.baud_rate = SERIAL_DEFAULT_SPEED;
     screensaver_init(serial_restore_screen, WHITE);
@@ -270,6 +272,7 @@ static void serial_transport_loop(bool is_main_loop)
     unsigned int addr;
     unsigned int size;
     unsigned int console;
+    int          fw_update;
 
     const target_ops_t *t = common_get_target();
 
@@ -312,14 +315,18 @@ static void serial_transport_loop(bool is_main_loop)
             addr = get_uint();
             console = get_uint();
 
-            /* Bit 31 of console field signals "args follow".
-             * Legacy dc-tool-ser never sets this bit, so kosload-serial
-             * stays backwards-compatible with the old host tool. */
+            /* High bits of the console field carry the flags the network
+             * protocol keeps in command->size (see protocol.h).  Legacy
+             * dc-tool-ser never sets either, so kosload-serial stays
+             * backwards-compatible with the old host tool. */
+            fw_update = (console & KOSLOAD_SERIAL_EXEC_FW_UPDATE) != 0;
+            console &= ~KOSLOAD_SERIAL_EXEC_FW_UPDATE;
+
             kosload_info.argc = 0;
             kosload_info.argv_data[0] = '\0';
 
-            if (console & (1u << 31)) {
-                console &= ~(1u << 31); /* clear flag before use */
+            if (console & KOSLOAD_SERIAL_EXEC_ARGV) {
+                console &= ~KOSLOAD_SERIAL_EXEC_ARGV; /* clear flag before use */
                 unsigned int prog_argc = get_uint();
                 if (prog_argc > 0) {
                     unsigned int argv_data_len = get_uint();
@@ -332,8 +339,19 @@ static void serial_transport_loop(bool is_main_loop)
                 }
             }
 
-            t->set_console_enabled(console);
-            serial_io_flush();
+            /* A firmware-update handoff isn't a user program: skip the
+             * console plumbing meant for them and give the target its one
+             * chance to tear down state that won't survive the one-way jump
+             * into the replacement loader.  Flush first — prepare may take
+             * down the very pipe the flush would have used. */
+            if (fw_update) {
+                serial_io_flush();
+                if (t->fw_update_prepare)
+                    t->fw_update_prepare();
+            } else {
+                t->set_console_enabled(console);
+                serial_io_flush();
+            }
             t->execute(addr);
             booted = NOT_BOOTED; /* reinit video on next loop */
             break;

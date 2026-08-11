@@ -1,0 +1,99 @@
+/* client/psp/stub/kosload-stub.ld.in — stage-1 PRX linker script (generated).
+ *
+ * Linked at base 0: host/tools/elf2prx turns this image into a relocatable PRX,
+ * and PRX relocation entries carry no addend, so the value the linker leaves in
+ * each instruction field must be the offset from the module base.
+ *
+ * Consequences that are load-bearing here:
+ *   - _gp is defined *inside* .sdata so it is section-relative.  Defined between
+ *     output sections it would be SHN_ABS, elf2prx would drop the relocation on
+ *     the module descriptor's gp_value, and the firmware would be handed an
+ *     unrelocated small-data anchor.
+ *   - The stack lives in .bss for the same reason (and the stub barely uses one).
+ *   - .rodata.sceModuleInfo is pinned right after the code; elf2prx points the
+ *     program header's p_paddr at it, which is how the firmware finds it.
+ */
+
+OUTPUT_FORMAT("elf32-littlemips", "elf32-bigmips", "elf32-littlemips")
+OUTPUT_ARCH(mips)
+ENTRY(_start)
+
+SECTIONS
+{
+  . = 0;
+
+  .rodata.sceModuleInfo ALIGN(16) : {
+    KEEP (*(.rodata.sceModuleInfo))
+  }
+
+  /* The stage-2 image.  Kept out of .rodata so its 64-byte alignment survives. */
+  .rodata.payload ALIGN(64) : {
+    KEEP (*(.rodata.payload))
+  }
+
+  /* .text after .rodata.payload.  The loader window sits below the user
+   * partition (mk/memory.mk enforces that), so the copy destination is disjoint
+   * from this image wherever the firmware loads it and the order is not
+   * load-bearing today -- but keeping the copier past the end of the payload is
+   * what would still hold if the destination ever moved back up.  stub.S
+   * re-proves the intervals at runtime before its first store either way. */
+  .text ALIGN(16) : {
+    *(.text.stub)
+    *(.text .text.* .gnu.linkonce.t.*)
+  }
+
+  .rodata ALIGN(16) : {
+    *(.rodata .rodata.* .gnu.linkonce.r.*)
+  }
+
+  .data ALIGN(16) : {
+    *(.data .data.* .gnu.linkonce.d.*)
+  }
+
+  .sdata ALIGN(16) : {
+    _gp = . + 0x7ff0;
+    *(.sdata .sdata.* .gnu.linkonce.s.*)
+  }
+
+  . = ALIGN(16);
+  __bss_start = .;
+  .sbss ALIGN(16) : { *(.sbss .sbss.* .scommon) }
+  .bss ALIGN(16) : {
+    *(.bss .bss.*) *(COMMON)
+    . = ALIGN(16);
+
+    /* Reserve the FULL stage-2 footprint, not just this stub's image.
+     *
+     * The firmware allocates the module a region of exactly p_memsz bytes.
+     * In the STOCK configuration stage 2 is copied to the base of that region
+     * and then uses everything up to its own _end -- it sets $sp near the top
+     * and clears ~90 KB of BSS.  If memsz only covered the stub, all of that
+     * would land in memory the firmware still owns and is using, corrupting it
+     * and killing the console a moment later.  NOBITS, so it costs nothing in
+     * the file.
+     *
+     * A reclaim build does not need the reservation, because stage 2 lands in
+     * the low 8 MiB instead.  It is kept unconditional deliberately: it is free
+     * in the image, it keeps one linker script for both configurations, and it
+     * is the conservative direction if a future change moves stage 2 back into
+     * the firmware's allocation.
+     *
+     * Must sit inside an allocated section: only those contribute to the
+     * segment's p_memsz, so doing this between sections has no effect on what
+     * the firmware reserves.  Inside a section `.` is section-relative, so this
+     * reserves the stage-2 footprint PLUS the stub's own size -- deliberately
+     * conservative, and ~22 KB of slack out of a 24 MB partition. */
+    . = MAX(., @PSP_STAGE2_MEMSZ@);
+  }
+  . = ALIGN(16);
+  _end = .;
+
+  /DISCARD/ : {
+    *(.MIPS.abiflags)
+    *(.gnu.attributes)
+    *(.reginfo)
+    *(.comment)
+    *(.eh_frame*)
+    *(.debug_*)
+  }
+}

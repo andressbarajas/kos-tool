@@ -63,6 +63,7 @@ extern const target_ops_t gamecube_target_ops;
 extern const target_ops_t wii_target_ops;
 extern const target_ops_t playstation2_target_ops;
 extern const target_ops_t xbox_target_ops;
+extern const target_ops_t psp_target_ops;
 
 /* Gets the target_ops for the current build */
 const target_ops_t *target_get_ops(void);

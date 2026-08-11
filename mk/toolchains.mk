@@ -12,6 +12,7 @@ GC_TOOLCHAIN        ?= /opt/toolchains/gc/powerpc-eabi/bin
 PS2_EE_TOOLCHAIN    ?= /opt/toolchains/ps2/mips-elf/bin
 PS2_IOP_TOOLCHAIN   ?= /opt/toolchains/ps2/mipsel-elf/bin
 XBOX_TOOLCHAIN      ?= /opt/toolchains/xbox/i686-pc-xbox/bin
+PSP_TOOLCHAIN       ?= /opt/toolchains/psp/mipsel-psp-elf/bin
 
 # Tool name prefixes (the cross-compiler triple).  Combined with the bindirs
 # above to form full tool paths, e.g. $(DC_TOOLCHAIN)/$(DC_PREFIX)gcc.
@@ -20,3 +21,4 @@ GC_PREFIX           := powerpc-eabi-
 PS2_PREFIX          := mips64r5900el-ps2-elf-
 PS2_IOP_PREFIX      := mipsel-elf-
 XBOX_PREFIX         := i686-pc-xbox-
+PSP_PREFIX          := mipsel-psp-elf-

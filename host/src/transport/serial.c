@@ -375,7 +375,14 @@ static int serial_recv_data(kostool_context_t *ctx, uint8_t *data, uint32_t src_
     ctx->serial_ops->write(ctx->serial_handle, &c, 1);
     blread(ctx, &c, 1);
 
-    uint32_t wrkmem_addr = ctx->target_big_endian ? GC_LZO_WRKMEM_ADDR : DC_LZO_WRKMEM_ADDR;
+    uint32_t wrkmem_addr = 0;
+
+    if(ctx->console_type == CONSOLE_DC)
+        wrkmem_addr = DC_LZO_WRKMEM_ADDR;
+    else if(ctx->console_type == CONSOLE_GC)
+        wrkmem_addr = GC_LZO_WRKMEM_ADDR;
+    else if(ctx->console_type == CONSOLE_PSP)
+        wrkmem_addr = PSP_LZO_WRKMEM_ADDR;
 
     /* If the read range overlaps wrkmem, the console would corrupt the
      * data with LZO hash tables. Send 0 to force uncompressed transfer. */
@@ -427,9 +434,17 @@ static int serial_recv_response(kostool_context_t *ctx, uint8_t *buffer, size_t 
     return 1;
 }
 
+/* The probe exists because legacy dcload-serial hangs on an unknown command, so
+ * this stays a strict allowlist of loaders known to answer it rather than a
+ * broad match.  Every loader that speaks the serial byte protocol has to appear
+ * here: the PSP's transport is USB, but the protocol on top of it is this one,
+ * and while it was missing the PSP negotiated NO capabilities at all -- which
+ * silently disabled argv passing (KOSLOAD_CAP_ARGV) as well as the firmware
+ * handoff flag, and never delivered the host's own capability word. */
 static bool serial_remote_supports_capabilities(const kostool_context_t *ctx) {
     return strncmp(ctx->remote_version_string, "dc-load-serial ", 15) == 0 ||
-           strncmp(ctx->remote_version_string, "gc-load-serial ", 15) == 0;
+           strncmp(ctx->remote_version_string, "gc-load-serial ", 15) == 0 ||
+           strncmp(ctx->remote_version_string, "psp-load-usb ", 13) == 0;
 }
 
 static bool serial_remote_supports_argv(const kostool_context_t *ctx) {
@@ -445,13 +460,20 @@ static int serial_execute(kostool_context_t *ctx, uint32_t addr, int console_ena
     uint8_t c;
     bool send_argv = (ctx->prog_argc > 0) && serial_remote_supports_argv(ctx);
 
+    /* Gate the firmware-update flag on the capability: a loader that predates
+     * it reads the bit as part of the console bool and would turn console
+     * redirection on for a handoff that has no program to redirect. */
+    bool send_fw_update = ctx->fw_update_in_progress &&
+                          (ctx->remote_capabilities & KOSLOAD_CAP_FW_PREPARE) != 0;
+
     if(cdfs_redir) {
         c = SERIAL_CMD_CDFS_REDIR;
         ctx->serial_ops->write(ctx->serial_handle, &c, 1);
         blread(ctx, &c, 1);
     }
 
-    printf("Sending execute command (0x%08x, console=%d)...", addr, console_enabled);
+    printf("Sending execute command (0x%08x, console=%d%s)...", addr, console_enabled,
+           send_fw_update ? ", fw_update=1" : "");
     if(send_argv)
         printf("argv(%u, argv0=\"%s\")...", ctx->prog_argc, ctx->prog_argv_data);
 
@@ -468,7 +490,11 @@ static int serial_execute(kostool_context_t *ctx, uint32_t addr, int console_ena
      * args are present, so with no args the protocol is identical to legacy. */
     uint32_t console_flags = (uint32_t)console_enabled;
     if(send_argv)
-        console_flags |= (1u << 31);
+        console_flags |= KOSLOAD_SERIAL_EXEC_ARGV;
+
+    if(send_fw_update)
+        console_flags |= KOSLOAD_SERIAL_EXEC_FW_UPDATE;
+
     send_uint(ctx, console_flags);
 
     if(send_argv) {

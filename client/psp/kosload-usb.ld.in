@@ -1,0 +1,107 @@
+/* client/psp/kosload-usb.ld.in — PSP (Allegrex) linker script (generated).
+ *
+ * Stage 2 of a two-stage boot.  This is the real loader, linked at the fixed
+ * @PSP_LOADER_BASE@ and emitted as a raw binary; stage 1 (client/psp/stub) is a
+ * relocatable PRX that carries this image as a payload, copies it here, and
+ * jumps to it.  Keeping stage 2 at a fixed base is what lets guest programs
+ * find the kosload header at a compile-time address, the same arrangement the
+ * DC, GC and PS2 ports use.
+ *
+ * .rodata.sceModuleInfo is pinned right after the code.  The firmware never
+ * reads this copy — it reads the descriptor in the stage-1 PRX — but keeping it
+ * leaves the loader image self-describing.
+ *
+ * Bounds __bss_start/_end drive crt0.S's BSS clear, and the private stack is
+ * reserved inside .bss.
+ */
+OUTPUT_FORMAT("elf32-littlemips", "elf32-bigmips", "elf32-littlemips")
+OUTPUT_ARCH(mips)
+ENTRY(_start)
+
+MEMORY
+{
+  ram (rwx) : ORIGIN = @PSP_LOADER_BASE@, LENGTH = @PSP_LOADER_SIZE@
+}
+
+SECTIONS
+{
+  .text : {
+    *(.text.crt0)
+    *(.text .text.* .stub .gnu.linkonce.t.*)
+    *(.glue_7t) *(.glue_7)
+    _etext = .;
+  } > ram
+
+  /* PSP module descriptor (import-free): pinned right after code. */
+  .rodata.sceModuleInfo ALIGN(16) : {
+    KEEP (*(.rodata.sceModuleInfo))
+  } > ram
+
+  .rodata ALIGN(16) : {
+    *(.rodata .rodata.* .gnu.linkonce.r.*)
+  } > ram
+
+  .data ALIGN(16) : {
+    *(.data .data.* .gnu.linkonce.d.*)
+    SORT(CONSTRUCTORS)
+  } > ram
+
+  .ctors ALIGN(16) : { KEEP(*(SORT(.ctors.*))) KEEP(*(.ctors)) } > ram
+  .dtors ALIGN(16) : { KEEP(*(SORT(.dtors.*))) KEEP(*(.dtors)) } > ram
+
+  .got ALIGN(16) : { *(.got.plt) *(.got) } > ram
+  .lit8 ALIGN(16) : { *(.lit8) } > ram
+  .lit4 ALIGN(16) : { *(.lit4) } > ram
+
+  .sdata ALIGN(16) : {
+    _gp = . + 0x7ff0;
+    *(.sdata .sdata.* .gnu.linkonce.s.*)
+  } > ram
+
+  . = ALIGN(16);
+  _edata = .;
+  __bss_start = .;
+
+  .sbss ALIGN(16) : {
+    *(.dynsbss) *(.sbss .sbss.* .scommon)
+  } > ram
+  /* Private stack, reserved inside .bss.  NOBITS, so it costs nothing in the
+   * raw image.  crt0.S sets $sp before clearing BSS; the clear then walks over
+   * this region while it is still unused, which is harmless. */
+  .bss ALIGN(16) : {
+    *(.dynbss) *(.bss .bss.*) *(COMMON)
+    . = ALIGN(16);
+    _stack_bottom = .;
+    . += 64 * 1024;
+    . = ALIGN(16);
+    _stack = .;
+  } > ram
+
+  . = ALIGN(16);
+  _end = .;
+  PROVIDE(end = .);
+
+  /DISCARD/ : {
+    *(.MIPS.abiflags)
+    *(.gnu.attributes)
+    *(.reginfo)
+    *(.comment)
+    *(.eh_frame*)
+    *(.debug_*)
+  }
+
+  /* An unsubstituted @PSP_LOADER_BASE@ evaluates to 0 and links a stage-2 image
+   * that quietly boots nowhere, so fail the link instead. */
+  ASSERT(( ORIGIN(ram) != 0 ), "Error: PSP_LOADER_BASE was not substituted into the linker script")
+  ASSERT(( _end <= (ORIGIN(ram) + LENGTH(ram)) ), "Error: PSP loader region overflowed")
+
+  /* The top 64 KiB of this window is the LZO work memory the host hands the
+   * loader for compressed downloads (PSP_LZO_WRKMEM_ADDR in protocol.h).  It is
+   * deliberately not a section here -- nothing in the image references it, and
+   * making it NOBITS would only inflate the reservation.  What must never
+   * happen is the image growing into it, which would have the download path
+   * scribble LZO hash tables over the loader's own BSS.  @PSP_LZO_WRKMEM_SIZE@
+   * is checked against LZO_WRKMEM_SIZE by a _Static_assert in target.c. */
+  ASSERT(( _end <= (ORIGIN(ram) + LENGTH(ram) - @PSP_LZO_WRKMEM_SIZE@) ),
+         "Error: PSP loader image would overlap the LZO work memory at the top of its window")
+}

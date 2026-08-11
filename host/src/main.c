@@ -37,6 +37,8 @@ static uint32_t default_load_address(console_type_t console) {
         return WII_DEFAULT_LOAD_ADDR;
     case CONSOLE_XBOX:
         return XBOX_DEFAULT_LOAD_ADDR;
+    case CONSOLE_PSP:
+        return PSP_DEFAULT_LOAD_ADDR;
     case CONSOLE_DC:
     case CONSOLE_UNKNOWN:
     default:
@@ -115,6 +117,12 @@ static int is_serial_device(const char *name) {
 
 static int is_dhcp_target(const char *name) {
     return name && strcmp(name, "dhcp") == 0;
+}
+
+/* `-t usb` selects the libusb transport (PSP over USB bulk).  It reuses the
+ * serial byte protocol over a libusb-backed byte pipe (host/transport/usb.c). */
+static int is_usb_target(const char *name) {
+    return name && strcmp(name, "usb") == 0;
 }
 
 static const char *program_basename(const char *path) {
@@ -213,7 +221,7 @@ static time_t host_local_rtc_time(time_t now) {
 static void usage(void) {
     printf("\nkostool %s — Unified console loader\n", KOSLOAD_VERSION_STRING);
     printf("build: %s\n\n", KOSLOAD_GIT_REV);
-    printf("Usage: kostool [options] -t <device|ip|dhcp>\n");
+    printf("Usage: kostool [options] -t <device|ip|dhcp|usb>\n");
     printf("       kostool [options] -T <profile>\n\n");
     printf("Commands:\n");
     printf("  -x <file>    Upload and execute <file>\n");
@@ -224,7 +232,7 @@ static void usage(void) {
     printf("Options:\n");
     printf("  -a <addr>    Set address (target default if omitted)\n");
     printf("  -s <size>    Set size for download\n");
-    printf("  -t <device>  Serial device, IP address, or 'dhcp'\n");
+    printf("  -t <device>  Serial device, IP address, 'dhcp', or 'usb' (PSP)\n");
     printf("  -T <profile> Use configured target profile (dc_serial, gc_serial, dc_ip, gc_ip, ps2_ip, wii_ip, xbox_ip)\n");
     printf("  -b <baud>    Serial baud rate (default: %d)\n", SERIAL_DEFAULT_SPEED);
     printf("  -n           Disable console/fileserver\n");
@@ -480,13 +488,33 @@ int main(int argc, char *argv[]) {
     if(!explicit_baud && ctx.serial_baud && is_serial_device(ctx.device_name))
         ctx.initial_speed = ctx.serial_baud;
 
-    /* Select transport */
-    if(is_serial_device(ctx.device_name)) {
+    /* Select transport.  `-t usb` reuses the serial protocol over a libusb
+     * byte pipe (PSP); it must be checked before the serial/network fallthrough
+     * because "usb" is neither a tty path nor a hostname. */
+    if(is_usb_target(ctx.device_name)) {
+#ifdef HAVE_LIBUSB
+        extern const platform_serial_ops_t usb_serial_ops;
+        ctx.transport = &serial_transport_ops;
+        ctx.serial_ops = &usb_serial_ops;
+        ctx.device_name = "usb";
+        ctx.hostname = NULL;
+        /* A bulk pipe has no baud rate, and renegotiating one is actively
+         * harmful: serial_change_speed() writes SERIAL_CMD_SPEED, whose loader
+         * handler calls serial_io_init() -> usb_dev_init() and resets the USB
+         * device controller while the host is reopening the handle. */
+        if(explicit_baud)
+            fprintf(stderr, "Note: -b is ignored for -t usb (a USB pipe has no baud rate)\n");
+        ctx.initial_speed = SERIAL_DEFAULT_SPEED;
+#else
+        fprintf(stderr, "Error: -t usb requires libusb (not built into this kos-tool)\n");
+        return 1;
+#endif
+    } else if(is_serial_device(ctx.device_name)) {
         ctx.transport = &serial_transport_ops;
     } else if(ctx.hostname) {
         ctx.transport = &network_transport_ops;
     } else {
-        fprintf(stderr, "Error: specify -t <device|ip|dhcp>\n");
+        fprintf(stderr, "Error: specify -t <device|ip|dhcp|usb>\n");
         return 1;
     }
 

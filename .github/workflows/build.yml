@@ -133,8 +133,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # libusb is not optional in practice: the host Makefile autodetects it and
+      # silently drops the `-t usb` transport when it is absent, so without it
+      # every released kos-tool refuses to talk to a PSP.
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y libelf-dev pkg-config zip
+        run: sudo apt-get update && sudo apt-get install -y libelf-dev libusb-1.0-0-dev pkg-config zip
 
       # Restore the cross-toolchains from the cache the `toolchains` job
       # populated (same keys), rather than downloading them as artifacts. The
@@ -210,6 +213,10 @@ jobs:
       - name: Package release archives (Linux host + firmware bundle)
         run: scripts/package-release.sh --all
 
+      # PSP is absent here on purpose: kos-chain has no PSP toolchain branch, so
+      # `make all` SKIPs the PSP client and client/psp/build/usb/psp-load-usb.bin
+      # never exists on CI.  Add it to this list (and to the toolchains matrix,
+      # the cache restores and the verify loop above) once that branch lands.
       - name: Bundle firmware .bin files (for host embedding)
         run: |
           tar czf firmware-bins.tar.gz \
@@ -264,7 +271,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
-        run: brew install libelf pkg-config
+        run: brew install libelf libusb pkg-config
       - name: Download firmware bins
         uses: actions/download-artifact@v4
         with:
@@ -299,6 +306,7 @@ jobs:
           install: >-
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-libelf
+            mingw-w64-x86_64-libusb
             mingw-w64-x86_64-pkg-config
             make
             tar
