@@ -10,8 +10,7 @@ enum xbox_clean_rtc_status {
     XBOX_CLEAN_RTC_OK = 0,
     XBOX_CLEAN_RTC_NO_SHADOW,
     XBOX_CLEAN_RTC_UIP_TIMEOUT,
-    XBOX_CLEAN_RTC_ALREADY_FROZEN,
-    XBOX_CLEAN_RTC_NOT_UTC
+    XBOX_CLEAN_RTC_ALREADY_FROZEN
 };
 
 volatile uint32_t xbox_clean_rtc_last_status = XBOX_CLEAN_RTC_NO_SHADOW;
@@ -169,10 +168,6 @@ void xbox_clean_set_rtc(uint32_t unix_timestamp) {
     saved_b = rtc_read(0x0bu);
     if((saved_b & 0x80u) != 0u) {
         xbox_clean_rtc_last_status = XBOX_CLEAN_RTC_ALREADY_FROZEN;
-        goto out_restore_index;
-    }
-    if((saved_b & 0x01u) != 0u) {
-        xbox_clean_rtc_last_status = XBOX_CLEAN_RTC_NOT_UTC;
         goto out_restore_index;
     }
 
