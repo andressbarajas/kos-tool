@@ -62,7 +62,9 @@ $(VERSION_H): $(VERSION_H_IN) mk/version.mk
 #   build/<console>/examples/  example programs
 #
 # <console> is the make target name (dc, gc, wii, ps2, xbox); make-dist and
-# package-release.sh derive their paths from the same names.
+# package-release.sh derive their paths from the same names.  Each examples/ is
+# wiped before staging — the copy is a plain `cp *.elf`, so otherwise an example
+# deleted from client/examples/ lingers and ships in the release bundle.
 
 BUILDDIR := build
 
@@ -229,7 +231,7 @@ dc: check-dc-toolchain $(VERSION_H) | $(DC_OUT)
 	@cp client/dreamcast/build/ip/dc-load-ip.elf $(DC_OUT)/
 	@cp client/dreamcast/build/ip/dc-load-ip.bin $(DC_OUT)/
 	@echo "  COPY    $(DC_OUT)/dc-load-ser.{elf,bin} dc-load-ip.{elf,bin}"
-	@mkdir -p $(DC_OUT)/examples
+	@rm -rf $(DC_OUT)/examples && mkdir -p $(DC_OUT)/examples
 	@cp client/dreamcast/build/examples/*.elf $(DC_OUT)/examples/
 	@if ls client/dreamcast/build/examples/*.iso >/dev/null 2>&1; then \
 	    cp client/dreamcast/build/examples/*.iso $(DC_OUT)/examples/; \
@@ -244,7 +246,7 @@ gc: check-gc-toolchain $(VERSION_H) | $(GC_OUT)
 	@cp client/gamecube/build/ip/gc-load-ip.elf $(GC_OUT)/
 	@cp client/gamecube/build/ip/gc-load-ip.bin $(GC_OUT)/
 	@echo "  COPY    $(GC_OUT)/gc-load-ser.{elf,bin} gc-load-ip.{elf,bin}"
-	@mkdir -p $(GC_OUT)/examples
+	@rm -rf $(GC_OUT)/examples && mkdir -p $(GC_OUT)/examples
 	@cp client/gamecube/build/examples/*.elf $(GC_OUT)/examples/
 	@echo "  COPY    $(GC_OUT)/examples/*.elf"
 	$(MAKE) host
@@ -255,7 +257,7 @@ wii: check-wii-toolchain $(VERSION_H) | $(WII_OUT)
 	@cp client/wii/build/ip/wii-load-ip.bin $(WII_OUT)/
 	@cp client/wii/build/ip/wii-load-ip.dol $(WII_OUT)/
 	@echo "  COPY    $(WII_OUT)/wii-load-ip.{elf,bin,dol}"
-	@mkdir -p $(WII_OUT)/examples
+	@rm -rf $(WII_OUT)/examples && mkdir -p $(WII_OUT)/examples
 	@cp client/wii/build/examples/*.elf $(WII_OUT)/examples/
 	@echo "  COPY    $(WII_OUT)/examples/*.elf"
 	$(MAKE) host
@@ -264,7 +266,7 @@ ps2: check-ps2-toolchain $(VERSION_H) | $(PS2_OUT)
 	$(MAKE) -C client/playstation2 ROOT=$(ROOT) all
 	@cp client/playstation2/build/ip/ps2-load-ip.elf $(PS2_OUT)/
 	@echo "  COPY    $(PS2_OUT)/ps2-load-ip.elf"
-	@mkdir -p $(PS2_OUT)/examples
+	@rm -rf $(PS2_OUT)/examples && mkdir -p $(PS2_OUT)/examples
 	@cp client/playstation2/build/examples/*.elf $(PS2_OUT)/examples/
 	@echo "  COPY    $(PS2_OUT)/examples/*.elf"
 	$(MAKE) host
@@ -275,7 +277,7 @@ xbox: check-xbox-toolchain $(VERSION_H) | $(XBOX_OUT)
 	@cp client/xbox/build/ip/xbox-load-ip.bin $(XBOX_OUT)/
 	@cp client/xbox/build/ip/default.xbe $(XBOX_OUT)/default.xbe
 	@echo "  COPY    $(XBOX_OUT)/xbox-load-ip.{exe,bin} $(XBOX_OUT)/default.xbe"
-	@mkdir -p $(XBOX_OUT)/examples
+	@rm -rf $(XBOX_OUT)/examples && mkdir -p $(XBOX_OUT)/examples
 	@cp client/xbox/build/examples/*.elf $(XBOX_OUT)/examples/
 	@echo "  COPY    $(XBOX_OUT)/examples/*.elf"
 	$(MAKE) host
