@@ -225,8 +225,8 @@ EXDIR   := $(CLIENTDIR)/examples
 EXBUILD := $(BUILDDIR)/examples
 
 XBOX_EXAMPLES := \
-    console-test download-test exit-test file-test gdb-test ip-calibrator \
-    syscall-test xbox-video-test xbox-reboot
+    console-test download-test exception-test exception-frame-test exit-test \
+    file-test gdb-test ip-calibrator syscall-test xbox-video-test xbox-reboot
 XBOX_EXAMPLE_ELFS := $(addprefix $(EXBUILD)/,$(addsuffix .elf,$(XBOX_EXAMPLES)))
 
 $(EXBUILD)/%.exe: $(EXDIR)/%/main.c $(ROOT)/mk/memory.mk | $(EXBUILD)

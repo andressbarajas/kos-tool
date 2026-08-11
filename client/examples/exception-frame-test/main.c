@@ -4,8 +4,8 @@
  *
  * Constructs a synthetic exception frame with known register values
  * and writes it via SYSCALL_WRITE to test the host's exception
- * frame parsing and formatting (handle_dc_exception / handle_gc_exception
- * in console.c).
+ * frame parsing and formatting (handle_dc_exception / handle_gc_exception /
+ * handle_ps2_exception / handle_xbox_exception in console.c).
  *
  * Unlike exception-test (which triggers a real hardware exception caught
  * by the firmware), this test crafts a frame with predictable values so
@@ -14,7 +14,9 @@
  * Expected host output:
  *   - Exception type banner with correct code string
  *   - All registers printed with recognizable pattern values
- *   - addr2line resolution of PC/SRR0 pointing to crash_site()
+ *   - The faulting-PC register (PC / SRR0 / EPC / EIP) resolving to crash_site()
+ *   - Xbox only: a scanned stack trace resolving the two planted code addresses
+ *     (crash_site, start) and skipping the pattern words
  *
  * Load and run:
  *   kostool -x exception-frame-test.elf
@@ -38,6 +40,14 @@
 #define KOSLOAD_BASE PS2_KOSLOAD_BASE
 #else
 #define KOSLOAD_BASE 0x80000284
+#endif
+#elif defined(__i386__)
+/* Xbox header starts with magic at XBOX_KOSLOAD_BASE+0, so the shared
+ * BASE+4/BASE+8 accessors below need the base biased back one word. */
+#ifdef XBOX_KOSLOAD_BASE
+#define KOSLOAD_BASE (XBOX_KOSLOAD_BASE - 4)
+#else
+#define KOSLOAD_BASE (0x00011000 - 4)
 #endif
 #else
 #error "Unsupported architecture"
@@ -292,6 +302,70 @@ static void send_ps2_frame(void) {
 }
 #endif
 
+#if defined(__i386__)
+/*
+ * x86 exception frame layout (220 bytes), matching x86_exception_frame_t
+ * on the host:
+ *   [0]        "EXPT" tag (4 bytes)
+ *   [1]        expt_code (CPU exception vector)
+ *   [2]        errcode
+ *   [3..22]    20 registers: EIP, EFLAGS, EAX, EBX, ECX, EDX, ESI, EDI,
+ *              EBP, ESP, CS, DS, ES, SS, FS, GS, CR0, CR2, CR3, CR4
+ *   [23..54]   32 stack words sampled from ESP
+ */
+#define XBOX_FRAME_WORDS 55
+#define XBOX_FRAME_BYTES 220
+#define XBOX_NUM_REGS    20
+#define XBOX_STACK_WORDS 32
+
+static void send_xbox_frame(void) {
+    unsigned int   frame[XBOX_FRAME_WORDS];
+    unsigned char *tag = (unsigned char *)&frame[0];
+    int i;
+
+    for(i = 0; i < XBOX_FRAME_WORDS; i++)
+        frame[i] = 0;
+
+    /* EXPT tag */
+    tag[0] = 'E';
+    tag[1] = 'X';
+    tag[2] = 'P';
+    tag[3] = 'T';
+
+    /* Vector 14 = page fault; errcode bit 0 clear = not-present page. */
+    frame[1] = 14;
+    frame[2] = 0x00000002; /* write to a non-present page */
+
+    /* Named register block. */
+    frame[3]  = (unsigned int)&crash_site; /* EIP    */
+    frame[4]  = 0x00010246;                /* EFLAGS */
+    for(i = 0; i < 8; i++)
+        frame[5 + i] = 0xAA000000 | (unsigned int)i; /* EAX..ESP */
+    frame[12] = 0x0003FF00;                /* ESP (overwrites the pattern) */
+    frame[13] = 0x00000008;                /* CS     */
+    frame[14] = 0x00000010;                /* DS     */
+    frame[15] = 0x00000010;                /* ES     */
+    frame[16] = 0x00000010;                /* SS     */
+    frame[17] = 0x00000010;                /* FS     */
+    frame[18] = 0x00000010;                /* GS     */
+    frame[19] = 0x8001003B;                /* CR0    */
+    frame[20] = 0xDEADBEEF;                /* CR2 (faulting address) */
+    frame[21] = 0x000F0000;                /* CR3    */
+    frame[22] = 0x00000690;                /* CR4    */
+
+    /* Two slots hold real code addresses for the host's scan-based backtrace;
+     * the rest are data-like patterns it must skip. */
+    for(i = 0; i < XBOX_STACK_WORDS; i++)
+        frame[23 + i] = 0x11110000 | (unsigned int)i;
+    frame[23 + 1] = (unsigned int)&crash_site;
+    frame[23 + 5] = (unsigned int)&start;
+
+    print("Sending Xbox exception frame (220 bytes)...\n");
+    kl_write(1, frame, XBOX_FRAME_BYTES);
+    print("Done.\n");
+}
+#endif
+
 void start(void) {
     print("\n");
     print("=== kosload exception frame test ===\n");
@@ -306,6 +380,8 @@ void start(void) {
     send_gc_frame();
 #elif defined(__mips__) || defined(__mips)
     send_ps2_frame();
+#elif defined(__i386__)
+    send_xbox_frame();
 #endif
 
     print("\n");

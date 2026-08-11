@@ -9,9 +9,11 @@
  *   GC    unmapped address read  -> DSI
  *   PS2   `break`                -> Breakpoint (the R5900 does NOT trap on the
  *                                   misaligned load DC uses)
+ *   Xbox  `ud2`                  -> Invalid Opcode (x86 misaligned reads don't
+ *                                   fault with AC clear, low RAM is mapped)
  *
  * Expect a register dump on video plus an "EXPT" frame symbolized host-side.
- * DC/GC/PS2 return to kosload.
+ * DC/GC/PS2 return to kosload; Xbox holds the crash screen (power cycle).
  *
  * Load and run:
  *   kostool -x exception-test.elf
@@ -35,6 +37,14 @@
  * DC/GC pattern needs BASE+4=magic, BASE+8=syscall, so PS2 base
  * is _start+4 (0x80000280+4), not the real entry. */
 #define KOSLOAD_BASE 0x80000284
+#endif
+#elif defined(__i386__)
+/* Xbox header starts with magic at XBOX_KOSLOAD_BASE+0, so the shared
+ * BASE+4/BASE+8 accessors below need the base biased back one word. */
+#ifdef XBOX_KOSLOAD_BASE
+#define KOSLOAD_BASE (XBOX_KOSLOAD_BASE - 4)
+#else
+#define KOSLOAD_BASE (0x00011000 - 4)
 #endif
 #else
 #error "Unsupported architecture"
@@ -92,6 +102,8 @@ void start(void) {
      */
 #if defined(__mips__) || defined(__mips)
     __asm__ volatile("break");
+#elif defined(__i386__)
+    __asm__ volatile("ud2");   /* Invalid Opcode, vector 6 */
 #elif defined(__sh__) || defined(__SH4_SINGLE__)
     /* MUST be inline asm: as a plain `(void)*(volatile unsigned int *)` GCC
      * narrowed the discarded read to a 16-bit `mov.w`, which is aligned and
