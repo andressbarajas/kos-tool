@@ -213,7 +213,6 @@ static const arch_update_params_t sh4_params = {
 
 /*
  * Pre-assembled PPC trampoline (160 bytes, padded to 256).
- * Assembled from ppc_trampoline.S with powerpc-eabi-gcc.
  *
  * Behavior:
  *   1. Load base register r7 = 0x80003100 (GC_DEFAULT_LOAD_ADDR)
