@@ -1338,7 +1338,13 @@ static void ser_syscall_fstat(kostool_context_t *ctx) {
 static void ser_syscall_write(kostool_context_t *ctx) {
     int fd = ser_recv_uint(ctx);
     uint32_t count = ser_recv_uint(ctx);
-    if(!count || count > MAX_SYSCALL_SIZE) {
+    /* Zero length is success, not failure -- and the loader sends no data block
+     * for it, so returning here consumes nothing and stays in frame. */
+    if(!count) {
+        ser_send_uint(ctx, 0);
+        return;
+    }
+    if(count > MAX_SYSCALL_SIZE) {
         ser_send_uint(ctx, -1);
         return;
     }

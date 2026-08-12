@@ -45,7 +45,11 @@ int write(int fd, const void *buf, unsigned int count) {
     serial_io_putchar(SERIAL_SYSCALL_WRITE);
     put_uint(fd);
     put_uint(count);
-    send_data_block_compressed((unsigned char *)buf, count);
+    /* The host consumes no data block for a zero count, so sending the header
+     * anyway blocks on an ack that never comes and leaves the stray header to
+     * desync every reply after it.  print("") is enough to trigger it. */
+    if(count)
+        send_data_block_compressed((unsigned char *)buf, count);
     return get_uint();
 }
 
