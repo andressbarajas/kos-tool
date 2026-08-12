@@ -159,6 +159,29 @@ unsigned int send_data_block_compressed(unsigned char *addr, unsigned int size)
     return 1;
 }
 
+extern void uint_to_string(unsigned int foo, unsigned char *bar);
+extern void clear_lines(int y, int height, unsigned int color);
+
+/* Draw the "(done/total)" progress line.
+ *
+ * The x coordinates assume uint_to_string() renders exactly 8 characters at
+ * 12 px each: 42 + 8*12 = 138 for the separator, 150 + 8*12 = 246 for the
+ * closing bracket.  Every console's implementation honours that. */
+static void draw_progress(unsigned int done, unsigned int total) {
+    const target_ops_t *t = common_get_target();
+    unsigned char current_str[9], total_str[9];
+
+    uint_to_string(total, total_str);
+    uint_to_string(done, current_str);
+
+    clear_lines(102, 24, 0);
+    t->draw_string(30, 102, "(", 0xffff);
+    t->draw_string(42, 102, (const char *)current_str, 0xffff);
+    t->draw_string(138, 102, "/", 0xffff);
+    t->draw_string(150, 102, (const char *)total_str, 0xffff);
+    t->draw_string(246, 102, ")", 0xffff);
+}
+
 void load_data_block_general(unsigned char *addr, unsigned int total, unsigned int verbose)
 {
     unsigned char type, sum;
@@ -168,24 +191,9 @@ void load_data_block_general(unsigned char *addr, unsigned int total, unsigned i
     unsigned char *data = addr;
     unsigned int realtotal = total;
 
-    const target_ops_t *t = common_get_target();
-
     while (total) {
-        if (verbose) {
-            unsigned char current_str[9], total_str[9];
-            extern void uint_to_string(unsigned int foo, unsigned char *bar);
-            extern void clear_lines(int y, int height, unsigned int color);
-
-            uint_to_string(realtotal, total_str);
-            uint_to_string(realtotal - total, current_str);
-
-            clear_lines(102, 24, 0);
-            t->draw_string(30, 102, "(", 0xffff);
-            t->draw_string(42, 102, (const char *)current_str, 0xffff);
-            t->draw_string(138, 102, "/", 0xffff);
-            t->draw_string(150, 102, (const char *)total_str, 0xffff);
-            t->draw_string(246, 102, ")", 0xffff);
-        }
+        if(verbose)
+            draw_progress(realtotal - total, realtotal);
 
         type = serial_io_getchar();
         size = get_uint();
@@ -220,11 +228,14 @@ void load_data_block_general(unsigned char *addr, unsigned int total, unsigned i
             break;
         }
     }
+
+    /* The loop draws before each block, so it exits one block short of the
+     * total.  Draw the finished state explicitly. */
+    if(verbose)
+        draw_progress(realtotal, realtotal);
 }
 
 /* ===== Transport main loop ===== */
-
-extern void clear_lines(int y, int height, unsigned int color);
 
 static void serial_restore_screen(void)
 {
@@ -234,6 +245,7 @@ static void serial_restore_screen(void)
     t->draw_string(30, 54, NAME, 0xffff);
     clear_lines(78, 24, 0);
     t->draw_string(30, 78, "idle...", 0xffff);
+    clear_lines(102, 24, 0);
 }
 
 static int serial_transport_init(void)
@@ -275,6 +287,9 @@ static void serial_transport_loop(bool is_main_loop)
 
         clear_lines(78, 24, 0);
         t->draw_string(30, 78, "idle...", 0xffff);
+        /* The progress counter belongs to the finished transfer, not to being
+         * idle; leave no stale "(done/total)" under "idle...". */
+        clear_lines(102, 24, 0);
 
         screensaver_reset();
         while (!serial_io_data_ready())
