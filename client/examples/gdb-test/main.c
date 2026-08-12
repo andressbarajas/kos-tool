@@ -100,19 +100,22 @@ static void uint_to_dec(unsigned int val, char *buf) {
  *   arg3 = pointer to output buffer (GDB response received)
  *   returns: number of bytes received in out_buf
  */
-static unsigned int kl_gdbpacket(const char *in_buf, unsigned int in_size, char *out_buf,
-                                 unsigned int out_size) {
+/* Signed: the syscall reports "no GDB client" as -1, and reading that back
+ * through an unsigned type turns it into 4294967295, which passes a `> 0`
+ * success test and sends the caller down the response path with no response. */
+static int kl_gdbpacket(const char *in_buf, unsigned int in_size, char *out_buf,
+                        unsigned int out_size) {
     kosload_syscall_fn sc = get_syscall();
     if(!sc)
         return 0;
-    return (unsigned int)sc(SYSCALL_GDBPACKET, (int)in_buf, (int)((in_size << 16) | out_size), (int)out_buf);
+    return sc(SYSCALL_GDBPACKET, (int)in_buf, (int)((in_size << 16) | out_size), (int)out_buf);
 }
 
 void start(void) __attribute__((section(".text.start")));
 void start(void) {
     char out_buf[256];
     char numbuf[12];
-    unsigned int ret;
+    int  ret;
     int i;
 
     print("\n");
@@ -131,12 +134,12 @@ void start(void) {
     ret = kl_gdbpacket("?", 1, out_buf, sizeof(out_buf) - 1);
 
     print("gdbpacket returned: ");
-    uint_to_dec(ret, numbuf);
+    uint_to_dec((unsigned int)ret, numbuf);
     print(numbuf);
     print(" bytes\n");
 
     if(ret > 0) {
-        out_buf[ret < sizeof(out_buf) ? ret : sizeof(out_buf) - 1] = '\0';
+        out_buf[(unsigned)ret < sizeof(out_buf) ? (unsigned)ret : sizeof(out_buf) - 1] = '\0';
         print("Response: \"");
         print(out_buf);
         print("\"\n");
