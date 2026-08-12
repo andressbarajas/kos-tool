@@ -1093,17 +1093,39 @@ static const char *resolve_path(kostool_context_t *ctx, const char *path, char *
 
 /* ===== Serial console helpers ===== */
 
-static void ser_blread(kostool_context_t *ctx, void *buf, int count) {
+/* Sticky once a blocking read fails.  Every serial helper below consults it, so
+ * a dead link unwinds the whole call chain in one step instead of each layer
+ * spinning on its own loop counter -- ser_recv_data's `while(total)`,
+ * ser_send_data's ack retry and do_dumbterm's `while(1)` all used to run
+ * forever, printing one read error per iteration. */
+static int ser_link_dead;
+
+/* Blocking read of exactly count bytes.  Returns 0 on success, -1 if the link
+ * failed before all of them arrived -- in which case buf is left partly or
+ * wholly uninitialised, so a caller that cannot tolerate garbage must check.
+ * Transports are expected to block rather than return 0 on an idle link;
+ * reaching here with 0 means the connection is gone, not that the target is
+ * merely quiet. */
+static int ser_blread(kostool_context_t *ctx, void *buf, int count) {
     uint8_t *tmp = buf;
+
+    if(ser_link_dead)
+        return -1;
+
     while(count > 0) {
         int ret = ctx->serial_ops->read(ctx->serial_handle, tmp, count);
         if(ret <= 0) {
+            /* Reported once: the callers below are loops, and one message per
+             * failed read is what turned a dead cable into a console flood. */
             fprintf(stderr, "blread: read error (%d)\n", ret);
-            return;
+            ser_link_dead = 1;
+            return -1;
         }
         tmp += ret;
         count -= ret;
     }
+
+    return 0;
 }
 
 static void ser_send_uint(kostool_context_t *ctx, uint32_t value) {
@@ -1118,15 +1140,20 @@ static void ser_send_uint(kostool_context_t *ctx, uint32_t value) {
     ctx->serial_ops->write(ctx->serial_handle, &b, 1);
 
     uint8_t e[4];
-    ser_blread(ctx, e, 4);
+    if(ser_blread(ctx, e, 4) != 0)
+        return; /* the link is gone; an echo mismatch here is noise */
     uint32_t echo = e[0] | ((uint32_t)e[1] << 8) | ((uint32_t)e[2] << 16) | ((uint32_t)e[3] << 24);
     if(echo != value)
         fprintf(stderr, "send_uint: echo mismatch (sent 0x%08x, got 0x%08x)\n", value, echo);
 }
 
+/* Returns 0 on a dead link rather than whatever was on the stack: callers use
+ * this for lengths, and a garbage length is how a failed read became an
+ * unbounded loop. */
 static uint32_t ser_recv_uint(kostool_context_t *ctx) {
-    uint8_t b[4];
-    ser_blread(ctx, b, 4);
+    uint8_t b[4] = {0, 0, 0, 0};
+    if(ser_blread(ctx, b, 4) != 0)
+        return 0;
     return b[0] | ((uint32_t)b[1] << 8) | ((uint32_t)b[2] << 16) | ((uint32_t)b[3] << 24);
 }
 
@@ -1153,7 +1180,10 @@ static void ser_send_data(kostool_context_t *ctx, const uint8_t *addr, uint32_t 
                 for(lzo_uint i = 0; i < csize; i++)
                     sum ^= buffer[i];
                 ctx->serial_ops->write(ctx->serial_handle, &sum, 1);
-                ser_blread(ctx, &ack, 1);
+                if(ser_blread(ctx, &ack, 1) != 0) {
+                    free(buffer);
+                    return;
+                }
             }
         } else {
             uint8_t c = SERIAL_DATA_UNCOMPRESSED;
@@ -1165,7 +1195,10 @@ static void ser_send_data(kostool_context_t *ctx, const uint8_t *addr, uint32_t 
                 sum ^= addr[i];
             ctx->serial_ops->write(ctx->serial_handle, &sum, 1);
             uint8_t ack;
-            ser_blread(ctx, &ack, 1);
+            if(ser_blread(ctx, &ack, 1) != 0) {
+                free(buffer);
+                return;
+            }
         }
         size -= sendsize;
         addr += sendsize;
@@ -1178,13 +1211,21 @@ static void ser_recv_data(kostool_context_t *ctx, void *data, uint32_t total) {
     uint8_t *out = data;
     while(total > 0) {
         uint8_t type;
-        ser_blread(ctx, &type, 1);
+        /* Every read below is checked: on a dead link `size` would be 0 and
+         * `total` would never decrement, which is exactly the loop that used to
+         * spin at 100% CPU emitting one read error per pass. */
+        if(ser_blread(ctx, &type, 1) != 0)
+            return;
         uint32_t size = ser_recv_uint(ctx);
+        if(ser_link_dead)
+            return;
 
         if(type == SERIAL_DATA_UNCOMPRESSED) {
-            ser_blread(ctx, out, size);
+            if(ser_blread(ctx, out, size) != 0)
+                return;
             uint8_t sum;
-            ser_blread(ctx, &sum, 1);
+            if(ser_blread(ctx, &sum, 1) != 0)
+                return;
             uint8_t ok = SERIAL_DATA_GOOD;
             ctx->serial_ops->write(ctx->serial_handle, &ok, 1);
             total -= size;
@@ -1195,9 +1236,12 @@ static void ser_recv_data(kostool_context_t *ctx, void *data, uint32_t total) {
                 fprintf(stderr, "\nser_recv_data: malloc(%u) failed\n", size);
                 return;
             }
-            ser_blread(ctx, tmp, size);
             uint8_t sum;
-            ser_blread(ctx, &sum, 1);
+            if(ser_blread(ctx, tmp, size) != 0 ||
+               ser_blread(ctx, &sum, 1) != 0) {
+                free(tmp);
+                return;
+            }
             lzo_uint newsize;
             if(lzo1x_decompress(tmp, size, out, &newsize, 0) == LZO_E_OK) {
                 uint8_t ok = SERIAL_DATA_GOOD;
@@ -2358,7 +2402,10 @@ static void do_dumbterm(kostool_context_t *ctx) {
     fflush(stdout);
     while(1) {
         uint8_t c;
-        ser_blread(ctx, &c, 1);
+        if(ser_blread(ctx, &c, 1) != 0) {
+            fprintf(stderr, "\nLost connection to console\n");
+            return;
+        }
         printf("%c", c);
         fflush(stdout);
     }
@@ -2367,6 +2414,7 @@ static void do_dumbterm(kostool_context_t *ctx) {
 /* ===== Serial console loop ===== */
 
 static int do_serial_console(kostool_context_t *ctx) {
+    ser_link_dead = 0;
     if(ctx->cdfs_enabled && ctx->iso_filename) {
         ctx->cdfs_fd = open(ctx->iso_filename, O_RDONLY | O_BINARY);
         if(ctx->cdfs_fd < 0)
@@ -2380,7 +2428,15 @@ static int do_serial_console(kostool_context_t *ctx) {
     while(1) {
         fflush(stdout);
         uint8_t command;
-        ser_blread(ctx, &command, 1);
+
+        /* Never dispatch on a byte we did not actually receive: `command` is
+         * uninitialised stack until the read succeeds, and switching on it
+         * used to run a random syscall handler, which then desynchronised the
+         * stream ("send_uint: echo mismatch"). */
+        if(ser_blread(ctx, &command, 1) != 0) {
+            fprintf(stderr, "Lost connection to console\n");
+            return -1;
+        }
 
         switch(command) {
         case SERIAL_SYSCALL_EXIT: {
