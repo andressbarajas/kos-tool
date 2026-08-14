@@ -12,7 +12,7 @@
 #include <kosload/net_adapter.h>
 #include <kosload/net_stack.h>
 #include "packet.h"
-#include "commands.h"
+#include <kosload/commands.h>
 
 /* From network_syscalls.c */
 extern void build_send_packet(int command_len);

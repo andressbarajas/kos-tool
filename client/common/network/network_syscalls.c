@@ -17,7 +17,7 @@
 #include <kosload/net_adapter.h>
 #include <kosload/net_stack.h>
 #include <kosload/target.h>
-#include "commands.h"
+#include <kosload/commands.h>
 #include "packet.h"
 
 /* ===== Syscall shared state ===== */

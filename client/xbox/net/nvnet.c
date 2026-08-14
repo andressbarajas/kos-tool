@@ -45,7 +45,7 @@
 
 #include "adapter.h"
 #include "nvnet.h"
-#include "net.h"
+#include <kosload/net_stack.h>
 #include "packet.h"
 #include "kosload.h"
 #include "../video.h"

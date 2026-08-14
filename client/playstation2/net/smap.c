@@ -24,7 +24,7 @@
 
 #include "smap.h"
 #include "adapter.h"
-#include "net.h"
+#include <kosload/net_stack.h>
 #include "kosload.h"
 #include "../iop_dev9.h"
 #include "../iop_smap.h"

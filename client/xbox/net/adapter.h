@@ -4,8 +4,6 @@
 
 #include <kosload/net_adapter.h>
 
-/* The configured driver implementation. */
-extern adapter_t *bb;
 extern adapter_t adapter_nvnet;
 
 #endif /* __ADAPTER_H__ */

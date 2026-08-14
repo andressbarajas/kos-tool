@@ -15,10 +15,10 @@
  */
 
 #include <string.h>
-#include "commands.h"
+#include <kosload/commands.h>
 #include "packet.h"
-#include "adapter.h"
-#include "net.h"
+#include <kosload/net_adapter.h>
+#include <kosload/net_stack.h>
 #include <kosload/dhcp.h>
 #include <kosload/screensaver.h>
 

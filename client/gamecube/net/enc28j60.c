@@ -21,7 +21,7 @@
 #include <string.h>
 #include "enc28j60.h"
 #include "packet.h"
-#include "net.h"
+#include <kosload/net_stack.h>
 #include "kosload.h"
 #include <kosload/dhcp.h>
 #include <kosload/target.h>

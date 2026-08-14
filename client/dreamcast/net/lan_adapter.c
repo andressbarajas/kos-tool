@@ -9,7 +9,7 @@
 
 #include <string.h>
 #include "packet.h"
-#include "net.h"
+#include <kosload/net_stack.h>
 #include "adapter.h"
 #include "lan_adapter.h"
 #include "kosload.h"  // clear_lines is in here

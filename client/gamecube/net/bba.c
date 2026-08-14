@@ -27,7 +27,7 @@
 
 #include "bba.h"
 #include "packet.h"
-#include "net.h"
+#include <kosload/net_stack.h>
 #include "kosload.h"
 #include <kosload/dhcp.h>
 #include "../exi.h"

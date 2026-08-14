@@ -10,7 +10,7 @@
 
 #include <string.h>
 #include "packet.h"
-#include "net.h"
+#include <kosload/net_stack.h>
 #include "adapter.h"
 #include "rtl8139.h"
 #include "kosload.h"

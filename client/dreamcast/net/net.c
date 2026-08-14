@@ -4,11 +4,11 @@
  */
 
 #include <string.h>
-#include "commands.h"
+#include <kosload/commands.h>
 #include "packet.h"
 #include "adapter.h"
 #include "scif.h"
-#include "net.h"
+#include <kosload/net_stack.h>
 #include <kosload/dhcp.h>
 #include "memfuncs.h"
 #include <kosload/screensaver.h>

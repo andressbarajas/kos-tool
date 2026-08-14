@@ -32,8 +32,8 @@
 
 #include <string.h>
 #include "packet.h"
-#include "net.h"
-#include "adapter.h"
+#include <kosload/net_stack.h>
+#include <kosload/net_adapter.h>
 #include <kosload/dhcp.h>
 #include <kosload/target.h>
 #include "kosload.h"

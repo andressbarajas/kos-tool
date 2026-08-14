@@ -1,19 +1,15 @@
 /* client/include/kosload/commands.h
  *
  * Canonical network-command declarations, shared by all platforms.
- * Consolidated from the (formerly identical) per-platform
- * client/<plat>/net/commands.h files; those are now thin redirects to
- * this header.
  *
  * Command-ID strings have a single source of truth in
  * <kosload/protocol.h> (the NET_CMD_* macros) — there are deliberately
  * no CMD_* aliases here; call sites use NET_CMD_* directly.
  *
  * Network struct types (net_command_t, ether/ip/udp_header_t) come from
- * <kosload/protocol.h>.  Platform packet macros (ETHER_H_LEN, checksum
- * helpers, ...) come from the per-platform "packet.h", which the
- * redirect stubs still include so the "commands.h" include graph is
- * unchanged for consumers that relied on it transitively.
+ * <kosload/protocol.h>, so this header is self-contained.  Consumers that
+ * also need the platform packet macros (ETHER_H_LEN, checksum helpers, ...)
+ * include the per-console "packet.h" themselves.
  */
 #ifndef KOSLOAD_CLIENT_COMMANDS_H
 #define KOSLOAD_CLIENT_COMMANDS_H

@@ -26,7 +26,8 @@
 #include "maple.h"
 #include "kosload.h"
 #include "perfctr.h"
-#include "commands.h"
+#include "packet.h"
+#include <kosload/commands.h>
 
 extern kosload_info_t kosload_info;
 
