@@ -127,7 +127,7 @@ endef
         check-xbox-toolchain check-psp-toolchain
 
 # Single source of truth for the version string (e.g. for release tooling/CI).
-# `make -s print-version` -> 3.0.0
+# `make -s print-version` -> 3.1.0
 print-version:
 	@echo $(KOSLOAD_VERSION)
 

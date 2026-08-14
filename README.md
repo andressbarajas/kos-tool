@@ -1,4 +1,4 @@
-# kos-tool 3.0.0
+# kos-tool 3.1.0
 
 **kos-tool** is a unified console loader for the **Sega Dreamcast**, **Nintendo GameCube**, **Sony PlayStation 2**, **Nintendo Wii**, **Microsoft Xbox**, and **Sony PSP**, combining the functionality of [dcload-serial](https://github.com/KallistiOS/dcload-serial) and [dcload-ip](https://github.com/KallistiOS/dcload-ip) into a single, clean codebase. It is a derivative of the original **dcload** by [Andrew Kieschnick](http://napalm-x.thegypsy.com/andrewk/dc/) (ADK/Napalm).
 
@@ -415,7 +415,7 @@ kos-tool -t /dev/ttyUSB0 -g -x program.elf
 When the client firmware boots, it displays:
 
 ```
-  dc-load-ip 3.0.0
+  dc-load-ip 3.1.0
   Broadband Adapter (HIT-0400)
   00:d0:de:ad:be:ef
   192.168.1.100

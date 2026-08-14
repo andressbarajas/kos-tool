@@ -78,7 +78,7 @@ copy_into() {
 }
 
 # Stamps the release version into each filename before its extension (dc-load-ip.bin ->
-# dc-load-ip-3.0.1.bin).
+# dc-load-ip-3.1.0.bin).
 copy_versioned() {
     local dest="$1"; shift
     local src base stem ext
