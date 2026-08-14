@@ -11,7 +11,7 @@
  *   arc/timg/logo.tpl       (RGB5A3 logo plate with a drawn mark)
  *
  * This mirrors the two-pane structure of a retail icon/banner (RE'd from a
- * retail channel binary; see AGENT/wii-wad-re.md) with our own art: a
+ * retail channel binary) with our own art: a
  * background picture pane that overscans the canvas plus a smaller centred logo
  * pane, two draw-texture materials, and a non-degenerate RLVC animation so the
  * System Menu has a real track to play.  The LZ77 stream is emitted as

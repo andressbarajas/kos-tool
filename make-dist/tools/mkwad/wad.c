@@ -12,7 +12,7 @@
  * zeroed, then a reserved field brute-forced until SHA-1 of the signed region
  * starts with 0x00 (accepted by a trucha-patched IOS / cIOS).
  *
- * Format reverse-engineered from a retail WAD; see AGENT/wii-wad-re.md.
+ * Format reverse-engineered from a retail WAD.
  */
 
 #include <ctype.h>

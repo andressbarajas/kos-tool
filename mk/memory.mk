@@ -175,8 +175,7 @@ endif
 # include/kosload/protocol.h; target.c static-asserts that.
 PSP_LZO_WRKMEM_SIZE   := 0x10000
 
-# Firmware partition boundaries (verified against the PSP kernel memory manager;
-# see AGENT/psp-memory-map.md).
+# Firmware partition boundaries (verified against the PSP kernel memory manager).
 PSP_KERNEL_BASE       := 0x08000000  # firmware kernel partition, 4 MB
 PSP_VOLATILE_BASE     := 0x08400000  # firmware volatile partition, 4 MB
 PSP_USER_BASE         := 0x08800000  # firmware user partition
@@ -191,5 +190,5 @@ PSP_USER_BASE         := 0x08800000  # firmware user partition
 # After the four F writes, KU0/KU1/K0/K1 all responded for both partitions.  A
 # deterministic 8-MiB image was uploaded through K1, downloaded byte-identically
 # through KU1 and K1, and the original 8 MiB was restored and verified through
-# both aliases.  See AGENT/psp-low-ram-protection.md for hashes and RE provenance.
+# both aliases.
 PSP_RAM_BYTES         := 33554432

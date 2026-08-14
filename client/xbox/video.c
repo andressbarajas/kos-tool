@@ -7,7 +7,7 @@
  * xbox_video_init() just halts the NV2A pushbuffer, reuses the live scanout
  * buffer, and un-blanks the sequencer; xbox_video_kick() keeps it pinned.  This
  * is encoder-agnostic (we never touch the encoder) and therefore revision-
- * agnostic.  See AGENT/xbox-modeset-re.md for the clean-room RE.
+ * agnostic.  The mode programming was recovered clean-room.
  *
  * CPU pixel writes go through the write-combined RAM alias (0xF0000000 | phys),
  * with a WBINVD first to evict stale write-back lines for the reused page.  The
@@ -202,8 +202,8 @@ void xbox_video_init(void) {
      *     this is what AvSendTVEncoderOption option 9 does.
      * Stride and height are read back from the mode (CRTC pitch / FP V-display-
      * end), so any resolution/region works — HDMI mods run 720x480, not 640x480.
-     * Encoder-agnostic, so revision-agnostic.  Recovered clean-room; see
-     * AGENT/xbox-modeset-re.md.  No MmAllocateContiguousMemoryEx / AvSetDisplayMode
+     * Encoder-agnostic, so revision-agnostic.  Recovered clean-room.  No
+     * MmAllocateContiguousMemoryEx / AvSetDisplayMode
      * / AvSendTVEncoderOption — zero kernel imports. */
     NV2A_R32(NV_PFIFO_CACHE1_DMA_PUSH) = 0;
     NV2A_R32(NV_PFIFO_CACHE1_PUSH0)    = 0;

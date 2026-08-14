@@ -9,7 +9,7 @@
  *
  * The XDVDFS on-disc format was reverse-engineered from a known-good sample
  * image plus public format documentation; this does NOT use extract-xiso (or
- * any other tool's) source. See AGENT/xiso-format.md.
+ * any other tool's) source.
  *
  * Usage:
  *   mkxiso-lite --source-dir DIR --output game.xiso [--quiet]

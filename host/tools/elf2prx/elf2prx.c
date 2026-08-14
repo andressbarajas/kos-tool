@@ -4,8 +4,8 @@
  *
  * Provenance: every PSP-specific constant below (ET_PSP_PRX, SHT_PRXRELOC, the
  * Allegrex e_flags bits, the p_paddr convention, the reduced r_info encoding,
- * the 52-byte descriptor) was read directly out of the unencrypted reference
- * modules under AGENT/PSP, on top of the published ELF32 layout.  No pspsdk /
+ * the 52-byte descriptor) was read directly out of unencrypted reference PSP
+ * firmware modules, on top of the published ELF32 layout.  No pspsdk /
  * prxgen source was consulted.  The one rule NOT observed from those binaries
  * is the SHN_ABS/SHN_UNDEF drop below, which is derived from first principles
  * and flagged as such at the point of use.

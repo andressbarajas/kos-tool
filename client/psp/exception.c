@@ -1,8 +1,7 @@
 /* client/psp/exception.c — Allegrex exception ownership and crash screen.
  *
  * The Allegrex keeps exception handler addresses in COP0 registers rather than
- * at a fixed memory vector (RE'd from 6.61 exceptionman.prx — see
- * AGENT/psp-memory-map.md):
+ * at a fixed memory vector (RE'd from 6.61 exceptionman.prx):
  *
  *   COP0 $25         general exception handler   (mtc0)
  *   COP0 control $9  NMI / reset handler         (ctc0), reached via the

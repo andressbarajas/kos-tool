@@ -2,7 +2,7 @@
 /* Generates a Wii channel banner content (content index 0): IMET header + outer
  * U8 archive (meta/banner.bin + meta/icon.bin), each an IMD5 + LZ77 wrapper
  * around an inner U8 of arc/blyt (brlyt), arc/anim (brlan), arc/timg (tpl).
- * See AGENT/wii-wad-re.md for the reverse-engineered format. */
+ * Format reverse-engineered from a retail channel binary. */
 #ifndef KOSTOOL_WII_BANNER_H
 #define KOSTOOL_WII_BANNER_H
 

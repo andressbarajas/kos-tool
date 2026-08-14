@@ -6,8 +6,8 @@
 # the fixed PSP_LOADER_BASE.  Stage 1 (stub/) is a small relocatable PRX that
 # carries stage 2 as a payload, copies it to that address and jumps to it; that
 # is what host/tools/elf2prx converts and host/tools/pbp wraps as an EBOOT.PBP.
-# See AGENT/psp-memory-map.md for why the fixed base and the trampoline are
-# needed.
+# The fixed base and the two-stage trampoline are both required because the
+# firmware loads stage 1 wherever it likes; see the header of stub/stub.S.
 
 ROOT      ?= $(CURDIR)/../..
 CLIENTDIR := $(CURDIR)/..

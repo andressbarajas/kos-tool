@@ -20,7 +20,7 @@
 #       inherited state (CCCCCCCC CCCCCCCC 00000000 00000000): hold the Media
 #       Engine in reset, grant all four permission words, verify every
 #       readback, and purge inherited cache lines while nothing of ours is
-#       down there yet.  See AGENT/psp-low-ram-protection.md.
+#       down there yet.
 #
 #   The firmware loads this PRX in its user partition, at 0x08800000 or above,
 #   so source, copier and destination are three DISJOINT intervals: copy
@@ -43,8 +43,7 @@
 #   copy loop itself from the scratchpad (0x00010000).  That region is writable, but
 #   hardware testing showed the Allegrex will not execute from it: a diagnostic
 #   build that merely jumped there and spun killed the firmware, while an
-#   otherwise identical build stopping one instruction earlier ran fine.  See
-#   AGENT/psp-memory-map.md.
+#   otherwise identical build stopping one instruction earlier ran fine.
 
     .set    noreorder
     .set    noat
@@ -126,7 +125,7 @@ stage1_pc_here:
 
     # ---- open the low 8 MiB before the first store to it ------------------
     #
-    # Ordering is load-bearing and matches AGENT/psp-low-ram-protection.md:
+    # Ordering below is load-bearing:
     # IE is already masked and the watchdog already disabled above.
     #
     # 0. Take both exception vectors BEFORE touching low RAM.

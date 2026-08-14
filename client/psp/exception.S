@@ -9,7 +9,7 @@
 # The NMI path is two hops: hardware jumps to the 64-byte stub at 0xBFC00000
 # (fixed in silicon, outside main RAM), and that stub reads control $9 and jumps
 # to whatever it finds.  Both facts were reverse engineered from 6.61
-# exceptionman.prx; see AGENT/psp-memory-map.md.
+# exceptionman.prx.
 #
 # These entries are crash handlers, not resumable ones: they capture the state,
 # hand it to C for display, and stop.  Interrupts are already masked by the time

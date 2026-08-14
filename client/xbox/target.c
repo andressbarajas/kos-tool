@@ -43,7 +43,7 @@ static uint64_t read_tsc(void) {
  * the machine is entirely ours: the MS kernel is silenced (its ISRs live in the
  * replaced IDT; no interrupt reaches it) — no kernel code runs, no syscalls.
  * "Exit" is reboot-only (xbox_reset() -> flash bootloader reloads the kernel and
- * boots the dashboard; see AGENT/xbox-reset-reboot-re.md).
+ * boots the dashboard).
  *
  * We deliberately DO NOT zero the kernel here.  xbox_relocate_identity() (called
  * next) physically relocates the loader on top of the kernel at phys 0x11000, so
@@ -104,7 +104,7 @@ extern char __loaded_image_end__[]   __asm__("__loaded_image_end__");
  * own linked VA), making VA == PA.  After this dma_phys() is the identity and the
  * whole scattered-VA!=PA class of NIC/DMA problems disappears.  Approach B: a
  * page-table remap (no rebasing), so the kosload header stays at VA 0x11000 and
- * the guest + KOS ABIs are untouched.  See AGENT/xbox-identity-relocation.md.
+ * the guest + KOS ABIs are untouched.
  *
  * Called after xbox_kernel_takeover() has silenced the MS kernel.  The identity
  * destination lies in its former resident range at physical 0x10000..0x3CB08,
