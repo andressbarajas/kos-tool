@@ -30,16 +30,6 @@
 #include <kosload/screensaver.h>
 #include <kosload/divutil.h>
 
-#ifndef KOSLOAD_VERSION_STRING
-#define KOSLOAD_VERSION_STRING "0.1.0"
-#endif
-
-/* Git revision sub-version stamp — on-screen DISPLAY ONLY, not the VERS wire
- * string (see mk/version.mk). */
-#ifndef KOSLOAD_GIT_REV
-#define KOSLOAD_GIT_REV "unknown"
-#endif
-
 #ifndef NETWORK_DISPLAY_X
 #define NETWORK_DISPLAY_X 30
 #endif

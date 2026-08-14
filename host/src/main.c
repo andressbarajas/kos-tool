@@ -16,11 +16,6 @@
 #include <kostool/config.h>
 #include <kostool/gdb.h>
 
-/* Git revision sub-version stamp (display only; see mk/version.mk). */
-#ifndef KOSLOAD_GIT_REV
-#define KOSLOAD_GIT_REV "unknown"
-#endif
-
 /* Forward declarations */
 uint32_t upload(kostool_context_t *ctx, const char *filename, uint32_t address);
 int download(kostool_context_t *ctx, const char *filename, uint32_t address, uint32_t size);

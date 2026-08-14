@@ -39,11 +39,6 @@ static unsigned int dbg_partbin_count = 0;
 static unsigned char dbg_hex2[12];
 #endif
 
-/* Version string for cmd_version response */
-#ifndef KOSLOAD_VERSION_STRING
-#define KOSLOAD_VERSION_STRING "0.1.0"
-#endif
-
 /* Syscall state (defined in network syscalls) */
 extern unsigned int syscall_retval;
 extern unsigned char *syscall_data;

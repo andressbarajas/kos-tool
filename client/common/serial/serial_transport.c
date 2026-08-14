@@ -24,10 +24,6 @@
 #include "minilzo.h"
 #include "serial_internal.h"
 
-/* Version string */
-#ifndef KOSLOAD_VERSION_STRING
-#define KOSLOAD_VERSION_STRING "0.1.0"
-#endif
 #define NAME LOADER_NAME " " KOSLOAD_VERSION_STRING
 
 #define WHITE 0xffff

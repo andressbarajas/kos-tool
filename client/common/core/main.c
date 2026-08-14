@@ -12,17 +12,6 @@
 /* From target-specific target.c */
 extern void exception_init(void);
 
-/* Version string - configured by CMake, fallback for direct builds */
-#ifndef KOSLOAD_VERSION_STRING
-#define KOSLOAD_VERSION_STRING "3.0.1"
-#endif
-
-/* Git revision sub-version stamp — on-screen DISPLAY ONLY, never the VERS wire
- * string (see mk/version.mk). */
-#ifndef KOSLOAD_GIT_REV
-#define KOSLOAD_GIT_REV "unknown"
-#endif
-
 /* Red background color */
 #define ERROR_BG_COLOR 0x2000
 
