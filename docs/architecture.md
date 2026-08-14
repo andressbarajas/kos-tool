@@ -35,6 +35,10 @@ Current target implementations live in:
 
 - `client/dreamcast/target.c`
 - `client/gamecube/target.c`
+- `client/wii/target.c`
+- `client/playstation2/target.c`
+- `client/xbox/target.c`
+- `client/psp/target.c`
 
 The client transport owns communication with the host:
 
@@ -50,8 +54,8 @@ The client transport contract lives in:
 
 Current shared client transport implementations live in:
 
-- `client/serial/serial_transport.c`
-- `client/network/network_transport.c`
+- `client/common/serial/serial_transport.c`
+- `client/common/network/network_transport.c`
 
 Network transport hardware is split one layer lower. Shared network code uses
 the adapter contract in:
@@ -70,23 +74,38 @@ Shared DHCP protocol declarations live in:
 
 - `client/include/kosload/dhcp.h`
 
-Console-local `net.h` files remain thin wrappers so target drivers can keep
-their existing local include paths while shared code includes the common
-contract directly.
+Shared status-display declarations live in:
+
+- `client/include/kosload/display.h`
+
+Shared code and console drivers both include these common contracts directly.
+The former console-local `net.h` and `commands.h` redirect headers have been
+removed; only headers that carry real per-console content remain, such as
+`client/<console>/net/adapter.h`, which declares that console's drivers.
 
 Console-local `packet.h` files intentionally remain wrappers that select the
 target byte-order macros before including the shared packet helper
 declarations. Packet helper implementations still live under each console tree
 because checksum odd-byte handling and copy behavior differ by CPU.
 
-Console-local `dhcp.h` files remain wrappers around the common DHCP packet
-types, constants, state declarations, and public prototypes. DHCP behavior and
-lease handling still live in each console's `dhcp.c` implementation.
+DHCP behavior and lease handling are shared, in `client/common/network/dhcp.c`.
+The packet types, constants, state declarations, and public prototypes all come
+from `client/include/kosload/dhcp.h`.
+
+The status display is split the same way. Loader state and the on-screen status
+helpers are shared, in `client/common/network/entry.c`. The three primitives
+they are drawn with (`uint_to_string`, `clear_lines`, and `setup_video`) are the
+console side of the contract, defined per port in `client/<console>/video.c`.
+Each `client/<console>/net/kosload.h` then carries only that console's own
+values: background colors, counter frequencies, and network UI coordinates.
 
 Current console-specific adapter selection lives in:
 
 - `client/dreamcast/net/adapter.c`
 - `client/gamecube/net/adapter.c`
+- `client/playstation2/net/adapter.c`
+- `client/wii/net/adapter.c`
+- `client/xbox/net/adapter.c`
 
 Individual Ethernet drivers stay under the console tree when they are hardware
 specific, or under `client/common/drivers/` when the chip driver is shared by
@@ -95,7 +114,7 @@ multiple consoles.
 Network drivers are layered as follows:
 
 - `client/<console>/net/adapter.c` chooses the active adapter for that console
-  and exposes it through `net_adapter_ops_t`
+  and exposes it through `adapter_t`
 - console-owned integrated adapters and timing-sensitive hardware drivers stay
   under `client/<console>/net/`
 - shared chip drivers, such as `client/common/drivers/w5500.c`, keep reusable
@@ -112,13 +131,13 @@ probing, priority, and selection should remain console-specific.
 
 The shared entrypoint is:
 
-- `client/common/main.c`
+- `client/common/core/main.c`
 
 Transport-specific entrypoints choose one target and one transport, then call
 `common_main()`:
 
-- `client/serial/entry.c`
-- `client/network/entry.c`
+- `client/common/serial/entry.c`
+- `client/common/network/entry.c`
 
 ## Host Layout
 

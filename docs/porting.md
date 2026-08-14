@@ -9,6 +9,11 @@ timing, and packet layout changes for separate commits.
 - Add `client/<console>/target.c` implementing `target_ops_t`.
 - Add console-local video, timer, cache, reboot, exception, execute, RTC, and
   storage support as needed.
+- Define the display primitives `client/include/kosload/display.h` declares
+  (`uint_to_string`, `clear_lines`, `setup_video`) in
+  `client/<console>/video.c`.
+- Add `client/<console>/net/kosload.h` with that console's background colors
+  and network UI coordinates for network builds.
 - Add linker scripts and memory constants for the console.
 - Add build rules that select one target implementation and one client
   transport implementation.
@@ -40,8 +45,8 @@ timing, and packet layout changes for separate commits.
   `client/<console>/net/adapter.c`.
 - Keep FIFO pacing, retry timing, DMA, cache, and interrupt behavior
   console-local unless it has been proven identical across targets.
-- Use `net_adapter_ops_t` so shared network code does not need to know which
-  adapter is active.
+- Use `adapter_t` so shared network code does not need to know which adapter is
+  active.
 
 ## Required Smoke Tests
 
