@@ -41,22 +41,6 @@ include mk/toolchains.mk
 # parallel, so per-console build time is unaffected.
 .NOTPARALLEL:
 
-# ---------- version.h generation ----------
-
-VERSION_H    := $(ROOT)/include/kosload/version.h
-VERSION_H_IN := $(ROOT)/include/kosload/version.h.in
-
-# Uses a PID-unique temp so concurrent sub-makes (e.g. `make all -j` building
-# several consoles at once) don't clobber each other's $@.tmp and fail the mv.
-$(VERSION_H): $(VERSION_H_IN) mk/version.mk
-	@t=$@.tmp.$$$$; \
-	 sed -e 's/@KOSLOAD_VERSION_MAJOR@/$(KOSLOAD_VERSION_MAJOR)/g' \
-	     -e 's/@KOSLOAD_VERSION_MINOR@/$(KOSLOAD_VERSION_MINOR)/g' \
-	     -e 's/@KOSLOAD_VERSION_PATCH@/$(KOSLOAD_VERSION_PATCH)/g' \
-	     -e 's/@KOSLOAD_VERSION@/$(KOSLOAD_VERSION)/g' \
-	     $< > $$t; \
-	 if ! cmp -s $$t $@ 2>/dev/null; then mv $$t $@; echo "  GEN     $@"; else rm -f $$t; fi
-
 # ---------- Output directory ----------
 #
 #   build/kos-tool             host tool (console-independent)
@@ -244,12 +228,12 @@ auto-psp:
 		echo "  SKIP    PSP firmware (toolchain not found)"; \
 	fi
 
-host: $(VERSION_H) | $(BUILDDIR)
+host: | $(BUILDDIR)
 	$(MAKE) -C host ROOT=$(ROOT)
 	@cp host/build/kos-tool $(BUILDDIR)/ 2>/dev/null || cp host/build/kos-tool.exe $(BUILDDIR)/
 	@echo "  COPY    $(BUILDDIR)/kos-tool"
 
-dc: check-dc-toolchain $(VERSION_H) | $(DC_OUT)
+dc: check-dc-toolchain | $(DC_OUT)
 	$(MAKE) -C client/dreamcast ROOT=$(ROOT) all
 	@cp client/dreamcast/build/serial/dc-load-ser.elf $(DC_OUT)/
 	@cp client/dreamcast/build/serial/dc-load-ser.bin $(DC_OUT)/
@@ -264,7 +248,7 @@ dc: check-dc-toolchain $(VERSION_H) | $(DC_OUT)
 	@echo "  COPY    $(DC_OUT)/examples/"
 	$(MAKE) host
 
-gc: check-gc-toolchain $(VERSION_H) | $(GC_OUT)
+gc: check-gc-toolchain | $(GC_OUT)
 	$(MAKE) -C client/gamecube ROOT=$(ROOT) all
 	@cp client/gamecube/build/serial/gc-load-ser.elf $(GC_OUT)/
 	@cp client/gamecube/build/serial/gc-load-ser.bin $(GC_OUT)/
@@ -276,7 +260,7 @@ gc: check-gc-toolchain $(VERSION_H) | $(GC_OUT)
 	@echo "  COPY    $(GC_OUT)/examples/*.elf"
 	$(MAKE) host
 
-wii: check-wii-toolchain $(VERSION_H) | $(WII_OUT)
+wii: check-wii-toolchain | $(WII_OUT)
 	$(MAKE) -C client/wii ROOT=$(ROOT) all
 	@cp client/wii/build/ip/wii-load-ip.elf $(WII_OUT)/
 	@cp client/wii/build/ip/wii-load-ip.bin $(WII_OUT)/
@@ -287,7 +271,7 @@ wii: check-wii-toolchain $(VERSION_H) | $(WII_OUT)
 	@echo "  COPY    $(WII_OUT)/examples/*.elf"
 	$(MAKE) host
 
-ps2: check-ps2-toolchain $(VERSION_H) | $(PS2_OUT)
+ps2: check-ps2-toolchain | $(PS2_OUT)
 	$(MAKE) -C client/playstation2 ROOT=$(ROOT) all
 	@cp client/playstation2/build/ip/ps2-load-ip.elf $(PS2_OUT)/
 	@echo "  COPY    $(PS2_OUT)/ps2-load-ip.elf"
@@ -296,7 +280,7 @@ ps2: check-ps2-toolchain $(VERSION_H) | $(PS2_OUT)
 	@echo "  COPY    $(PS2_OUT)/examples/*.elf"
 	$(MAKE) host
 
-xbox: check-xbox-toolchain $(VERSION_H) | $(XBOX_OUT)
+xbox: check-xbox-toolchain | $(XBOX_OUT)
 	$(MAKE) -C client/xbox ROOT=$(ROOT) all
 	@cp client/xbox/build/ip/xbox-load-ip.exe $(XBOX_OUT)/
 	@cp client/xbox/build/ip/xbox-load-ip.bin $(XBOX_OUT)/
@@ -309,7 +293,7 @@ xbox: check-xbox-toolchain $(VERSION_H) | $(XBOX_OUT)
 
 # EBOOT.PBP keeps its exact name: the PSP firmware only boots
 # ms0:/PSP/GAME/<dir>/EBOOT.PBP, so it can be moved but never renamed.
-psp: check-psp-toolchain $(VERSION_H) | $(PSP_OUT)
+psp: check-psp-toolchain | $(PSP_OUT)
 	$(MAKE) -C client/psp ROOT=$(ROOT) all
 	@cp client/psp/build/usb/psp-load-usb.elf $(PSP_OUT)/
 	@cp client/psp/build/usb/psp-load-usb.bin $(PSP_OUT)/
@@ -439,5 +423,5 @@ clean:
 	$(MAKE) -C client ROOT=$(ROOT) clean
 	$(MAKE) -C make-dist clean
 	$(MAKE) -C third_party/minilzo clean
-	rm -f $(VERSION_H)
+	rm -f
 	rm -rf $(BUILDDIR)

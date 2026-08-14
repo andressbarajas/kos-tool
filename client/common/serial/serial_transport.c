@@ -19,6 +19,7 @@
 #include <kosload/serial_io.h>
 #include <kosload/types.h>
 #include <kosload/info.h>
+#include <kosload/version.h>
 
 #include <kosload/screensaver.h>
 #include "minilzo.h"

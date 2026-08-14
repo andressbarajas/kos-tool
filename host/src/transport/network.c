@@ -388,15 +388,15 @@ static int query_capabilities(kostool_context_t *ctx, uint32_t *capabilities) {
  * wait-forever semantics, since the legacy host has no dedup cache and a
  * retransmit would re-run non-idempotent syscalls.
  *
- * Sourced from version.mk via the generated <kosload/version.h> so the
- * VERS-encoded protocol version tracks the release version automatically.
+ * Sourced from mk/version.mk via KOSLOAD_VERSION_DEFS so the VERS-encoded
+ * protocol version tracks the release version automatically.
  */
 #include <kosload/version.h>
+
 static uint32_t make_encoded_version(int force_legacy) {
     if(force_legacy)
         return 0;
-    return ((uint32_t)KOSLOAD_VERSION_MAJOR << 16) | ((uint32_t)KOSLOAD_VERSION_MINOR << 8) |
-           ((uint32_t)KOSLOAD_VERSION_PATCH);
+    return (uint32_t)KOSLOAD_VERSION_ENCODED;
 }
 
 /*

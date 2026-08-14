@@ -8,6 +8,7 @@
 #include <kosload/target.h>
 #include <kosload/transport.h>
 #include <kosload/protocol.h>
+#include <kosload/version.h>
 
 /* From target-specific target.c */
 extern void exception_init(void);

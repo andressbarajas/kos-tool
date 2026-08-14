@@ -17,6 +17,7 @@
 #include <kosload/target.h>
 #include <kosload/divutil.h>
 #include <kosload/protocol.h>
+#include <kosload/version.h>
 #include <kosload/memfuncs.h>
 #include <kosload/net_stack.h>
 #include <kosload/net_adapter.h>

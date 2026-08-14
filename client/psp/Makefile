@@ -84,7 +84,7 @@ USB_DEFS := -DKOSLOAD_SERIAL_TRANSPORT -DLOADER_NAME=\"psp-load-usb\" \
             -DMAX_RAM_BYTES=$(PSP_RAM_BYTES)
 
 CFLAGS  := $(ARCH_CFLAGS) $(FREE_CFLAGS) $(INCLUDES) $(MEMORY_DEFS) $(USB_DEFS) \
-           -DKOSLOAD_VERSION_STRING=\"$(KOSLOAD_VERSION)\" -DKOSLOAD_GIT_REV=\"$(KOSLOAD_GIT_REV)\" \
+           $(KOSLOAD_VERSION_DEFS) \
            -MMD -MP
 ASFLAGS := $(ARCH_ASFLAGS) $(INCLUDES) $(MEMORY_DEFS) $(USB_DEFS) -MMD -MP
 
@@ -103,19 +103,6 @@ STUB_LDFLAGS := -nostartfiles -nostdlib -static -Wl,--no-undefined \
                 -Wl,-u,module_info -Wl,--emit-relocs
 
 .DEFAULT_GOAL := all
-
-# ---------- version.h ----------
-
-VERSION_H    := $(ROOT)/include/kosload/version.h
-VERSION_H_IN := $(ROOT)/include/kosload/version.h.in
-
-$(VERSION_H): $(VERSION_H_IN) $(ROOT)/mk/version.mk
-	@sed -e 's/@KOSLOAD_VERSION_MAJOR@/$(KOSLOAD_VERSION_MAJOR)/g' \
-	     -e 's/@KOSLOAD_VERSION_MINOR@/$(KOSLOAD_VERSION_MINOR)/g' \
-	     -e 's/@KOSLOAD_VERSION_PATCH@/$(KOSLOAD_VERSION_PATCH)/g' \
-	     -e 's/@KOSLOAD_VERSION@/$(KOSLOAD_VERSION)/g' \
-	     $< > $@.tmp
-	@if ! cmp -s $@.tmp $@ 2>/dev/null; then mv $@.tmp $@; echo "  GEN     $@"; else rm $@.tmp; fi
 
 # ---------- Linker script ----------
 
@@ -150,32 +137,32 @@ COMMON_OBJS := \
     $(COMMONDIR)/go.o
 COMMON_A := $(COMMONDIR)/kosload_common.a
 
-$(COMMONDIR)/info.o: $(CLIENTDIR)/common/core/info.c $(VERSION_H) | $(COMMONDIR)
+$(COMMONDIR)/info.o: $(CLIENTDIR)/common/core/info.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
-$(COMMONDIR)/screensaver.o: $(CLIENTDIR)/common/core/screensaver.c $(VERSION_H) | $(COMMONDIR)
+$(COMMONDIR)/screensaver.o: $(CLIENTDIR)/common/core/screensaver.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
-$(COMMONDIR)/syscall_table.o: $(CLIENTDIR)/common/core/syscall_table.c $(VERSION_H) | $(COMMONDIR)
+$(COMMONDIR)/syscall_table.o: $(CLIENTDIR)/common/core/syscall_table.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 # These sources consume command-line PSP configuration without changing their
 # object names.  Rebuild them whenever an image is requested so mode/reclaim/
 # memory-map switches cannot reuse objects from a previous invocation.
-$(COMMONDIR)/target.o: target.c video.h cache.h $(VERSION_H) FORCE_PSP_IMAGE | $(COMMONDIR)
+$(COMMONDIR)/target.o: target.c video.h cache.h $(KOSLOAD_VERSION_MK) FORCE_PSP_IMAGE | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
-$(COMMONDIR)/video.o: video.c video.h syscon.h $(VERSION_H) FORCE_PSP_IMAGE | $(COMMONDIR)
+$(COMMONDIR)/video.o: video.c video.h syscon.h $(KOSLOAD_VERSION_MK) FORCE_PSP_IMAGE | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
-$(COMMONDIR)/syscon.o: syscon.c syscon.h $(VERSION_H) | $(COMMONDIR)
+$(COMMONDIR)/syscon.o: syscon.c syscon.h $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 $(COMMONDIR)/memfuncs.o: memfuncs.c | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 $(COMMONDIR)/module_info.o: module_info.c | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
-$(COMMONDIR)/exception.o: exception.c video.h cache.h hw_trace.h $(VERSION_H) FORCE_PSP_IMAGE | $(COMMONDIR)
+$(COMMONDIR)/exception.o: exception.c video.h cache.h hw_trace.h $(KOSLOAD_VERSION_MK) FORCE_PSP_IMAGE | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 $(COMMONDIR)/exception_entry.o: exception.S | $(COMMONDIR)
 	$(CC) $(ASFLAGS) -c $< -o $@
-$(COMMONDIR)/serial_io.o: serial_io.c usb/usb_dev.h $(VERSION_H) FORCE_PSP_IMAGE | $(COMMONDIR)
+$(COMMONDIR)/serial_io.o: serial_io.c usb/usb_dev.h $(KOSLOAD_VERSION_MK) FORCE_PSP_IMAGE | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
-$(COMMONDIR)/usb_dev.o: usb/usb_dev.c usb/usb_dev.h cache.h hw_trace.h $(VERSION_H) FORCE_PSP_IMAGE | $(COMMONDIR)
+$(COMMONDIR)/usb_dev.o: usb/usb_dev.c usb/usb_dev.h cache.h hw_trace.h $(KOSLOAD_VERSION_MK) FORCE_PSP_IMAGE | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 $(COMMONDIR)/crt0.o: crt0.S | $(COMMONDIR)
 	$(CC) $(ASFLAGS) -c $< -o $@
@@ -193,13 +180,13 @@ USB_OBJS := \
     $(USBDIR)/serial_transport.o \
     $(USBDIR)/serial_syscalls.o \
 
-$(USBDIR)/main.o: $(CLIENTDIR)/common/core/main.c $(VERSION_H) | $(USBDIR)
+$(USBDIR)/main.o: $(CLIENTDIR)/common/core/main.c $(KOSLOAD_VERSION_MK) | $(USBDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
-$(USBDIR)/entry.o: $(CLIENTDIR)/common/serial/entry.c $(VERSION_H) | $(USBDIR)
+$(USBDIR)/entry.o: $(CLIENTDIR)/common/serial/entry.c $(KOSLOAD_VERSION_MK) | $(USBDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
-$(USBDIR)/serial_transport.o: $(CLIENTDIR)/common/serial/serial_transport.c $(VERSION_H) | $(USBDIR)
+$(USBDIR)/serial_transport.o: $(CLIENTDIR)/common/serial/serial_transport.c $(KOSLOAD_VERSION_MK) | $(USBDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
-$(USBDIR)/serial_syscalls.o: $(CLIENTDIR)/common/serial/serial_syscalls.c $(VERSION_H) | $(USBDIR)
+$(USBDIR)/serial_syscalls.o: $(CLIENTDIR)/common/serial/serial_syscalls.c $(KOSLOAD_VERSION_MK) | $(USBDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # ---------- minilzo (cross-compiled for PSP) ----------
@@ -240,7 +227,6 @@ $(STUB_LD): stub/kosload-stub.ld.in $(USB_ELF) FORCE_PSP_IMAGE | $(STUBDIR)
 	     -e "s/@PSP_STAGE2_MEMSZ@/$$memsz/g" $< > $@; \
 	 echo "  GEN     $@ (stage-2 footprint $$memsz bytes)"
 
-
 # stub.S bakes the memory map into its instructions without that showing up in
 # the target name, so a command-line PSP_LOADER_BASE override would otherwise
 # reuse the previous build's stub.  Rebuild this tiny object every invocation.
@@ -250,7 +236,7 @@ FORCE_STUB:
 $(STUBDIR)/stub.o: stub/stub.S $(USB_BIN) FORCE_STUB | $(STUBDIR)
 	$(CC) $(ASFLAGS) -DPAYLOAD_FILE=\"$(CURDIR)/$(USB_BIN)\" -c $< -o $@
 
-$(STUBDIR)/module_info.o: module_info.c $(VERSION_H) | $(STUBDIR)
+$(STUBDIR)/module_info.o: module_info.c $(KOSLOAD_VERSION_MK) | $(STUBDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(STUBDIR)/syscon.o: syscon.c syscon.h | $(STUBDIR)

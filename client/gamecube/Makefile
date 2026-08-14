@@ -63,7 +63,7 @@ MEMORY_DEFS := -DGC_LOADER_BASE=$(GC_LOADER_BASE) \
 
 # ---------- Combined flags ----------
 
-CFLAGS  := $(ARCH_CFLAGS) $(FREE_CFLAGS) $(INCLUDES) $(MEMORY_DEFS) -DKOSLOAD_VERSION_STRING=\"$(KOSLOAD_VERSION)\" -DKOSLOAD_GIT_REV=\"$(KOSLOAD_GIT_REV)\"
+CFLAGS  := $(ARCH_CFLAGS) $(FREE_CFLAGS) $(INCLUDES) $(MEMORY_DEFS) $(KOSLOAD_VERSION_DEFS)
 ASFLAGS := $(ARCH_ASFLAGS) $(INCLUDES) $(MEMORY_DEFS)
 
 # Automatic header-dependency tracking.  -MMD writes a .d file alongside each
@@ -79,21 +79,8 @@ ASFLAGS += -MMD -MP
 # IP-additional includes
 IP_INCLUDES := -I$(CURDIR)/net
 
-# Default target (must appear before version.h rule)
+# Default target
 .DEFAULT_GOAL := all
-
-# ---------- version.h ----------
-
-VERSION_H    := $(ROOT)/include/kosload/version.h
-VERSION_H_IN := $(ROOT)/include/kosload/version.h.in
-
-$(VERSION_H): $(VERSION_H_IN) $(ROOT)/mk/version.mk
-	@sed -e 's/@KOSLOAD_VERSION_MAJOR@/$(KOSLOAD_VERSION_MAJOR)/g' \
-	     -e 's/@KOSLOAD_VERSION_MINOR@/$(KOSLOAD_VERSION_MINOR)/g' \
-	     -e 's/@KOSLOAD_VERSION_PATCH@/$(KOSLOAD_VERSION_PATCH)/g' \
-	     -e 's/@KOSLOAD_VERSION@/$(KOSLOAD_VERSION)/g' \
-	     $< > $@.tmp
-	@if ! cmp -s $@.tmp $@ 2>/dev/null; then mv $@.tmp $@; echo "  GEN     $@"; else rm $@.tmp; fi
 
 # ---------- Generated linker scripts (from .ld.in templates) ----------
 
@@ -141,34 +128,34 @@ COMMON_OBJS := $(COMMON_C_OBJS) $(COMMON_S_OBJS)
 COMMON_A    := $(COMMONDIR)/kosload_common.a
 
 # Common C object rules (by source directory)
-$(COMMONDIR)/info.o: $(CLIENTDIR)/common/core/info.c $(VERSION_H) | $(COMMONDIR)
+$(COMMONDIR)/info.o: $(CLIENTDIR)/common/core/info.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(COMMONDIR)/screensaver.o: $(CLIENTDIR)/common/core/screensaver.c $(VERSION_H) | $(COMMONDIR)
+$(COMMONDIR)/screensaver.o: $(CLIENTDIR)/common/core/screensaver.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(COMMONDIR)/syscall_table.o: $(CLIENTDIR)/common/core/syscall_table.c $(VERSION_H) | $(COMMONDIR)
+$(COMMONDIR)/syscall_table.o: $(CLIENTDIR)/common/core/syscall_table.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(COMMONDIR)/target.o: target.c $(VERSION_H) | $(COMMONDIR)
+$(COMMONDIR)/target.o: target.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(COMMONDIR)/exi.o: exi.c $(VERSION_H) | $(COMMONDIR)
+$(COMMONDIR)/exi.o: exi.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(COMMONDIR)/video.o: video.c $(VERSION_H) | $(COMMONDIR)
+$(COMMONDIR)/video.o: video.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(COMMONDIR)/cache.o: cache.c $(VERSION_H) | $(COMMONDIR)
+$(COMMONDIR)/cache.o: cache.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(COMMONDIR)/memfuncs.o: memfuncs.c $(VERSION_H) | $(COMMONDIR)
+$(COMMONDIR)/memfuncs.o: memfuncs.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(COMMONDIR)/usbgecko.o: serial/usbgecko.c $(VERSION_H) | $(COMMONDIR)
+$(COMMONDIR)/usbgecko.o: serial/usbgecko.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(COMMONDIR)/serial_io.o: serial/serial_io.c $(VERSION_H) | $(COMMONDIR)
+$(COMMONDIR)/serial_io.o: serial/serial_io.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Common ASM object rules
@@ -202,16 +189,16 @@ SERIAL_BIN := $(SERIALDIR)/gc-load-ser.bin
 GC_SERIAL_LDFLAGS := -nostdlib -Wl,-n -Wl,--gc-sections
 
 # Serial C object rules
-$(SERIALDIR)/main.o: $(CLIENTDIR)/common/core/main.c $(VERSION_H) | $(SERIALDIR)
+$(SERIALDIR)/main.o: $(CLIENTDIR)/common/core/main.c $(KOSLOAD_VERSION_MK) | $(SERIALDIR)
 	$(CC) $(CFLAGS) $(SERIAL_DEFS) -c $< -o $@
 
-$(SERIALDIR)/entry.o: $(CLIENTDIR)/common/serial/entry.c $(VERSION_H) | $(SERIALDIR)
+$(SERIALDIR)/entry.o: $(CLIENTDIR)/common/serial/entry.c $(KOSLOAD_VERSION_MK) | $(SERIALDIR)
 	$(CC) $(CFLAGS) $(SERIAL_DEFS) -c $< -o $@
 
-$(SERIALDIR)/serial_transport.o: $(CLIENTDIR)/common/serial/serial_transport.c $(VERSION_H) | $(SERIALDIR)
+$(SERIALDIR)/serial_transport.o: $(CLIENTDIR)/common/serial/serial_transport.c $(KOSLOAD_VERSION_MK) | $(SERIALDIR)
 	$(CC) $(CFLAGS) $(SERIAL_DEFS) -c $< -o $@
 
-$(SERIALDIR)/serial_syscalls.o: $(CLIENTDIR)/common/serial/serial_syscalls.c $(VERSION_H) | $(SERIALDIR)
+$(SERIALDIR)/serial_syscalls.o: $(CLIENTDIR)/common/serial/serial_syscalls.c $(KOSLOAD_VERSION_MK) | $(SERIALDIR)
 	$(CC) $(CFLAGS) $(SERIAL_DEFS) -c $< -o $@
 
 $(SERIAL_ELF): $(SERIAL_OBJS) $(COMMON_A) $(MINILZO_A) $(SERIAL_LD)
@@ -279,46 +266,46 @@ $(IP_CONFIG_STAMP): | $(IPDIR)
 	@if ! cmp -s $@.tmp $@ 2>/dev/null; then mv $@.tmp $@; echo "  GEN     $@"; else rm $@.tmp; fi
 
 # IP C object rules
-$(IPDIR)/main.o: $(CLIENTDIR)/common/core/main.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/main.o: $(CLIENTDIR)/common/core/main.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/commands.o: $(CLIENTDIR)/common/core/commands.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/commands.o: $(CLIENTDIR)/common/core/commands.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/entry.o: $(CLIENTDIR)/common/network/entry.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/entry.o: $(CLIENTDIR)/common/network/entry.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/network_transport.o: $(CLIENTDIR)/common/network/network_transport.c $(VERSION_H) $(IP_CONFIG_STAMP) | $(IPDIR)
+$(IPDIR)/network_transport.o: $(CLIENTDIR)/common/network/network_transport.c $(KOSLOAD_VERSION_MK) $(IP_CONFIG_STAMP) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/network_syscalls.o: $(CLIENTDIR)/common/network/network_syscalls.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/network_syscalls.o: $(CLIENTDIR)/common/network/network_syscalls.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/adapter.o: net/adapter.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/adapter.o: net/adapter.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/bba.o: net/bba.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/bba.o: net/bba.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/enc28j60.o: net/enc28j60.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/enc28j60.o: net/enc28j60.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/w5500.o: $(CLIENTDIR)/common/drivers/w5500.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/w5500.o: $(CLIENTDIR)/common/drivers/w5500.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/w5500_spi_gc.o: net/w5500_spi_gc.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/w5500_spi_gc.o: net/w5500_spi_gc.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/net.o: $(CLIENTDIR)/common/network/net.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/net.o: $(CLIENTDIR)/common/network/net.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/packet.o: net/packet.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/packet.o: net/packet.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/packet_helpers.o: $(CLIENTDIR)/common/network/packet_helpers.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/packet_helpers.o: $(CLIENTDIR)/common/network/packet_helpers.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/dhcp.o: $(CLIENTDIR)/common/network/dhcp.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/dhcp.o: $(CLIENTDIR)/common/network/dhcp.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
 $(IP_ELF): $(IP_OBJS) $(COMMON_A) $(IP_LD)

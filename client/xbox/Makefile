@@ -64,7 +64,7 @@ IP_DEFS += -DKOSLOAD_IP=\"$(STATICIP)\"
 endif
 
 CFLAGS  := $(ARCH_CFLAGS) $(FREE_CFLAGS) $(INCLUDES) $(MEMORY_DEFS) $(IP_DEFS) \
-           -DKOSLOAD_VERSION_STRING=\"$(KOSLOAD_VERSION)\" -DKOSLOAD_GIT_REV=\"$(KOSLOAD_GIT_REV)\" \
+           $(KOSLOAD_VERSION_DEFS) \
            -MMD -MP
 ASFLAGS := $(ARCH_CFLAGS) $(INCLUDES) $(MEMORY_DEFS) -MMD -MP
 
@@ -79,19 +79,6 @@ LDFLAGS := -nostdlib -nostartfiles \
            -Wl,-e,_start
 
 .DEFAULT_GOAL := all
-
-# ---------- version.h ----------
-
-VERSION_H    := $(ROOT)/include/kosload/version.h
-VERSION_H_IN := $(ROOT)/include/kosload/version.h.in
-
-$(VERSION_H): $(VERSION_H_IN) $(ROOT)/mk/version.mk
-	@sed -e 's/@KOSLOAD_VERSION_MAJOR@/$(KOSLOAD_VERSION_MAJOR)/g' \
-	     -e 's/@KOSLOAD_VERSION_MINOR@/$(KOSLOAD_VERSION_MINOR)/g' \
-	     -e 's/@KOSLOAD_VERSION_PATCH@/$(KOSLOAD_VERSION_PATCH)/g' \
-	     -e 's/@KOSLOAD_VERSION@/$(KOSLOAD_VERSION)/g' \
-	     $< > $@.tmp
-	@if ! cmp -s $@.tmp $@ 2>/dev/null; then mv $@.tmp $@; echo "  GEN     $@"; else rm $@.tmp; fi
 
 # ---------- Generated linker script ----------
 
@@ -112,13 +99,13 @@ COMMON_OBJS := \
     $(COMMONDIR)/screensaver.o \
     $(COMMONDIR)/syscall_table.o
 
-$(COMMONDIR)/info.o: $(CLIENTDIR)/common/core/info.c $(VERSION_H) | $(COMMONDIR)
+$(COMMONDIR)/info.o: $(CLIENTDIR)/common/core/info.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(COMMONDIR)/screensaver.o: $(CLIENTDIR)/common/core/screensaver.c $(VERSION_H) | $(COMMONDIR)
+$(COMMONDIR)/screensaver.o: $(CLIENTDIR)/common/core/screensaver.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(COMMONDIR)/syscall_table.o: $(CLIENTDIR)/common/core/syscall_table.c $(VERSION_H) | $(COMMONDIR)
+$(COMMONDIR)/syscall_table.o: $(CLIENTDIR)/common/core/syscall_table.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # ---------- IP (network) objects ----------
@@ -153,21 +140,21 @@ IP_PLATFORM_OBJS := \
 IP_OBJS := $(IP_COMMON_OBJS) $(IP_PLATFORM_OBJS)
 
 # Shared source rules
-$(IPDIR)/main.o: $(CLIENTDIR)/common/core/main.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/main.o: $(CLIENTDIR)/common/core/main.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
-$(IPDIR)/commands.o: $(CLIENTDIR)/common/core/commands.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/commands.o: $(CLIENTDIR)/common/core/commands.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
-$(IPDIR)/entry.o: $(CLIENTDIR)/common/network/entry.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/entry.o: $(CLIENTDIR)/common/network/entry.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
-$(IPDIR)/network_transport.o: $(CLIENTDIR)/common/network/network_transport.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/network_transport.o: $(CLIENTDIR)/common/network/network_transport.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
-$(IPDIR)/network_syscalls.o: $(CLIENTDIR)/common/network/network_syscalls.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/network_syscalls.o: $(CLIENTDIR)/common/network/network_syscalls.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
-$(IPDIR)/net.o: $(CLIENTDIR)/common/network/net.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/net.o: $(CLIENTDIR)/common/network/net.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
-$(IPDIR)/packet_helpers.o: $(CLIENTDIR)/common/network/packet_helpers.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/packet_helpers.o: $(CLIENTDIR)/common/network/packet_helpers.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
-$(IPDIR)/dhcp.o: $(CLIENTDIR)/common/network/dhcp.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/dhcp.o: $(CLIENTDIR)/common/network/dhcp.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Xbox source rules
@@ -177,25 +164,25 @@ $(IPDIR)/go.o: go.S | $(IPDIR)
 	$(CC) $(ASFLAGS) -c $< -o $@
 $(IPDIR)/exception_stubs.o: exception.S | $(IPDIR)
 	$(CC) $(ASFLAGS) -c $< -o $@
-$(IPDIR)/exception.o: exception.c video.h $(VERSION_H) | $(IPDIR)
+$(IPDIR)/exception.o: exception.c video.h $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
-$(IPDIR)/target.o: target.c video.h cache.h $(VERSION_H) | $(IPDIR)
+$(IPDIR)/target.o: target.c video.h cache.h $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
-$(IPDIR)/rtc.o: rtc.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/rtc.o: rtc.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
-$(IPDIR)/video.o: video.c video.h $(VERSION_H) | $(IPDIR)
+$(IPDIR)/video.o: video.c video.h $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 $(IPDIR)/memfuncs.o: memfuncs.c | $(IPDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
-$(IPDIR)/syscall.o: syscall.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/syscall.o: syscall.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
-$(IPDIR)/kosload_header.o: kosload_header.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/kosload_header.o: kosload_header.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
-$(IPDIR)/adapter.o: net/adapter.c net/nvnet.h $(VERSION_H) | $(IPDIR)
+$(IPDIR)/adapter.o: net/adapter.c net/nvnet.h $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
-$(IPDIR)/packet.o: net/packet.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/packet.o: net/packet.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
-$(IPDIR)/nvnet.o: net/nvnet.c net/nvnet.h $(VERSION_H) | $(IPDIR)
+$(IPDIR)/nvnet.o: net/nvnet.c net/nvnet.h $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # ---------- Link + package ----------

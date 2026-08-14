@@ -11,7 +11,6 @@ build/
 *.dol
 *.lzo
 .DS_Store
-include/kosload/version.h
 !make-dist/tools/IP.BIN
 make-dist/tools/elf2dol
 .claude/

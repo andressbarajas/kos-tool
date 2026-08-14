@@ -56,8 +56,7 @@ CFLAGS  := -O2 -Wall -Wextra -std=c11 \
     -I$(ROOT)/third_party/minilzo \
     $(LIBELF_CFLAGS) \
     -D_GNU_SOURCE \
-    -DKOSLOAD_VERSION_STRING=\"$(KOSLOAD_VERSION)\" \
-    -DKOSLOAD_GIT_REV=\"$(KOSLOAD_GIT_REV)\"
+    $(KOSLOAD_VERSION_DEFS)
 
 # Automatic header-dependency tracking.  -MMD writes a .d file alongside each
 # .o listing every (non-system) header pulled in by the preprocessor; -MP adds
@@ -207,21 +206,8 @@ OBJS     := $(patsubst src/%.c,$(BUILDDIR)/%.o,$(ALL_SRCS))
 
 TARGET   := $(BUILDDIR)/kos-tool
 
-# Default target (must appear before version.h rule)
+# Default target
 .DEFAULT_GOAL := all
-
-# ---------- version.h ----------
-
-VERSION_H    := $(ROOT)/include/kosload/version.h
-VERSION_H_IN := $(ROOT)/include/kosload/version.h.in
-
-$(VERSION_H): $(VERSION_H_IN) $(ROOT)/mk/version.mk
-	@sed -e 's/@KOSLOAD_VERSION_MAJOR@/$(KOSLOAD_VERSION_MAJOR)/g' \
-	     -e 's/@KOSLOAD_VERSION_MINOR@/$(KOSLOAD_VERSION_MINOR)/g' \
-	     -e 's/@KOSLOAD_VERSION_PATCH@/$(KOSLOAD_VERSION_PATCH)/g' \
-	     -e 's/@KOSLOAD_VERSION@/$(KOSLOAD_VERSION)/g' \
-	     $< > $@.tmp
-	@if ! cmp -s $@.tmp $@ 2>/dev/null; then mv $@.tmp $@; echo "  GEN     $@"; else rm $@.tmp; fi
 
 # ---------- Rules ----------
 
@@ -237,7 +223,7 @@ $(TARGET): $(OBJS) $(FW_OBJS) $(MINILZO_A) | $(BUILDDIR)
 	$(CC) $(OBJS) $(FW_OBJS) $(MINILZO_A) $(LDFLAGS) -o $@
 	@echo "  Built: $@"
 
-$(BUILDDIR)/%.o: src/%.c $(VERSION_H) $(HOST_HEADERS) | $(BUILDDIR)/transport $(BUILDDIR)/binary $(BUILDDIR)/platform
+$(BUILDDIR)/%.o: src/%.c $(KOSLOAD_VERSION_MK) $(HOST_HEADERS) | $(BUILDDIR)/transport $(BUILDDIR)/binary $(BUILDDIR)/platform
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # main.o carries the git stamp (KOSLOAD_GIT_REV via -D); recompile it every

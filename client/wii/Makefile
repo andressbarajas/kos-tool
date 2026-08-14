@@ -59,7 +59,7 @@ MEMORY_DEFS := \
     -DGC_LOADER_SIZE=$(WII_LOADER_SIZE) \
     -DXFB_ADDR=$(WII_XFB_BASE)
 
-CFLAGS  := $(ARCH_CFLAGS) $(FREE_CFLAGS) $(INCLUDES) $(MEMORY_DEFS) -DKOSLOAD_VERSION_STRING=\"$(KOSLOAD_VERSION)\" -DKOSLOAD_GIT_REV=\"$(KOSLOAD_GIT_REV)\"
+CFLAGS  := $(ARCH_CFLAGS) $(FREE_CFLAGS) $(INCLUDES) $(MEMORY_DEFS) $(KOSLOAD_VERSION_DEFS)
 ASFLAGS := $(ARCH_ASFLAGS) $(INCLUDES) $(MEMORY_DEFS)
 
 # Automatic header-dependency tracking.  -MMD writes a .d file alongside each
@@ -86,17 +86,7 @@ BOOTSTRAP_LD := $(IPDIR)/bootstrap.ld
 
 .DEFAULT_GOAL := all
 
-VERSION_H    := $(ROOT)/include/kosload/version.h
-VERSION_H_IN := $(ROOT)/include/kosload/version.h.in
 COMMON_CONFIG_STAMP := $(COMMONDIR)/common-config.stamp
-
-$(VERSION_H): $(VERSION_H_IN) $(ROOT)/mk/version.mk
-	@sed -e 's/@KOSLOAD_VERSION_MAJOR@/$(KOSLOAD_VERSION_MAJOR)/g' \
-	     -e 's/@KOSLOAD_VERSION_MINOR@/$(KOSLOAD_VERSION_MINOR)/g' \
-	     -e 's/@KOSLOAD_VERSION_PATCH@/$(KOSLOAD_VERSION_PATCH)/g' \
-	     -e 's/@KOSLOAD_VERSION@/$(KOSLOAD_VERSION)/g' \
-	     $< > $@.tmp
-	@if ! cmp -s $@.tmp $@ 2>/dev/null; then mv $@.tmp $@; echo "  GEN     $@"; else rm $@.tmp; fi
 
 $(IP_LD): wii-load-ip.ld.in $(ROOT)/mk/memory.mk | $(IPDIR)
 	@sed -e 's/@WII_LOADER_BASE@/$(WII_LOADER_BASE)/g' \
@@ -135,28 +125,28 @@ COMMON_S_OBJS := \
 COMMON_OBJS := $(COMMON_C_OBJS) $(COMMON_S_OBJS)
 COMMON_A    := $(COMMONDIR)/kosload_wii_common.a
 
-$(COMMONDIR)/info.o: $(CLIENTDIR)/common/core/info.c $(VERSION_H) | $(COMMONDIR)
+$(COMMONDIR)/info.o: $(CLIENTDIR)/common/core/info.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(COMMONDIR)/screensaver.o: $(CLIENTDIR)/common/core/screensaver.c $(VERSION_H) | $(COMMONDIR)
+$(COMMONDIR)/screensaver.o: $(CLIENTDIR)/common/core/screensaver.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(COMMONDIR)/syscall_table.o: $(CLIENTDIR)/common/core/syscall_table.c $(VERSION_H) | $(COMMONDIR)
+$(COMMONDIR)/syscall_table.o: $(CLIENTDIR)/common/core/syscall_table.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(COMMONDIR)/target.o: target.c $(VERSION_H) | $(COMMONDIR)
+$(COMMONDIR)/target.o: target.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(COMMONDIR)/video.o: $(CLIENTDIR)/gamecube/video.c $(VERSION_H) | $(COMMONDIR)
+$(COMMONDIR)/video.o: $(CLIENTDIR)/gamecube/video.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(COMMONDIR)/cache.o: $(CLIENTDIR)/gamecube/cache.c $(VERSION_H) | $(COMMONDIR)
+$(COMMONDIR)/cache.o: $(CLIENTDIR)/gamecube/cache.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(COMMONDIR)/memfuncs.o: $(CLIENTDIR)/gamecube/memfuncs.c $(VERSION_H) | $(COMMONDIR)
+$(COMMONDIR)/memfuncs.o: $(CLIENTDIR)/gamecube/memfuncs.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(COMMONDIR)/ios_net.o: ios_net.c ios_net.h $(VERSION_H) $(COMMON_CONFIG_STAMP) | $(COMMONDIR)
+$(COMMONDIR)/ios_net.o: ios_net.c ios_net.h $(KOSLOAD_VERSION_MK) $(COMMON_CONFIG_STAMP) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(COMMONDIR)/crt0.o: $(CLIENTDIR)/gamecube/crt0.S | $(COMMONDIR)
@@ -192,34 +182,34 @@ $(IP_CONFIG_STAMP): | $(IPDIR)
 	@printf '%s\n' 'WII_IOS_SOCKET_SHIM=clean-room-experimental-ipc' > $@.tmp
 	@if ! cmp -s $@.tmp $@ 2>/dev/null; then mv $@.tmp $@; echo "  GEN     $@"; else rm $@.tmp; fi
 
-$(IPDIR)/main.o: $(CLIENTDIR)/common/core/main.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/main.o: $(CLIENTDIR)/common/core/main.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/entry.o: $(CLIENTDIR)/common/network/entry.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/entry.o: $(CLIENTDIR)/common/network/entry.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/network_transport.o: $(CLIENTDIR)/common/network/network_transport.c $(VERSION_H) $(IP_CONFIG_STAMP) | $(IPDIR)
+$(IPDIR)/network_transport.o: $(CLIENTDIR)/common/network/network_transport.c $(KOSLOAD_VERSION_MK) $(IP_CONFIG_STAMP) | $(IPDIR)
 	$(CC) $(CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/network_syscalls.o: $(CLIENTDIR)/common/network/network_syscalls.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/network_syscalls.o: $(CLIENTDIR)/common/network/network_syscalls.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/commands.o: $(CLIENTDIR)/common/core/commands.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/commands.o: $(CLIENTDIR)/common/core/commands.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/adapter.o: net/adapter.c ios_net.h $(VERSION_H) | $(IPDIR)
+$(IPDIR)/adapter.o: net/adapter.c ios_net.h $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/net.o: $(CLIENTDIR)/common/network/net.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/net.o: $(CLIENTDIR)/common/network/net.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/packet.o: $(CLIENTDIR)/gamecube/net/packet.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/packet.o: $(CLIENTDIR)/gamecube/net/packet.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/packet_helpers.o: $(CLIENTDIR)/common/network/packet_helpers.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/packet_helpers.o: $(CLIENTDIR)/common/network/packet_helpers.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/dhcp.o: $(CLIENTDIR)/common/network/dhcp.c $(VERSION_H) | $(IPDIR)
+$(IPDIR)/dhcp.o: $(CLIENTDIR)/common/network/dhcp.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(CFLAGS) $(IP_DEFS) -c $< -o $@
 
 WII_IP_LDFLAGS := -nostdlib -Wl,-n -Wl,--gc-sections

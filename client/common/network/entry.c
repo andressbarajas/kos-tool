@@ -29,6 +29,7 @@
 
 #include <kosload/screensaver.h>
 #include <kosload/divutil.h>
+#include <kosload/version.h>
 
 #ifndef NETWORK_DISPLAY_X
 #define NETWORK_DISPLAY_X 30
