@@ -31,6 +31,7 @@ env:
   KOSCHAIN_REPO: https://github.com/andressbarajas/KallistiOS.git
   KOSCHAIN_PS2_REF: ps2_toolchain
   KOSCHAIN_XBOX_REF: xbox_toolchain
+  KOSCHAIN_PSP_REF: psp_toolchain
   TOOLCHAIN_PROFILE: stable
 
 jobs:
@@ -69,6 +70,11 @@ jobs:
             artifact_path: /opt/toolchains/xbox/i686-pc-xbox
             builds: |
               xbox /opt/toolchains/xbox/i686-pc-xbox
+          - name: psp
+            ref: psp_toolchain
+            artifact_path: /opt/toolchains/psp/mipsel-psp-elf
+            builds: |
+              psp /opt/toolchains/psp/mipsel-psp-elf
     steps:
       - name: Resolve kos-chain commit
         id: rev
@@ -145,7 +151,7 @@ jobs:
       - name: Resolve kos-chain commits
         id: rev
         run: |
-          for pair in "ps2:$KOSCHAIN_PS2_REF" "xbox:$KOSCHAIN_XBOX_REF"; do
+          for pair in "ps2:$KOSCHAIN_PS2_REF" "xbox:$KOSCHAIN_XBOX_REF" "psp:$KOSCHAIN_PSP_REF"; do
             name=${pair%%:*}; ref=${pair#*:}
             sha=$(git ls-remote "$KOSCHAIN_REPO" "refs/heads/$ref" | cut -f1)
             [ -n "$sha" ] || { echo "::error::branch $ref not found in $KOSCHAIN_REPO"; exit 1; }
@@ -183,6 +189,13 @@ jobs:
           key: kos-chain-xbox-${{ env.TOOLCHAIN_PROFILE }}-${{ steps.rev.outputs.xbox }}
           fail-on-cache-miss: true
 
+      - name: Restore PSP toolchain (cache)
+        uses: actions/cache/restore@v4
+        with:
+          path: /opt/toolchains/psp/mipsel-psp-elf
+          key: kos-chain-psp-${{ env.TOOLCHAIN_PROFILE }}-${{ steps.rev.outputs.psp }}
+          fail-on-cache-miss: true
+
       - name: Write Wii common key (if provided)
         run: |
           if [ -n "$WII_KEY" ]; then
@@ -208,15 +221,12 @@ jobs:
         run: |
           # build/<console>/ per console, kos-tool at the top level.
           test -x build/kos-tool
-          for c in dc gc wii ps2 xbox; do test -d "build/$c/examples"; done
+          for c in dc gc wii ps2 xbox psp; do test -d "build/$c/examples"; done
+          test -f build/psp/EBOOT.PBP
 
       - name: Package release archives (Linux host + firmware bundle)
         run: scripts/package-release.sh --all
 
-      # PSP is absent here on purpose: kos-chain has no PSP toolchain branch, so
-      # `make all` SKIPs the PSP client and client/psp/build/usb/psp-load-usb.bin
-      # never exists on CI.  Add it to this list (and to the toolchains matrix,
-      # the cache restores and the verify loop above) once that branch lands.
       - name: Bundle firmware .bin files (for host embedding)
         run: |
           tar czf firmware-bins.tar.gz \
@@ -226,7 +236,8 @@ jobs:
             client/gamecube/build/ip/gc-load-ip.bin \
             client/playstation2/build/ip/ps2-load-ip-image.bin \
             client/wii/build/ip/wii-load-ip.bin \
-            client/xbox/build/ip/xbox-load-ip.bin
+            client/xbox/build/ip/xbox-load-ip.bin \
+            client/psp/build/usb/psp-load-usb.bin
 
       - name: Upload firmware bundle
         uses: actions/upload-artifact@v4
