@@ -81,7 +81,7 @@ static bool payload1024 = false;
  * Map entries = ceil(MAX_RAM_BYTES / 1440), stored as 1 bit per entry.
  */
 #ifndef MAX_RAM_BYTES
-#error "MAX_RAM_BYTES must be defined per platform in CMakeLists.txt"
+#error "MAX_RAM_BYTES must be defined per platform (see MEMORY_DEFS in the per-console Makefile)"
 #endif
 #define BIN_INFO_MAP_ENTRIES ((MAX_RAM_BYTES + 1439) / 1440)
 #define BIN_INFO_MAP_BYTES (((BIN_INFO_MAP_ENTRIES + 63) / 64) * 8)
