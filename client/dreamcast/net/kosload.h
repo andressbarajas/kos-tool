@@ -1,7 +1,7 @@
 /* client/dreamcast/net/kosload.h */
 /*
- * Compatibility header for ported dcload-ip network stack files.
- * Provides the defines and declarations that dcload.h originally supplied.
+ * Dreamcast display/timing constants for the network stack.
+ * Shared state and display helpers live in <kosload/display.h>.
  *
  * Based on dcload-ip: dcload-ip/target-src/dcload/dcload.h
  */
@@ -9,11 +9,10 @@
 #ifndef __KOSLOAD_H__
 #define __KOSLOAD_H__
 
-#include <stdbool.h>
+#include <kosload/display.h>
 #include <kosload/protocol.h>
 
-/* Performance counter configuration (used by adapter timeout loops and
- * cmd_pmcr) */
+/* Performance counter used by the adapter timeout loops and cmd_pmcr. */
 #define KOSLOAD_PMCR 1
 
 /* Background colors (RGB565 format) — black like dcload-serial */
@@ -27,26 +26,6 @@
 #define PERFCOUNTER_SCALE SH4_FREQUENCY
 
 #define W5500_MODEL ADAPTER_DC_W5500
-
-/* Global state */
-extern volatile bool booted;
-extern volatile bool running;
-extern volatile bool receiving;
-extern unsigned int global_bg_color;
-extern volatile unsigned int installed_adapter;
-
-/* Functions provided by video.c */
-extern void uint_to_string(unsigned int foo, unsigned char *bar);
-extern void setup_video(unsigned int mode, unsigned int color);
-extern void clear_lines(int y, int height, unsigned int color);
-
-/* Functions provided by dcload main / display */
-extern void disp_info(void);
-extern void disp_status(const char *status);
-extern void disp_dhcp_attempts_count(void);
-extern void disp_dhcp_next_attempt(unsigned int);
-extern void uint_to_string_dec(unsigned int foo, char *bar);
-extern void dhcp_poll(void);
 
 /* Framebuffer color modes */
 #define FB_RGB0555 0

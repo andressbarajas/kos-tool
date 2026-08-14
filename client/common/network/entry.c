@@ -19,7 +19,6 @@
 
 #include <kosload/target.h>
 #include <kosload/transport.h>
-#include <kosload/video.h>
 #include <kosload/info.h>
 #include <kosload/net_adapter.h>
 #include <kosload/net_stack.h>
@@ -55,10 +54,6 @@
 
 extern void common_main(const target_ops_t *tgt, const client_transport_ops_t *xport);
 extern const target_ops_t *common_get_target(void);
-
-/* From video.c / video.h (platform-specific) */
-extern void uint_to_string(unsigned int foo, unsigned char *bar);
-extern void clear_lines(int y, int height, unsigned int color);
 
 /* From commands.c */
 extern unsigned int tool_ip;

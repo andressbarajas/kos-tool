@@ -1,17 +1,14 @@
 /* client/gamecube/net/kosload.h */
 /*
- * Compatibility header for ported dcload-ip network stack files.
- * GameCube version: different constants and CPU frequency.
+ * GameCube display/timing constants for the network stack.
+ * Shared state and display helpers live in <kosload/display.h>.
  */
 
 #ifndef __KOSLOAD_H__
 #define __KOSLOAD_H__
 
-#include <stdbool.h>
+#include <kosload/display.h>
 #include <kosload/protocol.h>
-
-/* Performance counter configuration (maps to TBR on GC, used by adapter timeout loops) */
-#define KOSLOAD_PMCR 1
 
 /* Colors in 0x00RRGGBB format (converted to YUV by gc_color_to_yuy2) */
 #define BBA_BG_COLOR   0x00200040 /* GameCube purple (dark) */
@@ -24,24 +21,5 @@
 #define PERFCOUNTER_SCALE GC_TBR_FREQUENCY
 
 #define W5500_MODEL ADAPTER_GC_W5500
-
-/* Global state (defined in entry.c) */
-extern volatile bool booted;
-extern volatile bool running;
-extern volatile bool receiving;
-extern unsigned int global_bg_color;
-extern volatile unsigned int installed_adapter;
-
-/* Functions provided by video.c */
-extern void uint_to_string(unsigned int foo, unsigned char *bar);
-extern void setup_video(unsigned int mode, unsigned int color);
-
-/* Functions provided by entry.c (display) */
-extern void disp_info(void);
-extern void disp_status(const char *status);
-extern void disp_dhcp_attempts_count(void);
-extern void disp_dhcp_next_attempt(unsigned int);
-extern void uint_to_string_dec(unsigned int foo, char *bar);
-extern void dhcp_poll(void);
 
 #endif /* __KOSLOAD_H__ */
