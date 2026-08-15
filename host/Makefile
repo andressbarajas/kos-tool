@@ -40,6 +40,14 @@ else
   EXTRA_DEFS     :=
   EXTRA_LDLIBS   := -lws2_32 -liphlpapi
   HOST_CC_DEFAULT := gcc
+
+  # Compile the MinGW-side libraries into the executable rather than shipping
+  # DLLs beside it, so a downloaded kos-tool.exe runs on a machine that has
+  # nothing installed.  Set KOSTOOL_WINDOWS_STATIC=0 for a dynamic link.
+  KOSTOOL_WINDOWS_STATIC ?= 1
+  ifeq ($(KOSTOOL_WINDOWS_STATIC),1)
+    STATIC_LDFLAGS := -static
+  endif
 endif
 
 # ---------- Compiler flags ----------
@@ -108,7 +116,11 @@ ifeq ($(UNAME_S),Darwin)
 else
   ifeq ($(shell pkg-config --exists libusb-1.0 2>/dev/null && echo yes),yes)
     LIBUSB_CFLAGS  := $(shell pkg-config --cflags libusb-1.0)
-    LIBUSB_LDFLAGS := $(shell pkg-config --libs libusb-1.0)
+    ifeq ($(KOSTOOL_WINDOWS_STATIC),1)
+      LIBUSB_LDFLAGS := $(shell pkg-config --static --libs libusb-1.0)
+    else
+      LIBUSB_LDFLAGS := $(shell pkg-config --libs libusb-1.0)
+    endif
   endif
 endif
 
@@ -117,7 +129,7 @@ ifneq ($(LIBUSB_LDFLAGS),)
   USB_SRC := src/transport/usb.c
 endif
 
-LDFLAGS := $(LIBELF_LDFLAGS) $(EXTRA_LDLIBS) $(LIBUSB_LDFLAGS)
+LDFLAGS := $(STATIC_LDFLAGS) $(LIBELF_LDFLAGS) $(EXTRA_LDLIBS) $(LIBUSB_LDFLAGS)
 
 # ---------- Firmware embedding ----------
 # If client firmware .bin files exist, embed them into kos-tool for
