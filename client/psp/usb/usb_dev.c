@@ -423,12 +423,12 @@ static void diag_fail(uint32_t error) {
 
 static const uint8_t dev_desc[18] = {
     18, 0x01,                          /* bLength, DEVICE */
-    0x00, 0x02,                        /* bcdUSB 2.00 */
+    0x01, 0x02,                        /* bcdUSB 2.01 */
     0xFF, 0x00, 0x00,                  /* vendor class */
     64,                                /* bMaxPacketSize0 */
     KOSLOAD_USB_VID & 0xFF, KOSLOAD_USB_VID >> 8,
     KOSLOAD_USB_PID & 0xFF, KOSLOAD_USB_PID >> 8,
-    0x00, 0x01,                        /* bcdDevice 1.00 */
+    0x01, 0x01,                        /* bcdDevice 1.01 */
     0, 0, 0,                           /* iManufacturer/iProduct/iSerial */
     1                                  /* bNumConfigurations */
 };
@@ -438,12 +438,72 @@ static const uint8_t dev_desc[18] = {
  * broken device and abandon enumeration.  It mirrors the device descriptor. */
 static const uint8_t qualifier_desc[10] = {
     10, 0x06,                          /* bLength, DEVICE_QUALIFIER */
-    0x00, 0x02,                        /* bcdUSB 2.00 */
+    0x01, 0x02,                        /* bcdUSB 2.01, matching dev_desc */
     0xFF, 0x00, 0x00,                  /* vendor class */
     64,                                /* bMaxPacketSize0 */
     1,                                 /* bNumConfigurations */
     0                                  /* bReserved */
 };
+
+/* ===== Microsoft OS 2.0 (WCID) descriptors =====
+ *
+ * Without these Windows leaves this vendor-class device unbound and -t usb
+ * needs a manual Zadig/WinUSB install; Linux and macOS need no setup.
+ *
+ * Two steps: bcdUSB >= 0x0201 makes Windows fetch the BOS, whose platform
+ * capability names a vendor request code; Windows then issues that request to
+ * read the set below, whose "WINUSB" compatible ID loads the driver.  This is
+ * Windows 8.1+; Windows 7 would need the older 0xEE-string mechanism.
+ *
+ * Nothing here may exceed the 64-byte ep0_buf: a DeviceInterfaceGUIDs
+ * REG_PROPERTY (~132 bytes) would, and libusb does not need one. */
+
+#define MSOS2_VENDOR_CODE          0x20u  /* ours to choose; advertised in the BOS */
+#define MSOS2_INDEX_DESCRIPTOR_SET 7u     /* wIndex Windows sends with it */
+#define MSOS2_DESC_SET_LEN         30u
+
+static const uint8_t msos2_desc[MSOS2_DESC_SET_LEN] = {
+    /* --- descriptor set header (10 bytes) --- */
+    0x0A, 0x00,                        /* wLength 10 */
+    0x00, 0x00,                        /* MS_OS_20_SET_HEADER_DESCRIPTOR */
+    0x00, 0x00, 0x03, 0x06,            /* dwWindowsVersion 0x06030000 (8.1) */
+    MSOS2_DESC_SET_LEN, 0x00,          /* wTotalLength */
+
+    /* --- compatible ID (20 bytes) ---
+     * Placed directly in the set header's scope, which applies it to the
+     * device: correct here because we expose exactly one configuration with
+     * one interface.  A composite device would need a function subset. */
+    0x14, 0x00,                        /* wLength 20 */
+    0x03, 0x00,                        /* MS_OS_20_FEATURE_COMPATIBLE_ID */
+    'W', 'I', 'N', 'U', 'S', 'B', 0x00, 0x00,        /* CompatibleID */
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00   /* SubCompatibleID */
+};
+
+static const uint8_t bos_desc[33] = {
+    0x05, 0x0F,                        /* bLength 5, BOS */
+    33, 0x00,                          /* wTotalLength */
+    0x01,                              /* bNumDeviceCaps */
+
+    0x1C, 0x10, 0x05, 0x00,            /* bLength 28, DEVICE_CAPABILITY,
+                                        * PLATFORM, bReserved */
+    /* MS OS 2.0 platform capability UUID {D8DD60DF-4589-4CC7-9CD2-659D9E648A9F},
+     * in the wire order the spec requires: first three fields little-endian,
+     * last two big-endian. */
+    0xDF, 0x60, 0xDD, 0xD8, 0x89, 0x45, 0xC7, 0x4C,
+    0x9C, 0xD2, 0x65, 0x9D, 0x9E, 0x64, 0x8A, 0x9F,
+
+    0x00, 0x00, 0x03, 0x06,            /* dwWindowsVersion 0x06030000 */
+    MSOS2_DESC_SET_LEN, 0x00,          /* wMSOSDescriptorSetTotalLength */
+    MSOS2_VENDOR_CODE,                 /* bMS_VendorCode */
+    0x00                               /* bAltEnumCode (0 = no alt enumeration) */
+};
+
+/* ep0_send() memcpys into ep0_buf unchecked, so nothing we can be asked for may
+ * exceed it.  Both new descriptors are well under 64 bytes; keep it that way. */
+_Static_assert(sizeof(bos_desc) <= sizeof(ep0_buf),
+               "BOS descriptor does not fit the EP0 buffer");
+_Static_assert(sizeof(msos2_desc) <= sizeof(ep0_buf),
+               "MS OS 2.0 descriptor set does not fit the EP0 buffer");
 
 /* Bulk wMaxPacketSize for the speed the controller latched.  High speed
  * mandates exactly 512 for bulk endpoints; full speed allows at most 64.
@@ -1040,6 +1100,10 @@ static void usb_global_events(void) {
 static void ep0_send(const void *data, uint32_t len, uint32_t wLength) {
     if(len > wLength)
         len = wLength;
+    /* The memcpy below is unchecked; truncate rather than overrun ep0_buf
+     * into the adjacent DMA buffers. */
+    if(len > sizeof(ep0_buf))
+        len = sizeof(ep0_buf);
     if(len != 0)
         memcpy((void *)UNCACHED(ep0_buf), data, len);
 
@@ -1123,6 +1187,7 @@ static void handle_setup(const uint8_t *s) {
     uint8_t bmRequestType = s[0];
     uint8_t bRequest = s[1];
     uint16_t wValue = (uint16_t)(s[2] | (s[3] << 8));
+    uint16_t wIndex = (uint16_t)(s[4] | (s[5] << 8));
     uint16_t wLength = (uint16_t)(s[6] | (s[7] << 8));
     static const uint8_t zero_status[2] = { 0, 0 };
 
@@ -1154,6 +1219,22 @@ static void handle_setup(const uint8_t *s) {
             diag_events |= USB_DEV_DIAG_EXPECTED_SETUP;
     }
 
+    /* Vendor requests are identified by bmRequestType, not by bRequest.  The
+     * switch below dispatches on bRequest alone, so this has to be decided
+     * first: MSOS2_VENDOR_CODE would otherwise be run as whatever standard
+     * request happens to share its number. */
+    if((bmRequestType & 0x60) == 0x40) {
+        /* 0xC0 exactly: device-to-host, vendor type, device recipient -- the
+         * only form the MS OS 2.0 spec defines for this request.  Answering an
+         * OUT-direction request with an IN data stage would desync EP0. */
+        if(bmRequestType == 0xC0 && bRequest == MSOS2_VENDOR_CODE &&
+           wIndex == MSOS2_INDEX_DESCRIPTOR_SET)
+            ep0_send(msos2_desc, sizeof(msos2_desc), wLength);
+        else
+            ep0_stall();
+        return;
+    }
+
     switch(bRequest) {
         case 6: /* GET_DESCRIPTOR */
             switch(wValue >> 8) {
@@ -1166,6 +1247,9 @@ static void handle_setup(const uint8_t *s) {
                     break;
                 case 6: /* DEVICE_QUALIFIER */
                     ep0_send(qualifier_desc, sizeof(qualifier_desc), wLength);
+                    break;
+                case 0x0F: /* BOS -- carries the MS OS 2.0 platform capability */
+                    ep0_send(bos_desc, sizeof(bos_desc), wLength);
                     break;
                 default: /* strings, other-speed config: not supported */
                     ep0_stall();
@@ -1203,7 +1287,6 @@ static void handle_setup(const uint8_t *s) {
             /* An unsupported request must be stalled.  Answering a control-IN
              * read with a zero-length packet instead reads to the host as a
              * valid but empty descriptor, which is what stalls enumeration. */
-            (void)bmRequestType;
             ep0_stall();
             break;
     }

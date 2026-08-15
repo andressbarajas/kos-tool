@@ -74,7 +74,8 @@ The PSP is the one console with no network path: `psp-load-usb` exposes a
 vendor-specific bulk IN/OUT endpoint pair and tunnels the same byte protocol
 the serial consoles use, so the host selects it with `-t usb` rather than a
 device path or an IP. That requires `libusb` on the host — a `kos-tool` built
-without it rejects `-t usb`.
+without it rejects `-t usb`. On Windows see
+[PSP over USB](#psp-over-usb--t-usb); Linux and macOS need no driver setup.
 
 Copy `EBOOT.PBP` to `ms0:/PSP/GAME/kosload/EBOOT.PBP` and launch it from the
 XMB. The EBOOT is unsigned, so it needs homebrew-enabled firmware —
@@ -283,6 +284,15 @@ Common Windows USB-serial drivers:
   [FTDI VCP driver](https://ftdichip.com/drivers/vcp-drivers/). In Device
   Manager, open the adapter properties and make sure **Load VCP** is enabled so
   Windows exposes the adapter as a `COMx` serial port.
+
+#### PSP over USB (`-t usb`)
+
+The PSP is a vendor-class USB device, not a `COMx` port, so none of the serial
+drivers above apply — select it with `-t usb`.
+
+**Windows 8.1+ needs no setup.** On Windows 7, bind the driver by hand with
+[Zadig](https://zadig.akeo.ie/) (*Options → List All Devices*, pick the PSP,
+install **WinUSB**). Once per machine.
 
 ### Static IP
 
