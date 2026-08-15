@@ -1611,7 +1611,7 @@ static void ser_syscall_creat(kostool_context_t *ctx) {
     int mode = ser_recv_uint(ctx);
     char buf[MAX_PATH_LEN];
     const char *resolved = resolve_path(ctx, pathname, buf, sizeof(buf));
-    int ret = creat(resolved, mode);
+    int ret = open(resolved, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, mode);
     ser_send_uint(ctx, ret);
     free(pathname);
 }
@@ -2240,7 +2240,7 @@ static void net_syscall_creat(kostool_context_t *ctx, uint8_t *pkt) {
     net_command_int_string_t *cmd = (net_command_int_string_t *)pkt;
     char buf[MAX_PATH_LEN];
     const char *resolved = resolve_path(ctx, cmd->string, buf, sizeof(buf));
-    int ret = creat(resolved, ntohl(cmd->value0));
+    int ret = open(resolved, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, ntohl(cmd->value0));
     net_send_cmd(ctx, NET_CMD_RETVAL, ret, ret, NULL, 0);
 }
 
