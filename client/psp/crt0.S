@@ -26,6 +26,7 @@
     .section .text.crt0, "ax"
     .global _start
     .global kosloadsyscall
+    .global kosloadmagic
 
 # ---- Guest-facing header (mirrors PS2 layout: BASE+4 magic, +8 syscall) ----
 _start:

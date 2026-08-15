@@ -26,6 +26,9 @@ _Static_assert(PSP_LZO_WRKMEM_SIZE == LZO_WRKMEM_SIZE,
 _Static_assert(PSP_LZO_WRKMEM_ADDR == PSP_LOADER_BASE + PSP_LOADER_SIZE - LZO_WRKMEM_SIZE,
                "PSP LZO work memory is not at the top of the loader window");
 
+/* From crt0.S */
+extern volatile uint32_t kosloadmagic;
+
 /* From go.S */
 extern void go(uint32_t addr);
 
@@ -136,6 +139,8 @@ static void psp_fw_update_prepare(void) {
 
 static void psp_set_console_enabled(bool enabled) {
     console_enabled = enabled;
+    kosloadmagic = enabled ? 0xdeadbeef : 0xfeedface;
+    cache_flush_range((const void *)&kosloadmagic, sizeof(kosloadmagic));
 }
 
 static uint64_t psp_get_ticks(void) {
