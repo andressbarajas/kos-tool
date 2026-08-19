@@ -52,21 +52,50 @@ static uint64_t read_tsc(void) {
  * (silenced) and harmless.  Erasing 0x10000..0x3CB08 here was fatal on an -F
  * re-entry: by then the loader already lives at phys 0x11000 (the identity
  * region), so the erase would zero the running loader out from under itself. */
-static uint64_t xbox_gdt[3] __attribute__((aligned(8))) = {
+static uint64_t xbox_gdt[4] __attribute__((aligned(8))) = {
     0x0000000000000000ull, /* null                              */
     0x00CF9A000000FFFFull, /* 0x08: ring-0 32-bit 4GB flat code */
     0x00CF92000000FFFFull, /* 0x10: ring-0 32-bit 4GB flat data */
+    0x0000000000000000ull, /* 0x18: 32-bit TSS, filled in below */
+};
+
+/* TR must name a descriptor in our own GDT: a guest that saves and restores the
+ * loader's CPU state reads it, and writes it to clear the busy bit.  The MS
+ * kernel's leftover TR (0x18) indexed its much larger table, so it fell past our
+ * limit.  The TSS itself is never used — the loader stays in ring 0 — hence all
+ * zeroes, with iomap_base past the limit so there is no I/O bitmap. */
+typedef struct __attribute__((packed)) xbox_tss {
+    uint32_t unused[25];   /* 0x00..0x63: link, esp0/ss0..ss2, saved regs, ldt */
+    uint16_t trap;         /* 0x64: debug-trap flag                            */
+    uint16_t iomap_base;   /* 0x66: >= limit => no I/O-permission bitmap       */
+} xbox_tss_t;
+
+static xbox_tss_t xbox_tss __attribute__((aligned(16))) = {
+    .iomap_base = sizeof(xbox_tss_t),
 };
 
 static void xbox_kernel_takeover(void) {
+    uint32_t tss_base  = (uint32_t)(uintptr_t)&xbox_tss;
+    uint32_t tss_limit = (uint32_t)sizeof(xbox_tss) - 1u;
     struct __attribute__((packed)) {
         uint16_t limit;
         uint32_t base;
     } gdtr = { sizeof(xbox_gdt) - 1, (uint32_t)(uintptr_t)xbox_gdt };
 
+    /* 0x18: present ring-0 32-bit TSS, available (type 0x9); the LTR below marks
+     * it busy (0xB), the state a guest expects.  Built here because &xbox_tss is
+     * not a constant expression.  Both this base and gdtr.base are linear
+     * addresses, so they survive xbox_relocate_identity() (PTE rewrite only). */
+    xbox_gdt[3] = ((uint64_t)(tss_limit & 0x0000FFFFu))
+                | ((uint64_t)(tss_base & 0x00FFFFFFu) << 16)
+                | ((uint64_t)0x89u << 40)
+                | ((uint64_t)((tss_limit >> 16) & 0x0Fu) << 48)
+                | ((uint64_t)(tss_base >> 24) << 56);
+
     __asm__ volatile("cli");
 
-    /* Our own GDT, then reload every segment register (a far jump reloads CS). */
+    /* Our own GDT, then reload every segment register (a far jump reloads CS)
+     * and the task register. */
     __asm__ volatile(
         "lgdt %0\n\t"
         "movw $0x10, %%ax\n\t"
@@ -77,6 +106,8 @@ static void xbox_kernel_takeover(void) {
         "movw %%ax, %%ss\n\t"
         "ljmp $0x08, $1f\n\t"
         "1:\n\t"
+        "movw $0x18, %%ax\n\t"
+        "ltr %%ax\n\t"
         :: "m"(gdtr) : "eax", "memory");
 
     /* Re-point the IDT gates at our (now-current) 0x08 code selector. */
