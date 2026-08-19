@@ -254,7 +254,17 @@ static void xbox_reboot(void) {
 }
 
 static void xbox_set_console_enabled(bool enabled) {
+    uint32_t cr0;
+
     console_enabled = enabled;
+
+    /* Guests read this word and skip their syscalls unless it says 0xdeadbeef.
+     * It lives in read-only .text, so drop CR0.WP across the store the way
+     * xbox_relocate_identity() does. */
+    __asm__ volatile("mov %%cr0, %0" : "=r"(cr0));
+    __asm__ volatile("mov %0, %%cr0" :: "r"(cr0 & ~0x00010000) : "memory");
+    *(volatile uint32_t *)(uintptr_t)XBOX_KOSLOAD_BASE = enabled ? 0xdeadbeef : 0xfeedface;
+    __asm__ volatile("mov %0, %%cr0" :: "r"(cr0) : "memory");
 }
 
 static void xbox_set_rtc(uint32_t unix_timestamp) {
