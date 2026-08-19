@@ -96,7 +96,7 @@ static int elf_load(const char *filename, uint32_t *entry_addr, binary_section_c
             return -1;
         }
 
-        if(!shdr->sh_addr)
+        if(!shdr->sh_addr || !(shdr->sh_flags & SHF_ALLOC))
             continue;
 
         Elf_Data *data = elf_getdata(scn, NULL);
