@@ -207,7 +207,7 @@ build/
 │   └── examples/                 # PlayStation 2 example ELFs
 ├── xbox/
 │   ├── xbox-load-ip.{exe,bin}    # Xbox network firmware
-│   ├── default.xbe               # Xbox loader as a launchable XBE (pe2xbe-packed, unsigned)
+│   ├── default.xbe               # Xbox loader as a launchable XBE (elf2xbe-packed, unsigned)
 │   ├── xbox-load-ip.xiso         # bootable disc image (`make dist-xbox`/`make dist`)
 │   └── examples/                 # Xbox example ELFs
 └── psp/
@@ -472,7 +472,7 @@ kos-tool/
 ├── host/                # Host tool (kos-tool)
 │   ├── src/             # Main, console, upload/download, discovery
 │   ├── include/         # Host headers
-│   └── tools/           # pe2xbe (Xbox XBE packer), elf2irx (PS2 IRX converter),
+│   └── tools/           # elf2xbe (Xbox XBE packer), elf2irx (PS2 IRX converter),
 │                         #   elf2prx + pbp (PSP EBOOT builders)
 ├── include/             # Shared protocol headers
 ├── make-dist/           # Delivery artifact tools (CDI, ISO/DOL, WAD, XISO)

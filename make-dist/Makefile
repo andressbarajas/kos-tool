@@ -130,7 +130,7 @@ GC_IP_ISO  := $(GC_OUT)/gc-load-ip.iso
 # release version is stamped into the filename once, by scripts/package-release.sh.
 PS2_IP_ISO := $(PS2_OUT)/ps2-load-ip.iso
 
-# Xbox XDVDFS (XISO) disc image wrapping the pe2xbe-packed default.xbe.
+# Xbox XDVDFS (XISO) disc image wrapping the elf2xbe-packed default.xbe.
 XBOX_IP_XBE  := $(XBOX_OUT)/default.xbe
 XBOX_IP_XISO := $(XBOX_OUT)/xbox-load-ip.xiso
 XBOX_DISC_DIR := $(LOCALDIR)/xbox-ip-disc
@@ -437,7 +437,7 @@ ps2: $(MKISO_LITE) $(PS2_DISC_CNF) $(PS2_DISC_ELF) | $(PS2_OUT)
 # Xbox: XDVDFS (XISO) disc image
 #
 # An Xbox disc is an XDVDFS image whose root holds default.xbe (produced by
-# pe2xbe in the main build).  The kernel/xemu auto-boots default.xbe from
+# elf2xbe in the main build).  The kernel/xemu auto-boots default.xbe from
 # the disc root.  The top-level `xbox` target stages default.xbe into
 # $(XBOX_OUT); we copy it in under its boot name and pack with mkxiso-lite.
 # ============================================================

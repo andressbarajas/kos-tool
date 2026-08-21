@@ -48,7 +48,8 @@
 #define XBOX_RAM_PHYS_MASK   0x03FFFFFFu /* 64 MB */
 #define XBOX_FB_PHYS         0x03C00000u /* fallback framebuffer if PCRTC reads 0 */
 
-/* MCPX SMBus (x86 port I/O) — used to program the video encoder. */
+/* MCPX SMBus (x86 port I/O).  Only the SMC below is driven over it: the video
+ * encoder is deliberately left exactly as the kernel programmed it. */
 #define SMBUS_STATUS         0xC000u
 #define SMBUS_CONTROL        0xC002u
 #define SMBUS_ADDRESS        0xC004u
@@ -327,7 +328,7 @@ void xbox_video_draw_bitmap(int x, int y, int w, int h, const uint32_t *bits, ui
 
 /* ===== Names expected by shared common code + the kosload header ===== */
 
-void setup_video(uint32_t mode, uint32_t bg_color) {
+void setup_video(unsigned int mode, unsigned int bg_color) {
     (void)mode;
     (void)bg_color;
     if(!fb)
@@ -347,7 +348,7 @@ void clear_lines(int y, int height, unsigned int color) {
 }
 
 /* Decimal uint -> string (shared exception/status display helper). */
-void uint_to_string(uint32_t val, unsigned char *buf) {
+void uint_to_string(unsigned int val, unsigned char *buf) {
     char tmp[11];
     int i = 0;
     if(val == 0) {

@@ -282,10 +282,10 @@ ps2: check-ps2-toolchain | $(PS2_OUT)
 
 xbox: check-xbox-toolchain | $(XBOX_OUT)
 	$(MAKE) -C client/xbox ROOT=$(ROOT) all
-	@cp client/xbox/build/ip/xbox-load-ip.exe $(XBOX_OUT)/
+	@cp client/xbox/build/ip/xbox-load-ip.elf $(XBOX_OUT)/
 	@cp client/xbox/build/ip/xbox-load-ip.bin $(XBOX_OUT)/
 	@cp client/xbox/build/ip/default.xbe $(XBOX_OUT)/default.xbe
-	@echo "  COPY    $(XBOX_OUT)/xbox-load-ip.{exe,bin} $(XBOX_OUT)/default.xbe"
+	@echo "  COPY    $(XBOX_OUT)/xbox-load-ip.{elf,bin} $(XBOX_OUT)/default.xbe"
 	@rm -rf $(XBOX_OUT)/examples && mkdir -p $(XBOX_OUT)/examples
 	@cp client/xbox/build/examples/*.elf $(XBOX_OUT)/examples/
 	@echo "  COPY    $(XBOX_OUT)/examples/*.elf"

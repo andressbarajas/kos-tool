@@ -8,25 +8,25 @@
 
     .code32
     .text
-    .globl  _isr_common
-    .extern _exception_handler_c
+    .globl  isr_common
+    .extern exception_handler_c
 
 /* Vectors that push a hardware error code: 8, 10, 11, 12, 13, 14, 17. */
 .macro ISR_ERR num
-    .globl  _isr_\num
-_isr_\num:
+    .globl  isr_\num
+isr_\num:
     pushl   $\num
-    jmp     _isr_common
+    jmp     isr_common
 .endm
 
 /* Vectors that do NOT push an error code: push a 0 placeholder for a uniform
    frame, then the vector number. */
 .macro ISR_NOERR num
-    .globl  _isr_\num
-_isr_\num:
+    .globl  isr_\num
+isr_\num:
     pushl   $0
     pushl   $\num
-    jmp     _isr_common
+    jmp     isr_common
 .endm
 
     ISR_NOERR 0
@@ -52,10 +52,10 @@ _isr_\num:
 
 /* On entry the stack holds: [vector][errcode][eip][cs][eflags].
    pusha appends [edi..eax], giving the x86_frame_t the C handler reads. */
-_isr_common:
+isr_common:
     pusha
     pushl   %esp                    /* &frame -> first arg */
-    call    _exception_handler_c
+    call    exception_handler_c
     addl    $4, %esp
 1:  cli
     hlt

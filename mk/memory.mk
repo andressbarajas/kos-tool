@@ -101,7 +101,7 @@ PS2_LOADER_SIZE    := 0xFFD80     # 1 MB minus the 0x280 vector area
 XBOX_RAM_TOP           := 0x04000000  # physical top of 64 MiB retail RAM
 XBOX_LOADER_BASE       := 0x00010000  # XBE image base (conventional homebrew)
 XBOX_LOADER_SIZE       := 0x0002C000  # max XBE header + loader window, ending at 0x0003C000
-XBOX_HEADER_RESERVE    := 0x1000      # XBE header page (must match pe2xbe HEADER_RESERVE)
+XBOX_HEADER_RESERVE    := 0x1000      # XBE header page (must match elf2xbe HEADER_RESERVE)
 XBOX_KOSLOAD_BASE      := 0x00011000  # = XBOX_LOADER_BASE + XBOX_HEADER_RESERVE
 XBOX_DEFAULT_LOAD_ADDR := 0x0003C000  # first guest VA, immediately after loader window
 

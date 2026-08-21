@@ -11,9 +11,17 @@
 
 #include <stdint.h>
 
+/* uint_to_string / clear_lines / setup_video are the shared console-side video
+ * contract; take the prototypes from the owning header rather than restating
+ * them.  They are declared there with unsigned int, and on this ELF target
+ * uint32_t is "long unsigned int", so a restatement would be a type conflict. */
+#include <kosload/display.h>
+
 /* The retail kernel/dashboard leaves an active framebuffer; video.c reads its
- * base, stride and height back from the live mode (PCRTC/CRTC/PRAMDAC).  These
- * 640x480 values are only the fallback defaults if that readback fails. */
+ * base, stride and height back from the live mode (PCRTC/CRTC/PRAMDAC), so
+ * XBOX_SCREEN_HEIGHT — and XBOX_SCREEN_WIDTH as the stride — apply only if that
+ * readback fails.  XBOX_SCREEN_WIDTH is also the unconditional horizontal clip
+ * for drawing, so text stays in the leftmost 640 pixels of a wider mode. */
 #define XBOX_SCREEN_WIDTH   640
 #define XBOX_SCREEN_HEIGHT  480
 #define XBOX_CHAR_WIDTH     12
@@ -40,12 +48,10 @@ void xbox_video_draw_string(int x, int y, const char *str, uint32_t color);
 void xbox_video_fill_rect(int x, int y, int w, int h, uint32_t color);
 void xbox_video_draw_bitmap(int x, int y, int w, int h, const uint32_t *bits, uint32_t color);
 
-/* Names expected by the kosload header and shared common code. */
-void setup_video(uint32_t mode, uint32_t bg_color);
+/* Names expected by the kosload header and shared common code.  setup_video(),
+ * clear_lines() and uint_to_string() come from <kosload/display.h> above. */
 void clear_screen(uint32_t color);
 void draw_string(int x, int y, const char *str, uint32_t color);
-void clear_lines(int y, int height, unsigned int color);
-void uint_to_string(uint32_t val, unsigned char *buf);
 const char *exception_code_to_string(uint32_t code);
 
 #endif /* KOSLOAD_XBOX_VIDEO_H */

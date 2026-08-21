@@ -1,7 +1,7 @@
 # client/xbox/Makefile — builds the Xbox IP loader (xbox-load-ip)
 #
-# Single-stage: link a PE/COFF image with the i686-pc-xbox toolchain, then
-# convert it to a bootable default.xbe with host/tools/pe2xbe.  Also emits a
+# Single-stage: link an ELF32 image with the i686-pc-xbox toolchain, then
+# convert it to a bootable default.xbe with host/tools/elf2xbe.  Also emits a
 # raw .bin for kos-tool firmware embedding.
 
 ROOT      ?= $(CURDIR)/../..
@@ -19,9 +19,9 @@ AR      := $(XBOX_TOOLCHAIN)/$(PREFIX)ar
 OBJCOPY := $(XBOX_TOOLCHAIN)/$(PREFIX)objcopy
 SIZE    := $(XBOX_TOOLCHAIN)/$(PREFIX)size
 
-# Host C compiler for the pe2xbe converter.
+# Host C compiler for the elf2xbe converter.
 HOSTCC  ?= cc
-PE2XBE  := $(ROOT)/host/tools/pe2xbe/pe2xbe
+ELF2XBE := $(ROOT)/host/tools/elf2xbe/elf2xbe
 
 # ---------- Directories ----------
 
@@ -68,12 +68,14 @@ CFLAGS  := $(ARCH_CFLAGS) $(FREE_CFLAGS) $(INCLUDES) $(MEMORY_DEFS) $(IP_DEFS) \
            -MMD -MP
 ASFLAGS := $(ARCH_CFLAGS) $(INCLUDES) $(MEMORY_DEFS) -MMD -MP
 
-# PE image layout: base + 0x20 alignment reach the linker script via ld's
-# __image_base__ / __section_alignment__ variables.
+# ELF image layout: the image base is set in the linker script, which needs the
+# literal anyway for its ASSERTs (--section-alignment / --file-alignment have no
+# elf_i386 equivalent).  ELF would otherwise page-align every PT_LOAD to 0x1000;
+# -z max-page-size=0x20 keeps the window as tight as PE's 0x20 alignment did.
 LDFLAGS := -nostdlib -nostartfiles \
-           -Wl,--image-base,$(XBOX_LOADER_BASE) \
-           -Wl,--section-alignment,0x20 \
-           -Wl,--file-alignment,0x20 \
+           -Wl,-z,max-page-size=0x20 \
+           -Wl,--build-id=none \
+           -Wl,--no-warn-rwx-segments \
            -Wl,--no-undefined \
            -Wl,--gc-sections \
            -Wl,-e,_start
@@ -187,24 +189,26 @@ $(IPDIR)/nvnet.o: net/nvnet.c net/nvnet.h $(KOSLOAD_VERSION_MK) | $(IPDIR)
 
 # ---------- Link + package ----------
 
-IP_EXE := $(IPDIR)/xbox-load-ip.exe
+IP_ELF := $(IPDIR)/xbox-load-ip.elf
 IP_BIN := $(IPDIR)/xbox-load-ip.bin
 IP_XBE := $(IPDIR)/default.xbe
 
-$(IP_EXE): $(IP_OBJS) $(COMMON_OBJS) $(IP_LD)
+$(IP_ELF): $(IP_OBJS) $(COMMON_OBJS) $(IP_LD)
 	$(CC) $(ARCH_CFLAGS) $(LDFLAGS) -T $(IP_LD) \
 	    $(IP_OBJS) $(COMMON_OBJS) -lgcc -o $@
 	@$(SIZE) $@ 2>/dev/null || true
 
-$(IP_BIN): $(IP_EXE)
+$(IP_BIN): $(IP_ELF)
 	@$(OBJCOPY) -O binary $< $@
 	@echo "  OBJCOPY $@"
 
-$(PE2XBE): $(ROOT)/host/tools/pe2xbe/pe2xbe.c $(ROOT)/host/tools/pe2xbe/Makefile
-	@$(MAKE) -C $(ROOT)/host/tools/pe2xbe CC=$(HOSTCC)
+$(ELF2XBE): $(ROOT)/host/tools/elf2xbe/elf2xbe.c $(ROOT)/host/tools/elf2xbe/Makefile
+	@$(MAKE) -C $(ROOT)/host/tools/elf2xbe CC=$(HOSTCC)
 
-$(IP_XBE): $(IP_EXE) $(PE2XBE)
-	@$(PE2XBE) -o $@ -t "xbox-load-ip" $(IP_EXE)
+# -b is the XBE image base: the ELF has no image-base field, and the page below
+# the first PT_LOAD is the reserve the generated XBE headers occupy.
+$(IP_XBE): $(IP_ELF) $(ELF2XBE)
+	@$(ELF2XBE) -o $@ -b $(XBOX_LOADER_BASE) -t "xbox-load-ip" $(IP_ELF)
 
 # ---------- Freestanding Xbox guest examples ----------
 
@@ -216,17 +220,13 @@ XBOX_EXAMPLES := \
     file-test gdb-test ip-calibrator syscall-test xbox-video-test xbox-reboot
 XBOX_EXAMPLE_ELFS := $(addprefix $(EXBUILD)/,$(addsuffix .elf,$(XBOX_EXAMPLES)))
 
-$(EXBUILD)/%.exe: $(EXDIR)/%/main.c $(ROOT)/mk/memory.mk | $(EXBUILD)
+$(EXBUILD)/%.elf: $(EXDIR)/%/main.c $(ROOT)/mk/memory.mk | $(EXBUILD)
 	@echo "  CC      $@"
 	@$(CC) $(ARCH_CFLAGS) -g -O2 -ffreestanding -fno-zero-initialized-in-bss -nostdlib \
 	    -DXBOX_KOSLOAD_BASE=$(XBOX_KOSLOAD_BASE) \
-	    -Wl,--image-base,$(XBOX_DEFAULT_LOAD_ADDR) \
-	    -Wl,--section-alignment,0x20 -Wl,--file-alignment,0x20 \
-	    -Wl,-e,_start $< -o $@
-
-$(EXBUILD)/%.elf: $(EXBUILD)/%.exe
-	@echo "  OBJCOPY $@"
-	@$(OBJCOPY) -O elf32-i386 $< $@
+	    -Wl,-z,max-page-size=0x20 -Wl,--build-id=none \
+	    -Wl,-Ttext-segment=$(XBOX_DEFAULT_LOAD_ADDR) \
+	    -Wl,-e,start $< -o $@
 
 examples: $(XBOX_EXAMPLE_ELFS)
 
@@ -236,7 +236,7 @@ examples: $(XBOX_EXAMPLE_ELFS)
 
 all: ip examples
 
-ip: $(IP_EXE) $(IP_BIN) $(IP_XBE)
+ip: $(IP_ELF) $(IP_BIN) $(IP_XBE)
 
 $(COMMONDIR) $(IPDIR) $(EXBUILD):
 	@mkdir -p $@

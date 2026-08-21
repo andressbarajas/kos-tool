@@ -1,22 +1,41 @@
 /*
- * Independent GNU PE/i386 linker script for the production Xbox loader.
+ * Independent GNU ELF/i386 linker script for the production Xbox loader.
  *
- * Required invocation supplies: --image-base=0x00010000
+ * Required invocation supplies: -z max-page-size=0x20; the image base is set
+ * below, and host/tools/elf2xbe is told the same one with -b @XBOX_LOADER_BASE@.
  */
 
-OUTPUT_FORMAT("pei-i386")
+OUTPUT_FORMAT("elf32-i386")
 OUTPUT_ARCH(i386)
 ENTRY(_start)
 
+/*
+ * One PT_LOAD per XBE section.  elf2xbe walks these, not the section headers:
+ *   p_vaddr  -> XBE section virtual address
+ *   p_filesz -> XBE raw size        (0 for the NOLOAD reservations)
+ *   p_memsz  -> XBE virtual size    (the .bss tail is memsz - filesz)
+ *   p_flags  -> XBE_SEC_WRITABLE / XBE_SEC_EXECUTABLE
+ * The ELF file header and program headers are deliberately NOT mapped into a
+ * segment: the first loadable byte must be @XBOX_KOSLOAD_BASE@, and the page
+ * below it belongs to the generated XBE headers.
+ */
+PHDRS
+{
+  text  PT_LOAD FLAGS(5);   /* PF_R | PF_X */
+  data  PT_LOAD FLAGS(6);   /* PF_R | PF_W */
+  nic   PT_LOAD FLAGS(6);   /* PF_R | PF_W       - persistent NVnet DMA region */
+  arena PT_LOAD FLAGS(7);   /* PF_R | PF_W | PF_X - guest code runs here       */
+}
+
 SECTIONS
 {
-  ASSERT(__image_base__ == 0x00010000,
-         "Xbox loader must be linked with --image-base=0x00010000")
-  ASSERT(__image_base__ + @XBOX_LOADER_SIZE@ == @XBOX_DEFAULT_LOAD_ADDR@,
+  ASSERT(@XBOX_LOADER_BASE@ == 0x00010000,
+         "Xbox loader image base moved from 0x00010000")
+  ASSERT(@XBOX_LOADER_BASE@ + @XBOX_LOADER_SIZE@ == @XBOX_DEFAULT_LOAD_ADDR@,
          "Xbox guest arena must immediately follow the loader window")
 
   /* Reserve image-base + 0x0000..0x0fff for generated XBE headers. */
-  . = __image_base__ + 0x1000;
+  . = @XBOX_LOADER_BASE@ + 0x1000;
   __loaded_image_start__ = .;
 
   .text ALIGN(32) :
@@ -35,30 +54,48 @@ SECTIONS
     *(.text .text.* .gnu.linkonce.t.*)
     . = ALIGN(16);
     __text_end__ = .;
-  }
+  } :text
 
-  .rdata ALIGN(32) :
+  .rodata ALIGN(32) :
   {
     __rdata_start__ = .;
-    *(.rdata .rdata.* .rdata$*)
     *(.rodata .rodata.* .gnu.linkonce.r.*)
     . = ALIGN(16);
     __rdata_end__ = .;
-  }
+  } :text
 
   .data ALIGN(32) :
   {
     __data_start__ = .;
-    *(.data .data.* .data$* .gnu.linkonce.d.*)
+    *(.data .data.* .gnu.linkonce.d.*)
     *(.sdata .sdata.*)
+
+    /* Catch the constructor/destructor lists explicitly rather than letting
+     * them land wherever ld puts an orphan section.  HAVE_INITFINI_ARRAY_SUPPORT
+     * is 0 in this toolchain, so GCC emits .ctors, not .init_array -- and
+     * nothing in this freestanding runtime walks either list.  The ASSERT below
+     * turns "someone added __attribute__((constructor))" into a link error
+     * instead of a constructor that is silently never run. */
+    . = ALIGN(4);
+    __ctors_start__ = .;
+    KEEP(*(SORT_BY_INIT_PRIORITY(.init_array.*) SORT_BY_INIT_PRIORITY(.ctors.*)))
+    KEEP(*(.init_array .ctors))
+    KEEP(*(SORT_BY_INIT_PRIORITY(.fini_array.*) SORT_BY_INIT_PRIORITY(.dtors.*)))
+    KEEP(*(.fini_array .dtors))
+    __ctors_end__ = .;
+
+    /* Empty in this configuration; collected so they cannot become orphans. */
+    *(.jcr .tm_clone_table)
+    *(.got .got.plt .igot .igot.plt)
+
     . = ALIGN(16);
     __data_end__ = .;
-  }
+  } :data
 
-  .bss ALIGN(32) :
+  .bss ALIGN(32) (NOLOAD) :
   {
     __bss_start__ = .;
-    *(.bss .bss.* .bss$* .gnu.linkonce.b.*)
+    *(.bss .bss.* .gnu.linkonce.b.*)
     *(.sbss .sbss.*)
     *(COMMON)
 
@@ -68,7 +105,7 @@ SECTIONS
     . = ALIGN(16);
     __stack_top__ = .;
     __bss_end__ = .;
-  }
+  } :data
 
   /* Persistent NVnet DMA region: RX/TX descriptors and buffers.
    * It is outside .bss so crt0 does not clear it, and it has no contents in the
@@ -79,7 +116,7 @@ SECTIONS
     __nicpersist_start__ = .;
     . += 0x0000D000;     /* 52 KiB: NVnet rings, buffers, and metadata */
     __nicpersist_end__ = .;
-  }
+  } :nic
 
   __loaded_image_end__ = .;
   ASSERT(__bss_end__ <= __nicpersist_start__,
@@ -102,13 +139,11 @@ SECTIONS
     __guest_arena_start__ = .;
     . += 0x02000000;
     __guest_arena_end__ = .;
-  }
+  } :arena
 
   /* Only non-runtime bookkeeping, debug, and unwind inputs are discarded. */
   /DISCARD/ :
   {
-    *(.reloc .reloc.*)
-    *(.drectve)
     *(.comment)
     *(.note .note.*)
     *(.debug .debug_* .zdebug_*)
@@ -117,10 +152,20 @@ SECTIONS
     *(.gcc_except_table .gcc_except_table.*)
   }
 
-  ASSERT(__kosload_header_start__ == 0x00011000,
-         ".text.kosload_header must begin at VA 0x00011000")
+  ASSERT(__kosload_header_start__ == @XBOX_KOSLOAD_BASE@,
+         ".text.kosload_header must begin at VA XBOX_KOSLOAD_BASE")
   ASSERT(__kosload_header_end__ > __kosload_header_start__,
          "missing required .text.kosload_header input")
+  /* The host's -F trampoline (host/src/firmware_update.c) hard-codes
+   * "jmp XBOX_KOSLOAD_BASE + 0x20" as the replacement loader's entry, and the
+   * only thing that puts _start there is the 32-byte kosload header landing
+   * first in .text.  Nothing else checks that pairing at build time, and a
+   * mismatch is silent: the flash succeeds and the console jumps into the
+   * middle of whatever moved into 0x11020. */
+  ASSERT(_start == @XBOX_KOSLOAD_BASE@ + 0x20,
+         "_start moved off XBOX_KOSLOAD_BASE + 0x20 (the host -F trampoline hard-codes that entry)")
+  ASSERT(__ctors_end__ == __ctors_start__,
+         "a constructor/destructor list was linked in but crt0.S never walks it")
   ASSERT((__bss_start__ & 15) == 0,
          "BSS start must be 16-byte aligned")
   ASSERT((__stack_bottom__ & 15) == 0,

@@ -1,5 +1,5 @@
 /*
- * Independent IA-32 PE/XBE loader startup.
+ * Independent IA-32 ELF/XBE loader startup.
  *
  * Entry is called by the Xbox kernel. This startup takes ownership of a
  * linker-reserved stack and deliberately never returns to the kernel.
@@ -7,10 +7,10 @@
 
     .code32
 
-    .section .text.startup, "xr"
+    .section .text.startup, "ax", @progbits
     .p2align 4
     .globl _start
-    .extern _main
+    .extern main
     .extern __bss_start__
     .extern __bss_end__
     .extern __stack_top__
@@ -47,7 +47,7 @@ _start:
     andl $3, %ecx
     rep stosb
 
-    call _main
+    call main
 
     /* A returned loader main terminates locally and never executes RET. */
 .Lhalt:
@@ -55,16 +55,8 @@ _start:
     hlt
     jmp .Lhalt
 
-    /*
-     * PE-target GCC may inject this constructor trampoline call into _main.
-     * This freestanding runtime has no implicit constructors, so it is inert.
-     */
-    .p2align 2
-    .globl ___main
-___main:
-    ret
 
-    .section .rdata.startup, "r"
+    .section .rodata.startup, "a", @progbits
     .p2align 2
 __startup_mxcsr:
     .long 0x00001f80
