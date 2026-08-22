@@ -74,7 +74,9 @@ enum ps2_smap_fno {
     PS2_SMAP_FNO_RELEASE_RX_BATCH = 9,  /* batched RELEASE_RX (ABI v4) */
     PS2_SMAP_FNO_SUBMIT_TX_BATCH  = 10, /* batched SUBMIT_TX  (ABI v5) */
     PS2_SMAP_FNO_GET_RTC          = 11, /* read CDVD/Mechacon RTC (ABI v6) */
-    PS2_SMAP_FNO_SET_RTC          = 12  /* write CDVD/Mechacon RTC (ABI v6) */
+    PS2_SMAP_FNO_SET_RTC          = 12, /* write CDVD/Mechacon RTC (ABI v6) */
+    PS2_SMAP_FNO_POWER_POLL       = 13, /* read+ack CDVD ISTAT power bit (ABI v7) */
+    PS2_SMAP_FNO_POWER_OFF        = 14  /* Mechacon S command 0x0F (ABI v7) */
 };
 
 /* RPC return codes.  0 = ok; negatives are categorized failures. */
@@ -127,8 +129,9 @@ enum ps2_smap_tx_state {
  *       new fno RELEASE_RX_BATCH.
  *   5 — TX_SLOTS bumped to 16, hot_diag adds last_submit_batch_size,
  *       new fno SUBMIT_TX_BATCH, RELEASE_BATCH_MAX bumped to 16.
- *   6 — adds GET_RTC / SET_RTC RPCs backed by CDVDMAN clock calls. */
-#define PS2_SMAP_ABI_VERSION   6
+ *   6 — adds GET_RTC / SET_RTC RPCs backed by CDVDMAN clock calls.
+ *   7 — adds POWER_POLL / POWER_OFF: the front power button. */
+#define PS2_SMAP_ABI_VERSION   7
 
 /* ============================================================
  * Enums kept for chip_init / status reporting
@@ -313,6 +316,16 @@ typedef struct ps2_smap_submit_tx_batch_req {
         unsigned int _pad;
     } entries[PS2_SMAP_SUBMIT_BATCH_MAX];
 } ps2_smap_submit_tx_batch_req_t;
+
+/* POWER_POLL reply.  `requested` is a one-shot edge (CDVD ISTAT bit 2)
+ * that the IRX consumes as it reports it — there is no button level to
+ * report.  `istat` is the raw pre-ack byte, for on-screen verification. */
+typedef struct ps2_smap_power_rsp {
+    int          rc;
+    unsigned int requested;   /* 1 = a power-off request was latched and consumed */
+    unsigned int istat;       /* raw ISTAT byte as read, before the ack */
+    unsigned int status;      /* POWER_OFF only: Mechacon status byte from S cmd 0x0F */
+} ps2_smap_power_rsp_t;
 
 typedef struct ps2_smap_rc_rsp {
     int          rc;

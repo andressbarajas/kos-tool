@@ -49,6 +49,15 @@ int ps2_smap_get_diag(struct ps2_smap_cold_diag_rsp *out);
 int ps2_smap_get_rtc(uint32_t *unix_timestamp);
 int ps2_smap_set_rtc(uint32_t unix_timestamp);
 
+/* Front power button, via the Mechacon.
+ *
+ * power_poll() consumes one latched power-off request from CDVD ISTAT:
+ * *requested becomes 1 exactly once per press, *istat_raw is the pre-ack
+ * register byte.  power_off() cuts the rail, so returning at all means the
+ * Mechacon declined.  Out-pointers are optional; both return 0 on success. */
+int ps2_smap_power_poll(uint32_t *requested, uint32_t *istat_raw);
+int ps2_smap_power_off(uint32_t *status);
+
 /*
  * Send one Ethernet frame.  Copies the bytes into a free TX slot with SIF
  * DMA, then tells the IOP that slot is ready.

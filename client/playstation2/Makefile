@@ -294,7 +294,7 @@ SMAP_IRX              := $(IOPDIR)/smap.irx
 SMAP_IRX_HDR          := $(IOPDIR)/smap_irx_bin.h
 SMAP_IRX_CFLAGS       := $(IOP_CFLAGS)
 
-$(SMAP_IRX_OBJ): iop/smap_irx.c iop/kosload_iop.h iop/smap_protocol.h | $(IOPDIR)
+$(SMAP_IRX_OBJ): iop/smap_irx.c iop/kosload_iop.h iop/smap_protocol.h ps2_memory_map.h | $(IOPDIR)
 	@echo "  IOP-CC  $@"
 	@$(IOP_CC) $(SMAP_IRX_CFLAGS) -c $< -o $@
 
@@ -365,7 +365,8 @@ IP_PLATFORM_NET_OBJS := \
     $(IPDIR)/adapter.o \
     $(IPDIR)/smap.o \
     $(IPDIR)/iop_dev9.o \
-    $(IPDIR)/iop_smap.o
+    $(IPDIR)/iop_smap.o \
+    $(IPDIR)/power.o
 
 IP_BOOTSTRAP_OBJS := \
     $(IPDIR)/iop_bootstrap.o \
@@ -424,7 +425,10 @@ $(IPDIR)/iop_smap.o: iop_smap.c iop_smap.h iop/smap_protocol.h bootstrap/iop_boo
 $(IPDIR)/iop_bootstrap.o: bootstrap/iop_bootstrap.c bootstrap/iop_bootstrap.h ee_sif.h ps2_memory_map.h iop_dev9.h iop_smap.h iop/dev9_init_shared.h iop/smap_protocol.h $(KOSDEV9_IRX_HDR) $(SMAP_IRX_HDR) $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
-$(IPDIR)/smap.o: net/smap.c iop_dev9.h $(KOSLOAD_VERSION_MK) | $(IPDIR)
+$(IPDIR)/smap.o: net/smap.c iop_dev9.h power.h $(KOSLOAD_VERSION_MK) | $(IPDIR)
+	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
+
+$(IPDIR)/power.o: power.c power.h iop_smap.h iop/smap_protocol.h $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(IP_CFLAGS) $(IP_DEFS) -c $< -o $@
 
 $(IPDIR)/net.o: $(CLIENTDIR)/common/network/net.c $(KOSLOAD_VERSION_MK) | $(IPDIR)

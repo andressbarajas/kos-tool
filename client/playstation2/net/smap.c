@@ -28,6 +28,7 @@
 #include "kosload.h"
 #include "../iop_dev9.h"
 #include "../iop_smap.h"
+#include "../power.h"
 #include "../iop/smap_protocol.h"
 #include "../bootstrap/iop_bootstrap.h"
 #include "../video.h"
@@ -356,6 +357,11 @@ static void smap_loop_adapter(bool is_main_loop) {
             /* If no data available or error occurred, break the loop */
             if(rc != 0 || rx_len == 0)
                 break;
+            /* Keeps the power-button poll below out of transfers.  Only
+             * unicast counts — broadcast noise would otherwise hold the
+             * quiet window shut forever. */
+            if((current_pkt[0] & 1) == 0)
+                ps2_power_note_activity();
             process_pkt(current_pkt);
         }
 
@@ -379,6 +385,7 @@ static void smap_loop_adapter(bool is_main_loop) {
             if(g_last_link_state != PS2_SMAP_LINK_DOWN)
                 dhcp_poll();
             screensaver_poll();
+            ps2_power_poll();
         }
 
         if(timeout_loop > 0) {

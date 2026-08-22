@@ -53,6 +53,7 @@ static ps2_smap_status_rsp_t           smap_status_rsp __attribute__((aligned(64
 static ps2_smap_cold_diag_rsp_t        smap_cold_diag_rsp __attribute__((aligned(64)));
 static ps2_smap_rtc_req_t              smap_rtc_req __attribute__((aligned(64)));
 static ps2_smap_rtc_rsp_t              smap_rtc_rsp __attribute__((aligned(64)));
+static ps2_smap_power_rsp_t            smap_power_rsp __attribute__((aligned(64)));
 static ps2_smap_submit_tx_req_t        smap_submit_tx_req __attribute__((aligned(64)));
 static ps2_smap_release_rx_batch_req_t smap_release_batch_req __attribute__((aligned(64)));
 static ps2_smap_submit_tx_batch_req_t  smap_submit_batch_req __attribute__((aligned(64)));
@@ -264,6 +265,45 @@ int ps2_smap_set_rtc(uint32_t unix_timestamp) {
     if(rc < 0)
         return -2;
     if(smap_rc_rsp.rc != PS2_SMAP_RC_OK)
+        return -3;
+
+    return 0;
+}
+
+int ps2_smap_power_poll(uint32_t *requested, uint32_t *istat_raw) {
+    int rc;
+
+    if(!g_layout_valid)
+        return -1;
+
+    memset(&smap_power_rsp, 0, sizeof(smap_power_rsp));
+    rc = rpc_call_sync(PS2_SMAP_FNO_POWER_POLL, 0, 0, &smap_power_rsp, sizeof(smap_power_rsp));
+    if(rc < 0)
+        return -2;
+    if(smap_power_rsp.rc != PS2_SMAP_RC_OK)
+        return -3;
+
+    if(requested != 0)
+        *requested = smap_power_rsp.requested;
+    if(istat_raw != 0)
+        *istat_raw = smap_power_rsp.istat;
+    return 0;
+}
+
+int ps2_smap_power_off(uint32_t *status) {
+    int rc;
+
+    if(!g_layout_valid)
+        return -1;
+
+    memset(&smap_power_rsp, 0, sizeof(smap_power_rsp));
+    rc = rpc_call_sync(PS2_SMAP_FNO_POWER_OFF, 0, 0, &smap_power_rsp, sizeof(smap_power_rsp));
+    if(rc < 0)
+        return -2;
+
+    if(status != 0)
+        *status = smap_power_rsp.status;
+    if(smap_power_rsp.rc != PS2_SMAP_RC_OK)
         return -3;
 
     return 0;

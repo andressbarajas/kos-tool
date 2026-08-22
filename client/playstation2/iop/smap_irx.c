@@ -17,6 +17,7 @@
  *
  */
 
+#include "../ps2_memory_map.h"
 #include "kosload_iop.h"
 #include "smap_protocol.h"
 
@@ -129,9 +130,18 @@ typedef struct smap_cdvd_clock {
     unsigned char year;
 } smap_cdvd_clock_t;
 
+/* #29 = sceCdApplySCmd(cmd, in, in_len, out).  Takes CDVDMAN's own
+ * S-command semaphore, and copies back up to 16 bytes whatever the command
+ * returns, so `out` must have room for 16.
+ *
+ * Not #74 (sceCdPowerOff): that only exists in XCDVDMAN/NCDVDMAN.  The
+ * ROM-boot CDVDMAN we get exports 0..61, so a #74 stub would fail to link
+ * and take the whole IRX down. */
 KOSLOAD_IMPORT_TABLE(cdvdman, 1, 1);
 KOSLOAD_IMPORT(cdvdman, 24, iop_cd_read_clock, int, (smap_cdvd_clock_t * clock));
 KOSLOAD_IMPORT(cdvdman, 25, iop_cd_write_clock, int, (const smap_cdvd_clock_t *clock));
+KOSLOAD_IMPORT(cdvdman, 29, iop_cd_apply_scmd, int,
+               (unsigned char cmd, const void *in, int in_len, void *out));
 KOSLOAD_IMPORT_TABLE_END(cdvdman);
 
 /* JST bias and the BCD/calendar math live in a shared header so host-side
@@ -423,6 +433,7 @@ static ps2_smap_layout_rsp_t g_layout __attribute__((aligned(64)));
 static ps2_smap_status_rsp_t g_status_rsp __attribute__((aligned(64)));
 static ps2_smap_cold_diag_rsp_t g_cold_diag_rsp __attribute__((aligned(64)));
 static ps2_smap_rtc_rsp_t g_rtc_rsp __attribute__((aligned(64)));
+static ps2_smap_power_rsp_t g_power_rsp __attribute__((aligned(64)));
 static ps2_smap_rc_rsp_t g_rc_rsp __attribute__((aligned(64)));
 
 /* ================================================================== *
@@ -1300,6 +1311,54 @@ static int smap_cdvd_write_rtc(unsigned int timestamp) {
     return (int)PS2_SMAP_RC_OK;
 }
 
+/* ------------------------------------------------------------------ *
+ * Front power button
+ *
+ * The Mechacon debounces the button and times the hold, then latches one
+ * request on CDVD ISTAT bit 2 and waits for S command 0x0F.  Nothing in
+ * the loader answered it, so the button did nothing.
+ *
+ * The stock CDVDMAN's IRQ 2 handler only knows bits 0 and 1, so it cannot
+ * consume the event behind our back; acknowledging it here also quiets the
+ * interrupt it would otherwise keep re-firing.
+ *
+ * No CDVDMAN export exposes ISTAT, so it is touched directly.  Only bit 2
+ * is written back, leaving CDVDMAN's own completion bits alone.
+ * ------------------------------------------------------------------ */
+
+static int smap_cdvd_poll_power(unsigned int *istat_out, unsigned int *requested_out) {
+    volatile unsigned char *istat = (volatile unsigned char *)PS2_IOP_REG_CDVD_ISTAT;
+    unsigned char           value;
+
+    if(istat_out == 0 || requested_out == 0)
+        return (int)PS2_SMAP_RC_BAD_LEN;
+
+    value = *istat;
+    *istat_out = (unsigned int)value;
+    *requested_out = (value & PS2_IOP_CDVD_ISTAT_POWER_OFF_REQ) ? 1u : 0u;
+
+    if(*requested_out)
+        *istat = PS2_IOP_CDVD_ISTAT_POWER_OFF_REQ;
+
+    return (int)PS2_SMAP_RC_OK;
+}
+
+static int smap_cdvd_power_off(unsigned int *status_out) {
+    unsigned char result[16];   /* sceCdApplySCmd always copies back 16 */
+
+    if(status_out == 0)
+        return (int)PS2_SMAP_RC_BAD_LEN;
+
+    zero_bytes(result, sizeof(result));
+    if(iop_cd_apply_scmd(PS2_IOP_CDVD_SCMD_POWER_OFF, 0, 0, result) <= 0) {
+        *status_out = 0;
+        return (int)PS2_SMAP_RC_INTERNAL;
+    }
+
+    *status_out = (unsigned int)result[0];
+    return (int)PS2_SMAP_RC_OK;
+}
+
 static void *smap_rpc_handler(int fno, void *buffer, int length) {
     int   result_rc = (int)PS2_SMAP_RC_OK;
     void *out_ptr = (void *)&g_rc_rsp;
@@ -1555,6 +1614,28 @@ static void *smap_rpc_handler(int fno, void *buffer, int length) {
         g_rc_rsp.rc = smap_cdvd_write_rtc(req->unix_timestamp);
         out_ptr = (void *)&g_rc_rsp;
         result_rc = g_rc_rsp.rc;
+        break;
+    }
+
+    case PS2_SMAP_FNO_POWER_POLL: {
+        unsigned int istat = 0;
+        unsigned int requested = 0;
+        zero_bytes(&g_power_rsp, sizeof(g_power_rsp));
+        g_power_rsp.rc = smap_cdvd_poll_power(&istat, &requested);
+        g_power_rsp.istat = istat;
+        g_power_rsp.requested = requested;
+        out_ptr = (void *)&g_power_rsp;
+        result_rc = g_power_rsp.rc;
+        break;
+    }
+
+    case PS2_SMAP_FNO_POWER_OFF: {
+        unsigned int status = 0;
+        zero_bytes(&g_power_rsp, sizeof(g_power_rsp));
+        g_power_rsp.rc = smap_cdvd_power_off(&status);
+        g_power_rsp.status = status;
+        out_ptr = (void *)&g_power_rsp;
+        result_rc = g_power_rsp.rc;
         break;
     }
 

@@ -197,6 +197,11 @@
 #define PS2_IOP_REG_SIF_CTRL             0xBD000040
 #define PS2_IOP_REG_SIF_BD6              0xBD000060
 
+/* CDVD / Mechacon.  IOP-side only; not visible from the EE.
+ *
+ * S-command sequence: write parameters to 0x2017, the command to 0x2016,
+ * then read results from 0x2018 until 0x2017 reports the FIFO empty.
+ * ISTAT is write-1-to-clear. */
 #define PS2_IOP_REG_CDVD_BASE            0xBF402000
 #define PS2_IOP_REG_CDVD_NCMD            0xBF402004
 #define PS2_IOP_REG_CDVD_NCMD_STAT       0xBF402005
@@ -206,8 +211,19 @@
 #define PS2_IOP_REG_CDVD_STATUS          0xBF40200A
 #define PS2_IOP_REG_CDVD_DISK_TYPE       0xBF40200F
 #define PS2_IOP_REG_CDVD_SCMD            0xBF402016
-#define PS2_IOP_REG_CDVD_SCMD_STAT       0xBF402017
-#define PS2_IOP_REG_CDVD_SCMD_PARAMS     0xBF402018
+#define PS2_IOP_REG_CDVD_SCMD_STAT       0xBF402017  /* R: status, W: parameter */
+#define PS2_IOP_REG_CDVD_SCMD_RESULT     0xBF402018  /* R: result byte */
+
+/* PS2_IOP_REG_CDVD_ISTAT bits (write-1-to-clear). */
+#define PS2_IOP_CDVD_ISTAT_NCMD_DONE     0x01
+#define PS2_IOP_CDVD_ISTAT_POWER_OFF_REQ 0x04
+
+/* PS2_IOP_REG_CDVD_SCMD_STAT bits (read side). */
+#define PS2_IOP_CDVD_SCMD_STAT_BUSY      0x80
+#define PS2_IOP_CDVD_SCMD_STAT_NO_DATA   0x40
+
+/* Mechacon S command: cut power.  No parameters, one status byte back. */
+#define PS2_IOP_CDVD_SCMD_POWER_OFF      0x0F
 
 #define PS2_IOP_REG_INTC_STAT            0xBF801070
 #define PS2_IOP_REG_INTC_MASK            0xBF801074
