@@ -80,8 +80,6 @@ extern volatile uint32_t psp_guest_running;
 uint8_t           psp_exc_wire[sizeof(psp_exception_frame_t)];
 volatile uint32_t psp_exc_pending;
 
-extern void setup_video(uint32_t mode, uint32_t bg_color);
-
 /* This owns a complete cache line.  exception_init() publishes its cached BSS
  * zeros once, after which both producers and the crash reader use KSEG1 only. */
 __attribute__((aligned(64))) struct psp_hw_trace psp_hw_trace;

@@ -147,6 +147,7 @@ $(PROBE_LD): kosload-ip.ld.in $(ROOT)/mk/memory.mk | $(IPDIR)
 
 COMMON_C_OBJS := \
     $(COMMONDIR)/info.o \
+    $(COMMONDIR)/display.o \
     $(COMMONDIR)/screensaver.o \
     $(COMMONDIR)/syscall_table.o \
     $(COMMONDIR)/target.o \
@@ -165,6 +166,8 @@ COMMON_A    := $(COMMONDIR)/kosload_common.a
 
 # Common C object rules (by source directory)
 $(COMMONDIR)/info.o: $(CLIENTDIR)/common/core/info.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+$(COMMONDIR)/display.o: $(CLIENTDIR)/common/core/display.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(COMMONDIR)/screensaver.o: $(CLIENTDIR)/common/core/screensaver.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)

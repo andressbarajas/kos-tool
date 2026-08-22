@@ -11,10 +11,8 @@
 
 #include <stdint.h>
 
-/* uint_to_string / clear_lines / setup_video are the shared console-side video
- * contract; take the prototypes from the owning header rather than restating
- * them.  They are declared there with unsigned int, and on this ELF target
- * uint32_t is "long unsigned int", so a restatement would be a type conflict. */
+/* setup_video / clear_screen / draw_string / clear_lines / uint_to_string are
+ * the shared video contract */
 #include <kosload/display.h>
 
 /* The retail kernel/dashboard leaves an active framebuffer; video.c reads its
@@ -39,6 +37,9 @@ void xbox_smc_led(uint8_t pattern);
 void xbox_reset(void);
 
 void xbox_video_init(void);
+/* Idempotent bring-up: initialise only if no framebuffer is bound yet.  This is
+ * what xbox_target_ops::setup_video calls. */
+void xbox_video_ensure(void);
 /* Re-pin NV2A scanout, re-halt the pushbuffer, and re-un-blank; call each
  * main-loop iteration so the display survives the kernel's post-handoff
  * boot-animation teardown. */
@@ -48,10 +49,6 @@ void xbox_video_draw_string(int x, int y, const char *str, uint32_t color);
 void xbox_video_fill_rect(int x, int y, int w, int h, uint32_t color);
 void xbox_video_draw_bitmap(int x, int y, int w, int h, const uint32_t *bits, uint32_t color);
 
-/* Names expected by the kosload header and shared common code.  setup_video(),
- * clear_lines() and uint_to_string() come from <kosload/display.h> above. */
-void clear_screen(uint32_t color);
-void draw_string(int x, int y, const char *str, uint32_t color);
 const char *exception_code_to_string(uint32_t code);
 
 #endif /* KOSLOAD_XBOX_VIDEO_H */

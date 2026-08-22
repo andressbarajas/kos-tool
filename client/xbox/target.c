@@ -258,7 +258,9 @@ static void xbox_clear_screen(uint32_t color) {
 static void xbox_setup_video(uint32_t mode, uint32_t bg_color) {
     (void)mode;
     (void)bg_color;
-    /* Framebuffer already acquired in xbox_init(). */
+    /* Framebuffer normally already acquired in xbox_init(); the guest-facing
+     * setup_video() lands here too, so make sure one exists. */
+    xbox_video_ensure();
 }
 
 static void xbox_execute(uint32_t address) {

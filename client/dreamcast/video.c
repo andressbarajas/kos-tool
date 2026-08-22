@@ -26,11 +26,13 @@ void __call_builtin_sh_set_fpscr(unsigned int value) {
 #endif
 
 /*
- * setup_video: Called by exception handler and main startup.
+ * dc_video_setup: the real bring-up behind target_ops::setup_video, so the
+ * shared setup_video() (client/common/core/display.c) and the exception
+ * handler both land here.
  * mode parameter is the pixel mode (0=RGB555, 1=RGB565, 3=RGB888).
  * bg_color is the background color for dc_video_clear.
  */
-void setup_video(uint32_t mode, uint32_t bg_color) {
+void dc_video_setup(uint32_t mode, uint32_t bg_color) {
     (void)mode;
     /* Only retail Dreamcasts have the cable-detect line; NAOMI / System SP
        and any other hardware type default to VGA (0). */
@@ -39,27 +41,8 @@ void setup_video(uint32_t mode, uint32_t bg_color) {
     dc_video_clear(bg_color);
 }
 
-/* clear_lines: Clear n lines starting at line y to value c.
- * Uses 16-bit writes matching dcload-ip implementation. */
-void clear_lines(unsigned int y, unsigned int n, unsigned int c) {
-    unsigned short *vmem = (unsigned short *)(0xa5000000 + y * 640 * 2);
-    n = n * 640;
-    while(n-- > 0)
-        *vmem++ = c;
-}
-
 /* Exception code to string — stub, formatting moved to host (kos-tool) */
 char *exception_code_to_string(unsigned int expevt) {
     (void)expevt;
     return "";
-}
-
-/* uint_to_string: hex conversion, used by exception.S via address table */
-void uint_to_string(unsigned int value, unsigned char *buf) {
-    char hexdigit[17] = "0123456789abcdef";
-    for(int i = 7; i >= 0; i--) {
-        buf[i] = hexdigit[value & 0x0f];
-        value >>= 4;
-    }
-    buf[8] = 0;
 }

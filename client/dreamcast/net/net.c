@@ -16,11 +16,8 @@
 /* Debug instrumentation in packet hot-path can throttle RX heavily; keep off. */
 #define NET_DEBUG 0
 #if NET_DEBUG
-extern void draw_string(int x, int y, const char *str, int color);
-extern void clear_lines(int y, int height, unsigned int color);
 static unsigned int dbg_pkt_count = 0;
 static unsigned int dbg_udp_count = 0;
-extern void uint_to_string(unsigned int foo, unsigned char *bar);
 static unsigned char dbg_hex[12];
 #endif
 

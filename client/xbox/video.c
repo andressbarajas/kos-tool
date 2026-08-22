@@ -328,36 +328,9 @@ void xbox_video_draw_bitmap(int x, int y, int w, int h, const uint32_t *bits, ui
 
 /* ===== Names expected by shared common code + the kosload header ===== */
 
-void setup_video(unsigned int mode, unsigned int bg_color) {
-    (void)mode;
-    (void)bg_color;
+void xbox_video_ensure(void) {
     if(!fb)
         xbox_video_init();
-}
-
-void clear_screen(uint32_t color) {
-    xbox_video_clear(color);
-}
-
-void draw_string(int x, int y, const char *str, uint32_t color) {
-    xbox_video_draw_string(x, y, str, color);
-}
-
-void clear_lines(int y, int height, unsigned int color) {
-    xbox_video_fill_rect(0, y, XBOX_SCREEN_WIDTH, height, color);
-}
-
-/* Zero-padded 8-digit hex, matching every other port: callers pass [9] buffers
- * and the shared display code positions text assuming exactly 8 characters. */
-void uint_to_string(unsigned int val, unsigned char *buf) {
-    static const char hex[] = "0123456789ABCDEF";
-    int i;
-
-    for(i = 7; i >= 0; i--) {
-        buf[i] = (unsigned char)hex[val & 0xF];
-        val >>= 4;
-    }
-    buf[8] = '\0';
 }
 
 const char *exception_code_to_string(uint32_t code) {

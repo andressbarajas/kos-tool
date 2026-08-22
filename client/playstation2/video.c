@@ -522,37 +522,6 @@ void ps2_video_draw_bitmap(int x, int y, int w, int h, const uint32_t *bits, uin
 
 /* ===== Functions expected by crt0.S header and common code ===== */
 
-void setup_video(uint32_t mode, uint32_t bg_color) {
-    (void)mode;
-    (void)bg_color;
-    /* Video is initialized once in ps2_video_init() via target->init() */
-}
-
-void clear_screen(uint32_t color) {
-    ps2_video_clear(color);
-}
-
-void draw_string(int x, int y, const char *str, uint32_t color) {
-    ps2_video_draw_string(x, y, str, color);
-}
-
-void clear_lines(int y, int height, unsigned int color) {
-    uint8_t r, g, b;
-    color_to_rgb(color, &r, &g, &b);
-    gs_fill_rect(0, y, PS2_SCREEN_WIDTH, height, r, g, b);
-}
-
-void uint_to_string(unsigned int val, unsigned char *buf) {
-    int i;
-    static const char hex[] = "0123456789ABCDEF";
-
-    for(i = 7; i >= 0; i--) {
-        buf[i] = hex[val & 0xF];
-        val >>= 4;
-    }
-    buf[8] = '\0';
-}
-
 /* Exception code to string -- stub, formatting moved to host (kos-tool).
  * Must exist for crt0.S linkage (fixed offset in entry header). */
 const char *exception_code_to_string(uint32_t code) {

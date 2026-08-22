@@ -35,7 +35,6 @@ extern kosload_info_t kosload_info;
 /* Debug instrumentation in upload command path can stall PBIN handling; keep off. */
 #define CMD_DEBUG 0
 #if CMD_DEBUG
-extern void draw_string(int x, int y, const char *str, int color);
 static unsigned int dbg_partbin_count = 0;
 static unsigned char dbg_hex2[12];
 #endif

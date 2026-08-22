@@ -13,14 +13,12 @@
 #include <kosload/target.h>
 #include <kosload/protocol.h>
 #include "hardware.h"
+
 #include "video.h"
 
 #ifndef DC_LOADER_BASE
 #define DC_LOADER_BASE 0x8c004000 /* fallback; normally -D'd from mk/memory.mk */
 #endif
-
-/* From video.c */
-extern void setup_video(uint32_t mode, uint32_t bg_color);
 
 /* From disable.S */
 extern void disable_cache(void);
@@ -69,7 +67,7 @@ static int dc_init(void) {
 }
 
 static void dc_draw_string(int x, int y, const char *str, uint32_t color) {
-    draw_string(x, y, str, (int)(color & 0xffff));
+    dc_video_draw_string(x, y, str, (int)(color & 0xffff));
 }
 
 static void dc_clear_screen(uint32_t color) {
@@ -77,7 +75,7 @@ static void dc_clear_screen(uint32_t color) {
 }
 
 static void dc_setup_video(uint32_t mode, uint32_t bg_color) {
-    setup_video(mode, bg_color);
+    dc_video_setup(mode, bg_color);
 }
 
 static void dc_execute(uint32_t address) {

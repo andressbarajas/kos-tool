@@ -7,7 +7,7 @@
 ! ROM font-based text rendering and screen management.
 ! Based on Video example code, used by both dcload-serial and dcload-ip.
 
-	.globl	_draw_string, _dc_video_clear
+	.globl	_dc_video_draw_string, _dc_video_clear
 	.globl	_dc_video_init, _dc_video_check_cable
 	.globl	_get_font_address
 
@@ -22,7 +22,7 @@
 	! r5 = y
 	! r6 = string
 	! r7 = colour
-_draw_string:
+_dc_video_draw_string:
 	mov.l	r14,@-r15
 	sts	pr,r14
 	mov.l	r13,@-r15

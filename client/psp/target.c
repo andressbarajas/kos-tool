@@ -88,6 +88,10 @@ static void psp_clear_screen(uint32_t color) {
 static void psp_setup_video(uint32_t mode, uint32_t bg_color) {
     (void)mode;
     (void)bg_color;
+    /* The guest-facing setup_video() lands here, and a returning program may
+     * have left the LCD in any state, so bring the panel back up rather than
+     * assuming psp_init()'s bring-up still holds. */
+    psp_video_init();
 }
 
 static void psp_execute(uint32_t address) {

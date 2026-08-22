@@ -241,46 +241,11 @@ void gc_video_draw_string(int x, int y, const char *str, uint32_t color) {
     cache_flush_dc(xfb + y * GC_SCREEN_WIDTH * 2, GC_CHAR_HEIGHT * GC_SCREEN_WIDTH * 2);
 }
 
-/* ===== Functions expected by crt0.S header and common code ===== */
-
-void setup_video(uint32_t mode, uint32_t bg_color) {
-    (void)mode;
-    (void)bg_color;
-    /* Video is initialized once in gc_video_init() via target->init() */
-}
-
-void clear_screen(uint32_t color) {
-    gc_video_clear(color);
-}
-
-void draw_string(int x, int y, const char *str, uint32_t color) {
-    gc_video_draw_string(x, y, str, color);
-}
-
-void uint_to_string(unsigned int val, unsigned char *buf) {
-    int i;
-    static const char hex[] = "0123456789ABCDEF";
-
-    for(i = 7; i >= 0; i--) {
-        buf[i] = hex[val & 0xF];
-        val >>= 4;
-    }
-    buf[8] = '\0';
-}
+/* ===== Functions expected by crt0.S header ===== */
 
 /* Exception code to string — stub, formatting moved to host (kos-tool).
  * Must exist for crt0.S linkage (fixed offset in entry header). */
 const char *exception_code_to_string(uint32_t code) {
     (void)code;
     return "";
-}
-
-void clear_lines(int y, int height, uint32_t color) {
-    uint32_t  yuy2 = gc_color_to_yuy2(color);
-    uint32_t *fb32 = (uint32_t *)(xfb + y * GC_SCREEN_WIDTH * 2);
-    int count = (height * GC_SCREEN_WIDTH * 2) / 4;
-    int i;
-    for(i = 0; i < count; i++)
-        fb32[i] = yuy2;
-    cache_flush_dc(xfb + y * GC_SCREEN_WIDTH * 2, height * GC_SCREEN_WIDTH * 2);
 }

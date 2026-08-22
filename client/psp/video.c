@@ -271,41 +271,6 @@ void psp_video_draw_bitmap(int x, int y, int w, int h, const uint32_t *bits, uin
 
 /* ===== Names expected by shared common code + kosload header ===== */
 
-void setup_video(uint32_t mode, uint32_t bg_color) {
-    (void)mode;
-    (void)bg_color;
-    psp_video_init();
-}
-
-void clear_screen(uint32_t color) {
-    psp_video_clear(color);
-}
-
-void draw_string(int x, int y, const char *str, uint32_t color) {
-    psp_video_draw_string(x, y, str, color);
-}
-
-void clear_lines(int y, int height, unsigned int color) {
-    psp_video_fill_rect(0, y, PSP_SCREEN_WIDTH, height, color);
-}
-
-/* Zero-padded 8-digit hex, identical to the Dreamcast, GameCube, Wii, PS2 and
- * Xbox implementations.
- *
- * The width is a contract, not a preference: callers pass `[9]` buffers and
- * serial_transport.c's progress line positions its separators by assuming
- * exactly 8 characters.  Neither tolerates a variable-length field. */
-void uint_to_string(uint32_t val, unsigned char *buf) {
-    static const char hex[] = "0123456789ABCDEF";
-    int i;
-
-    for(i = 7; i >= 0; i--) {
-        buf[i] = (unsigned char)hex[val & 0xF];
-        val >>= 4;
-    }
-    buf[8] = '\0';
-}
-
 const char *exception_code_to_string(uint32_t code) {
     switch(code) {
         case 0:  return "Interrupt";

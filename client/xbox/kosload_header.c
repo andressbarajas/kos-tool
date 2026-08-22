@@ -21,16 +21,13 @@
  */
 
 #include <stdint.h>
+#include <kosload/display.h>
 #include <kosload/info.h>
+
+#include "video.h"
 
 extern int kosloadsyscall(int nr, int a1, int a2, int a3);
 extern kosload_info_t kosload_info;
-
-extern void setup_video(unsigned int mode, unsigned int bg_color);
-extern void clear_screen(uint32_t color);
-extern void draw_string(int x, int y, const char *str, uint32_t color);
-extern void uint_to_string(unsigned int val, unsigned char *buf);
-extern const char *exception_code_to_string(uint32_t code);
 
 __attribute__((used, section(".text.kosload_header")))
 const uint32_t kosload_header[8] = {

@@ -11,6 +11,8 @@
 
 #include <stdint.h>
 
+#include <kosload/display.h>
+
 /* VI register base */
 #define VI_BASE             0xCC002000
 
@@ -41,11 +43,6 @@ void gc_video_draw_string(int x, int y, const char *str, uint32_t color);
  * Returns a 32-bit value suitable for writing directly to the XFB. */
 uint32_t gc_color_to_yuy2(uint32_t rgb);
 
-/* Functions expected by crt0.S exception handler header */
-void setup_video(uint32_t mode, uint32_t bg_color);
-void clear_screen(uint32_t color);
-void draw_string(int x, int y, const char *str, uint32_t color);
-void uint_to_string(unsigned int val, unsigned char *buf);
 const char *exception_code_to_string(uint32_t code);
 
 #endif /* KOSLOAD_GC_VIDEO_H */

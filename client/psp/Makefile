@@ -122,6 +122,7 @@ $(USB_LD): kosload-usb.ld.in $(ROOT)/mk/memory.mk FORCE_PSP_IMAGE | $(USBDIR)
 
 COMMON_OBJS := \
     $(COMMONDIR)/info.o \
+    $(COMMONDIR)/display.o \
     $(COMMONDIR)/screensaver.o \
     $(COMMONDIR)/syscall_table.o \
     $(COMMONDIR)/target.o \
@@ -138,6 +139,8 @@ COMMON_OBJS := \
 COMMON_A := $(COMMONDIR)/kosload_common.a
 
 $(COMMONDIR)/info.o: $(CLIENTDIR)/common/core/info.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+$(COMMONDIR)/display.o: $(CLIENTDIR)/common/core/display.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 $(COMMONDIR)/screensaver.o: $(CLIENTDIR)/common/core/screensaver.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
