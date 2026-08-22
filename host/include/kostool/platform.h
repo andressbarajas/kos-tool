@@ -47,6 +47,12 @@ typedef struct platform_time_ops {
     void (*sleep_usec)(uint32_t usec);
 } platform_time_ops_t;
 
+/* Set while a caller is polling for a console expected to be absent -- the
+ * reconnect window after a firmware update.  A failed open or connect is the
+ * normal case there, so transports stay quiet and the caller reports the one
+ * failure that matters.  Not a context field: the open hook takes no ctx. */
+extern int kostool_quiet_open;
+
 /* Platform implementations */
 extern const platform_serial_ops_t linux_serial_ops;
 extern const platform_serial_ops_t macos_serial_ops;

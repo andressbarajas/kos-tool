@@ -19,6 +19,10 @@
 #include <kostool/platform.h>
 #include "minilzo.h"
 
+/* Declared in <kostool/platform.h>; defined here because this file is in every
+ * build while the libusb backend that also reads it is conditional. */
+int kostool_quiet_open;
+
 #define HEAP_ALLOC(var, size) long __LZO_MMODEL var[((size) + (sizeof(long) - 1)) / sizeof(long)]
 
 static HEAP_ALLOC(wrkmem, LZO1X_1_MEM_COMPRESS);
@@ -245,7 +249,8 @@ static int serial_init(kostool_context_t *ctx) {
     /* Open at initial speed (default 57600) */
     ctx->serial_handle = ctx->serial_ops->open(ctx->device_name, SERIAL_DEFAULT_SPEED);
     if(!ctx->serial_handle) {
-        fprintf(stderr, "Failed to open serial device %s\n", ctx->device_name);
+        if(!kostool_quiet_open)
+            fprintf(stderr, "Failed to open serial device %s\n", ctx->device_name);
         return -1;
     }
 

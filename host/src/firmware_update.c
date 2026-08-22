@@ -1067,17 +1067,113 @@ static uint8_t *load_firmware_file(const char *path, uint32_t *out_size) {
     return buf;
 }
 
-/* How long to let a reflashed PSP bring its USB device controller back up
- * before the host speaks to it, and how long to wait between further tries.
- * Measured on PSP-1000: the loader answers well inside the settle window, and
- * the retries exist for a slow boot rather than the normal path. */
-#define PSP_REFLASH_SETTLE_USEC  1500000  /* 1.5 s before the first attempt */
-#define PSP_REFLASH_RETRY_USEC    400000  /* 400 ms between attempts */
+/* How long to wait for a reflashed console to come back.
+ *
+ * Wall-clock, not an attempt count, because the two failure modes cost very
+ * different amounts.  Nothing on the link at all -- device off the bus, link
+ * not up -- is cheap to probe, so retry fast.  Link up but the loader silent
+ * burns a read timeout per try, and on a serial cable each try reopens a live
+ * UART, so back off hard.
+ *
+ * 30 s is headroom, not a measurement.  A fixed budget expired while a console
+ * was still absent and failed a flash that had in fact succeeded. */
+#define RECONNECT_SETTLE_USEC    1500000  /* 1.5 s before the first attempt   */
+#define RECONNECT_ABSENT_USEC     400000  /* nothing on the bus: cheap probe  */
+#define RECONNECT_QUIET_USEC     2000000  /* link up but silent: costly retry */
+#define RECONNECT_TIMEOUT_USEC  30000000  /* 30 s total before giving up      */
+
+/* Close the link and forget everything negotiated with the outgoing loader. */
+static void reconnect_drop_link(kostool_context_t *ctx, int is_serial) {
+    /* Serial restarts at the default baud rate, so there is no speed to
+     * restore; setting it here skips that step in shutdown. */
+    if(is_serial)
+        ctx->current_speed = SERIAL_DEFAULT_SPEED;
+
+    ctx->transport->shutdown(ctx);
+
+    /* installed_adapter is also prepare_comms()'s "already initialized" flag:
+     * left set, the next handshake no-ops against a dead link. */
+    ctx->installed_adapter = 0;
+    ctx->legacy_mode = 0;
+    ctx->remote_capabilities = 0;
+    memset(ctx->remote_version_string, 0, sizeof(ctx->remote_version_string));
+}
+
+/* Wait for the new loader to answer.  Shared by every transport and console.
+ *
+ * Success is a completed handshake -- a version string read back off the wire.
+ * Never merely "the open succeeded": that holds for a serial port or a
+ * connected UDP socket whether or not a console is listening.
+ *
+ * Returns 1 when the console is back and talking, 0 otherwise. */
+static int reconnect_after_update(kostool_context_t *ctx) {
+    const int is_serial = (strcmp(ctx->transport->name, "serial") == 0);
+    const int can_retry = ctx->time_ops && ctx->time_ops->time_usec &&
+                          ctx->time_ops->sleep_usec;
+    uint32_t interval = RECONNECT_SETTLE_USEC;
+    uint64_t deadline = 0;
+    int reconnected = 0;
+
+    reconnect_drop_link(ctx, is_serial);
+
+    if(can_retry) {
+        deadline = ctx->time_ops->time_usec() + RECONNECT_TIMEOUT_USEC;
+        printf("Reconnecting (up to %u s)...\n",
+               (unsigned)(RECONNECT_TIMEOUT_USEC / 1000000u));
+    }
+    else {
+        printf("Reconnecting...\n");
+    }
+    fflush(stdout);
+
+    for(;;) {
+        int opened;
+
+        if(can_retry)
+            ctx->time_ops->sleep_usec(interval);
+
+        /* Absent or silent is expected until the deadline, so keep the
+         * per-attempt diagnostics quiet rather than printing a pile of
+         * failures for a wait that is going fine. */
+        kostool_quiet_open = 1;
+        opened = (ctx->transport->init(ctx) == 0);
+        kostool_quiet_open = 0;
+
+        if(opened && ctx->remote_version_string[0] != '\0') {
+            reconnected = 1;
+            break;
+        }
+
+        if(!can_retry || ctx->time_ops->time_usec() >= deadline)
+            break;
+
+        if(opened) {
+            /* Up but not answering.  Drop the handle so the next try re-opens
+             * whatever is really there, and back off -- this is the costly
+             * case, and on serial it reopens a live UART. */
+            interval = RECONNECT_QUIET_USEC;
+            reconnect_drop_link(ctx, is_serial);
+        }
+        else {
+            interval = RECONNECT_ABSENT_USEC;
+        }
+    }
+
+    /* Falling through to success would make a failed flash read as a good one
+     * -- how a bad update used to surface later as an unrelated read error. */
+    if(!reconnected) {
+        fprintf(stderr, "Failed to reconnect after firmware update\n");
+        return 0;
+    }
+
+    return 1;
+}
 
 /* ===== Core update logic ===== */
 
 static int perform_update(kostool_context_t *ctx, const uint8_t *fw_data, uint32_t fw_size,
-                          const char *patch_ip, const arch_update_params_t *arch) {
+                          const char *patch_ip, const arch_update_params_t *arch,
+                          int dhcp_reconnect) {
     /* Build combined blob: trampoline (256 bytes) + firmware .bin */
     uint32_t blob_size = arch->trampoline_size + fw_size;
     uint8_t *blob = malloc(blob_size);
@@ -1149,73 +1245,18 @@ static int perform_update(kostool_context_t *ctx, const uint8_t *fw_data, uint32
 
     free(blob);
     printf("Firmware updated\n");
-    printf("Reconnecting...\n");
 
-    if(strcmp(ctx->transport->name, "serial") == 0) {
-        /* Serial: console restarts at default baud rate after trampoline.
-         * Must close and reinit to renegotiate speed. */
-        ctx->current_speed = SERIAL_DEFAULT_SPEED; /* skip speed restore in shutdown */
-        ctx->transport->shutdown(ctx);
-
-        ctx->remote_capabilities = 0;
-        memset(ctx->remote_version_string, 0, sizeof(ctx->remote_version_string));
-
-        /* PSP needs a settle delay before the host talks to it again.  The
-         * device never leaves the bus, so there is no disconnect to wait on:
-         * the handle reopens while the new loader is still re-initializing the
-         * USB controller and no endpoint answers.  serial_init() calls that
-         * success and hands back an empty version string, and every read
-         * against the dead handle costs USB_IO_TIMEOUT_MS.  Other serial
-         * consoles keep the single immediate attempt -- repeated
-         * shutdown/init cycles on a live serial link are their own hazard. */
-        int is_psp = (arch == &allegrex_params);
-        int attempts = is_psp ? 12 : 1;
-
-        int reconnected = 0;
-
-        for(int i = 0; i < attempts; i++) {
-            if(is_psp && ctx->time_ops && ctx->time_ops->sleep_usec)
-                ctx->time_ops->sleep_usec(i == 0 ? PSP_REFLASH_SETTLE_USEC
-                                                 : PSP_REFLASH_RETRY_USEC);
-
-            /* A failed open just means the loader is not back on the bus yet;
-             * the check after the loop is what decides the update failed. */
-            if(ctx->transport->init(ctx) != 0)
-                continue;
-
-            if(ctx->remote_version_string[0] != '\0') {
-                reconnected = 1;
-                break; /* handshake really completed */
-            }
-
-            /* Opened, but the loader is not answering yet.  Drop the handle so
-             * the next attempt re-opens whatever is actually on the bus. */
-            if(i + 1 < attempts) {
-                ctx->current_speed = SERIAL_DEFAULT_SPEED;
-                ctx->transport->shutdown(ctx);
-                ctx->remote_capabilities = 0;
-                memset(ctx->remote_version_string, 0, sizeof(ctx->remote_version_string));
-            }
-        }
-
-        /* Every attempt either failed to open or opened without completing the
-         * handshake.  Falling through to the success return here would make a
-         * failed flash read as a good one, which is exactly how a bad update
-         * used to surface later as an unrelated "blread: read error". */
-        if(!reconnected) {
-            fprintf(stderr, "Failed to reconnect after firmware update\n");
-            return -1;
-        }
-    } else {
-        /* Network (static IP or DHCP): keep existing socket alive.
-         * Lazy prepare_comms() will reconnect on the next operation.
-         * DHCP servers typically reassign the same IP for the same MAC,
-         * so reusing the original hostname works in practice. */
-        ctx->installed_adapter = 0;
-        ctx->legacy_mode = 0;
-        ctx->remote_capabilities = 0;
-        memset(ctx->remote_version_string, 0, sizeof(ctx->remote_version_string));
+    /* Patched to "0.0.0.0", the loader re-runs DHCP and may return on a
+     * different address, so there is nothing to reconnect *to*.  Say so rather
+     * than spend the whole budget failing against the old hostname. */
+    if(dhcp_reconnect) {
+        reconnect_drop_link(ctx, 0);
+        printf("Loader will request a new DHCP lease; reconnect with -t dhcp\n");
+        return 1;
     }
+
+    if(!reconnect_after_update(ctx))
+        return -1;
 
     return 1;
 }
@@ -1272,7 +1313,7 @@ int auto_update_firmware(kostool_context_t *ctx) {
 
         printf("Updating firmware...\n");
 
-        int ret = perform_update(ctx, fw_data, fw_size, NULL, arch);
+        int ret = perform_update(ctx, fw_data, fw_size, NULL, arch, 0);
         free(ext_fw);
         return ret;
     }
@@ -1450,29 +1491,13 @@ int auto_update_firmware(kostool_context_t *ctx) {
         }
     }
 
-    /* Save adapter description (e.g. " using Broadband Adapter (HIT-0400)")
-     * before the update clears remote_version_string. */
-    const char *using_suffix = strstr(ctx->remote_version_string, " using ");
-    char adapter_desc[128] = "";
-    if(using_suffix)
-        snprintf(adapter_desc, sizeof(adapter_desc), "%s", using_suffix);
-
     if(strstr(remote_name, "dcload") != NULL)
         printf("Legacy loader found...\n");
     printf("Updating firmware...\n");
 
-    int result = perform_update(ctx, fw_data, fw_size, patch_ip, arch);
-
-    /* Network static IP: print the expected new version and pre-fill
-     * remote_version_string so prepare_comms() skips its duplicate printf.
-     * Serial and DHCP paths do a full reinit which prints the real version. */
-    if(result > 0 && !dhcp_reconnect && !is_serial) {
-        snprintf(ctx->remote_version_string,
-                 sizeof(ctx->remote_version_string),
-                 "%s-load-%s %s%s", prefix, "ip",
-                 KOSLOAD_VERSION_STRING, adapter_desc);
-        printf("%s\n", ctx->remote_version_string);
-    }
-
-    return result;
+    /* Every reconnecting path reads the version back off the wire and prints
+     * the real one.  This used to synthesize a banner from the host's own
+     * version plus the OUTGOING loader's adapter, which made a successful
+     * flash look like a no-op. */
+    return perform_update(ctx, fw_data, fw_size, patch_ip, arch, dhcp_reconnect);
 }

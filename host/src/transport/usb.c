@@ -50,8 +50,9 @@ static void *usb_open(const char *device, uint32_t initial_baud) {
 
     h->dev = libusb_open_device_with_vid_pid(h->ctx, KOSLOAD_USB_VID, KOSLOAD_USB_PID);
     if(!h->dev) {
-        fprintf(stderr, "usb: no PSP loader found (VID:PID %04x:%04x). Is it in USB mode?\n",
-                KOSLOAD_USB_VID, KOSLOAD_USB_PID);
+        if(!kostool_quiet_open)
+            fprintf(stderr, "usb: no PSP loader found (VID:PID %04x:%04x). Is it in USB mode?\n",
+                    KOSLOAD_USB_VID, KOSLOAD_USB_PID);
         libusb_exit(h->ctx);
         free(h);
         return NULL;

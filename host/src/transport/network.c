@@ -439,7 +439,8 @@ static int prepare_comms(kostool_context_t *ctx) {
                                  : ctx->socket_fd;
     }
 
-    fprintf(stderr, "No network loader response from %s\n", ctx->hostname);
+    if(!kostool_quiet_open)
+        fprintf(stderr, "No network loader response from %s\n", ctx->hostname);
     return -1;
 
 got_version:
@@ -573,7 +574,8 @@ static int network_init(kostool_context_t *ctx) {
     int rc;
     rc = ctx->socket_ops->connect(ctx->socket_legacy, host_copy, NET_LEGACY_PORT);
     if(rc < 0) {
-        fprintf(stderr, "Failed to connect to %s:%d (legacy)\n", host_copy, NET_LEGACY_PORT);
+        if(!kostool_quiet_open)
+            fprintf(stderr, "Failed to connect to %s:%d (legacy)\n", host_copy, NET_LEGACY_PORT);
         free(host_copy);
         return -1;
     }
@@ -581,7 +583,8 @@ static int network_init(kostool_context_t *ctx) {
     /* Connect v2 socket */
     rc = ctx->socket_ops->connect(ctx->socket_fd, host_copy, port);
     if(rc < 0) {
-        fprintf(stderr, "Failed to connect to %s:%d\n", host_copy, port);
+        if(!kostool_quiet_open)
+            fprintf(stderr, "Failed to connect to %s:%d\n", host_copy, port);
         free(host_copy);
         return -1;
     }
@@ -598,8 +601,10 @@ static int network_init(kostool_context_t *ctx) {
 
     /* Run VERS handshake now so remote_version_string and
      * remote_capabilities are available for auto-update. */
-    printf("Connecting to %s...\n", ctx->hostname);
-    fflush(stdout);
+    if(!kostool_quiet_open) {
+        printf("Connecting to %s...\n", ctx->hostname);
+        fflush(stdout);
+    }
     if(prepare_comms(ctx) != 0)
         return -1;
 
