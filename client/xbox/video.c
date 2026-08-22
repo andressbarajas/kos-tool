@@ -347,23 +347,17 @@ void clear_lines(int y, int height, unsigned int color) {
     xbox_video_fill_rect(0, y, XBOX_SCREEN_WIDTH, height, color);
 }
 
-/* Decimal uint -> string (shared exception/status display helper). */
+/* Zero-padded 8-digit hex, matching every other port: callers pass [9] buffers
+ * and the shared display code positions text assuming exactly 8 characters. */
 void uint_to_string(unsigned int val, unsigned char *buf) {
-    char tmp[11];
-    int i = 0;
-    if(val == 0) {
-        buf[0] = '0';
-        buf[1] = '\0';
-        return;
+    static const char hex[] = "0123456789ABCDEF";
+    int i;
+
+    for(i = 7; i >= 0; i--) {
+        buf[i] = (unsigned char)hex[val & 0xF];
+        val >>= 4;
     }
-    while(val > 0) {
-        tmp[i++] = '0' + (val % 10);
-        val /= 10;
-    }
-    int j = 0;
-    while(i > 0)
-        buf[j++] = tmp[--i];
-    buf[j] = '\0';
+    buf[8] = '\0';
 }
 
 const char *exception_code_to_string(uint32_t code) {
