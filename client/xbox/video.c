@@ -333,7 +333,7 @@ void xbox_video_ensure(void) {
         xbox_video_init();
 }
 
-const char *exception_code_to_string(uint32_t code) {
+const char *exception_code_to_string(unsigned int code) {
     switch(code) {
         case 0:  return "Divide Error";
         case 1:  return "Debug";

@@ -245,7 +245,7 @@ void gc_video_draw_string(int x, int y, const char *str, uint32_t color) {
 
 /* Exception code to string — stub, formatting moved to host (kos-tool).
  * Must exist for crt0.S linkage (fixed offset in entry header). */
-const char *exception_code_to_string(uint32_t code) {
+const char *exception_code_to_string(unsigned int code) {
     (void)code;
     return "";
 }

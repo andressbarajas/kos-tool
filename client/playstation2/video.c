@@ -524,7 +524,7 @@ void ps2_video_draw_bitmap(int x, int y, int w, int h, const uint32_t *bits, uin
 
 /* Exception code to string -- stub, formatting moved to host (kos-tool).
  * Must exist for crt0.S linkage (fixed offset in entry header). */
-const char *exception_code_to_string(uint32_t code) {
+const char *exception_code_to_string(unsigned int code) {
     (void)code;
     return "";
 }

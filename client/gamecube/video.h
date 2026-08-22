@@ -43,6 +43,4 @@ void gc_video_draw_string(int x, int y, const char *str, uint32_t color);
  * Returns a 32-bit value suitable for writing directly to the XFB. */
 uint32_t gc_color_to_yuy2(uint32_t rgb);
 
-const char *exception_code_to_string(uint32_t code);
-
 #endif /* KOSLOAD_GC_VIDEO_H */

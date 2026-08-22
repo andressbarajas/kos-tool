@@ -42,7 +42,7 @@ void dc_video_setup(uint32_t mode, uint32_t bg_color) {
 }
 
 /* Exception code to string — stub, formatting moved to host (kos-tool) */
-char *exception_code_to_string(unsigned int expevt) {
+const char *exception_code_to_string(unsigned int expevt) {
     (void)expevt;
     return "";
 }

@@ -22,6 +22,4 @@ void psp_video_draw_string(int x, int y, const char *str, uint32_t color);
 void psp_video_fill_rect(int x, int y, int w, int h, uint32_t color);
 void psp_video_draw_bitmap(int x, int y, int w, int h, const uint32_t *bits, uint32_t color);
 
-const char *exception_code_to_string(uint32_t code);
-
 #endif /* KOSLOAD_PSP_VIDEO_H */

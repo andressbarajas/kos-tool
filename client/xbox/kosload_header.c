@@ -24,8 +24,6 @@
 #include <kosload/display.h>
 #include <kosload/info.h>
 
-#include "video.h"
-
 extern int kosloadsyscall(int nr, int a1, int a2, int a3);
 extern kosload_info_t kosload_info;
 

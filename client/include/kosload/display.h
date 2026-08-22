@@ -39,6 +39,9 @@ void clear_screen(unsigned int color);
 /* Draws str at pixel position (x, y) in color. */
 void draw_string(int x, int y, const char *str, unsigned int color);
 
+/* Names the CPU exception code.  DEFINED per console in client/<console>/video.c */
+const char *exception_code_to_string(unsigned int code);
+
 /* ===== Shared loader state (client/common/network/entry.c) ===== */
 
 extern volatile bool booted;
