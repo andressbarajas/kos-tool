@@ -13,16 +13,11 @@
 #include <kosload/target.h>
 #include <kosload/protocol.h>
 #include "hardware.h"
+#include "video.h"
 
 #ifndef DC_LOADER_BASE
 #define DC_LOADER_BASE 0x8c004000 /* fallback; normally -D'd from mk/memory.mk */
 #endif
-
-/* From video.S (compiler prepends _ to C symbols on SH-ELF) */
-extern void draw_string(int x, int y, const char *str, int color);
-extern void clrscr(int color);
-extern int  check_cable(void);
-extern void init_video(int cabletype, int pixelmode);
 
 /* From video.c */
 extern void setup_video(uint32_t mode, uint32_t bg_color);
@@ -78,7 +73,7 @@ static void dc_draw_string(int x, int y, const char *str, uint32_t color) {
 }
 
 static void dc_clear_screen(uint32_t color) {
-    clrscr((int)(color & 0xffff));
+    dc_video_clear((int)(color & 0xffff));
 }
 
 static void dc_setup_video(uint32_t mode, uint32_t bg_color) {

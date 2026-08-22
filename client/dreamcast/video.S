@@ -7,7 +7,8 @@
 ! ROM font-based text rendering and screen management.
 ! Based on Video example code, used by both dcload-serial and dcload-ip.
 
-	.globl	_draw_string, _clrscr, _init_video, _check_cable
+	.globl	_draw_string, _dc_video_clear
+	.globl	_dc_video_init, _dc_video_check_cable
 	.globl	_get_font_address
 
 	.text
@@ -171,7 +172,7 @@ drawmod:
 	! Assumes a 640*480 screen with RGB555 or RGB565 pixels
 
 	! r4 = pixel colour
-_clrscr:
+_dc_video_clear:
 	mov.l	vrambase,r0
 	mov.l	clrcount,r1
 clrloop:
@@ -199,7 +200,7 @@ clrcount:
 
 	! r4 = cabletype (0=VGA, 2=RGB, 3=Composite)
 	! r5 = pixel mode (0=RGB555, 1=RGB565, 3=RGB888)
-_init_video:
+_dc_video_init:
 	! Look up bytes per pixel as shift value
 	mov	#3,r1
 	and	r5,r1
@@ -312,7 +313,7 @@ hpos:
 	! 2 = RGB
 	! 3 = Composite
 
-_check_cable:
+_dc_video_check_cable:
 	! set PORT8 and PORT9 to input
 	mov.l	porta,r0
 	mov.l	pctra_clr,r2

@@ -11,14 +11,7 @@
 #include <stdint.h>
 
 #include "hardware.h"
-
-/* Assembly-level video functions (from video.S).
- * SH-ELF compiler prepends _ to C symbols, so these match
- * the _init_video, _clrscr, etc. labels in video.S. */
-extern void init_video(int cabletype, int pixelmode);
-extern void clrscr(int color);
-extern void draw_string(int x, int y, const char *str, int color);
-extern int  check_cable(void);
+#include "video.h"
 
 /* FPSCR setup wrapper for crt0.S */
 #if __GNUC__ <= 4
@@ -35,15 +28,15 @@ void __call_builtin_sh_set_fpscr(unsigned int value) {
 /*
  * setup_video: Called by exception handler and main startup.
  * mode parameter is the pixel mode (0=RGB555, 1=RGB565, 3=RGB888).
- * bg_color is the background color for clrscr.
+ * bg_color is the background color for dc_video_clear.
  */
 void setup_video(uint32_t mode, uint32_t bg_color) {
     (void)mode;
     /* Only retail Dreamcasts have the cable-detect line; NAOMI / System SP
        and any other hardware type default to VGA (0). */
-    int cabletype = (dc_hardware_type() == DC_HW_TYPE_RETAIL) ? check_cable() : 0;
-    init_video(cabletype, 1);
-    clrscr(bg_color);
+    int cabletype = (dc_hardware_type() == DC_HW_TYPE_RETAIL) ? dc_video_check_cable() : 0;
+    dc_video_init(cabletype, 1);
+    dc_video_clear(bg_color);
 }
 
 /* clear_lines: Clear n lines starting at line y to value c.

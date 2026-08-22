@@ -7,7 +7,7 @@
 ! table is defined in C (syscall_table.c) for easy extension.
 
 	.extern _setup_video
-	.extern _clrscr
+	.extern _dc_video_clear
 	.extern _draw_string
 	.extern _uint_to_string
 	.extern _exception_code_to_string
@@ -50,7 +50,7 @@ kosload_info_k:
 setup_video_k:
 	.long _setup_video
 clrscr_k:
-	.long _clrscr
+	.long _dc_video_clear
 draw_string_k:
 	.long _draw_string
 uint_to_string_k:
