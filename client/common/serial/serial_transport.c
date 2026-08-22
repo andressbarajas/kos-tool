@@ -22,6 +22,7 @@
 #include <kosload/version.h>
 
 #include <kosload/screensaver.h>
+#include <kosload/display.h>
 #include "minilzo.h"
 #include "serial_internal.h"
 
@@ -47,7 +48,9 @@ unsigned char *wrkmem = 0;
 #define IS(a)        ((a) == BOOTED)
 #define IS_NOT(a)    ((a) == NOT_BOOTED)
 
-static int booted = NOT_BOOTED;
+/* Whether this transport has painted its status screen yet -- cleared after
+ * execute() so the next loop repaints. */
+static int video_booted = NOT_BOOTED;
 
 /* ===== Serial helpers ===== */
 
@@ -156,14 +159,12 @@ unsigned int send_data_block_compressed(unsigned char *addr, unsigned int size)
     return 1;
 }
 
-extern void uint_to_string(unsigned int foo, unsigned char *bar);
-extern void clear_lines(int y, int height, unsigned int color);
-
 /* Draw the "(done/total)" progress line.
  *
  * The x coordinates assume uint_to_string() renders exactly 8 characters at
  * 12 px each: 42 + 8*12 = 138 for the separator, 150 + 8*12 = 246 for the
- * closing bracket.  Every console's implementation honours that. */
+ * closing bracket.  The shared implementation in client/common/core/display.c
+ * guarantees that width. */
 static void draw_progress(unsigned int done, unsigned int total) {
     const target_ops_t *t = common_get_target();
     unsigned char current_str[9], total_str[9];
@@ -251,7 +252,7 @@ static int serial_transport_init(void)
         return -1;
     lzo_init();
     wrkmem = 0;
-    booted = NOT_BOOTED;
+    video_booted = NOT_BOOTED;
     kosload_info.capabilities = KOSLOAD_CAP_SERIAL | KOSLOAD_CAP_ARGV;
     if (target_get_ops()->cdfs_redir_enable)
         kosload_info.capabilities |= KOSLOAD_CAP_CDFS_REDIR;
@@ -278,11 +279,11 @@ static void serial_transport_loop(bool is_main_loop)
     while (1) {
         serial_io_set_border(0x00ffffff);
 
-        if (IS_NOT(booted)) {
+        if (IS_NOT(video_booted)) {
             t->setup_video(0, 0);
             t->clear_screen(0);
             t->draw_string(30, 54, NAME, 0xffff);
-            booted = BOOTED;
+            video_booted = BOOTED;
         }
 
         clear_lines(78, 24, 0);
@@ -301,10 +302,10 @@ static void serial_transport_loop(bool is_main_loop)
 
         switch (cmd) {
         case SERIAL_CMD_EXECUTE: /* 'A' - execute */
-            if (IS_NOT(booted)) {
+            if (IS_NOT(video_booted)) {
                 t->setup_video(0, 0);
                 t->draw_string(30, 54, NAME, 0xffff);
-                booted = BOOTED;
+                video_booted = BOOTED;
             }
             clear_lines(78, 24, 0);
             t->draw_string(30, 78, "executing...", 0xffff);
@@ -350,14 +351,14 @@ static void serial_transport_loop(bool is_main_loop)
                 serial_io_flush();
             }
             t->execute(addr);
-            booted = NOT_BOOTED; /* reinit video on next loop */
+            video_booted = NOT_BOOTED; /* reinit video on next loop */
             break;
 
         case SERIAL_CMD_LOAD_BEGIN: /* 'B' - load binary */
-            if (IS_NOT(booted)) {
+            if (IS_NOT(video_booted)) {
                 t->setup_video(0, 0);
                 t->draw_string(30, 54, NAME, 0xffff);
-                booted = BOOTED;
+                video_booted = BOOTED;
             }
             clear_lines(78, 24, 0);
             t->draw_string(30, 78, "receiving data...", 0xffff);
@@ -368,10 +369,10 @@ static void serial_transport_loop(bool is_main_loop)
             break;
 
         case 'D': /* send uncompressed binary (verbose) */
-            if (IS_NOT(booted)) {
+            if (IS_NOT(video_booted)) {
                 t->setup_video(0, 0);
                 t->draw_string(30, 54, NAME, 0xffff);
-                booted = BOOTED;
+                video_booted = BOOTED;
             }
             clear_lines(78, 24, 0);
             t->draw_string(30, 78, "sending uncompressed data...", 0xffff);
@@ -383,10 +384,10 @@ static void serial_transport_loop(bool is_main_loop)
             break;
 
         case SERIAL_CMD_DOWNLOAD: /* 'F' - send compressed binary (verbose) */
-            if (IS_NOT(booted)) {
+            if (IS_NOT(video_booted)) {
                 t->setup_video(0, 0);
                 t->draw_string(30, 54, NAME, 0xffff);
-                booted = BOOTED;
+                video_booted = BOOTED;
             }
             clear_lines(78, 24, 0);
             t->draw_string(30, 78, "sending compressed data...", 0xffff);
