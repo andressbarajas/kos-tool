@@ -156,10 +156,10 @@ static uint64_t psp_get_ticks(void) {
 }
 
 /* The PSP keeps its wall clock in the syscon microcontroller, reachable only
- * through a syscon command whose byte and response layout we have not RE'd --
- * and psp_syscon_cmd() is send-only today, so reading one is not just a matter
- * of knowing the number.  Until that is done the host-supplied timestamp is all
- * we have, so anchor it to the COP0 cycle counter and let it run: a program
+ * through a syscon command whose byte and response layout we have not RE'd.
+ * The driver can read replies now (psp_syscon_baryon_version() does), so this
+ * is down to identifying the clock command.  Until then the host-supplied
+ * timestamp is all we have, so anchor it to the COP0 cycle counter: a program
  * that samples the clock twice a minute apart sees a minute pass, instead of
  * the same frozen second the previous constant-return version reported.  It
  * does NOT survive a power cycle; the host sets it again on the next run. */

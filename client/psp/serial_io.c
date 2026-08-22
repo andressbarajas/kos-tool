@@ -10,6 +10,7 @@
 
 #include <kosload/protocol.h>
 #include <kosload/serial_io.h>
+#include "power.h"
 #include "usb/usb_dev.h"
 
 extern volatile unsigned int installed_adapter;
@@ -49,5 +50,6 @@ void serial_io_set_border(unsigned int color) {
 }
 
 unsigned int serial_io_data_ready(void) {
+    psp_power_poll();
     return usb_dev_rx_ready() ? 1u : 0u;
 }

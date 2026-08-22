@@ -128,6 +128,7 @@ COMMON_OBJS := \
     $(COMMONDIR)/target.o \
     $(COMMONDIR)/video.o \
     $(COMMONDIR)/syscon.o \
+    $(COMMONDIR)/power.o \
     $(COMMONDIR)/memfuncs.o \
     $(COMMONDIR)/module_info.o \
     $(COMMONDIR)/exception.o \
@@ -155,6 +156,8 @@ $(COMMONDIR)/video.o: video.c video.h syscon.h $(KOSLOAD_VERSION_MK) FORCE_PSP_I
 	$(CC) $(CFLAGS) -c $< -o $@
 $(COMMONDIR)/syscon.o: syscon.c syscon.h $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
+$(COMMONDIR)/power.o: power.c power.h syscon.h video.h $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
+	$(CC) $(CFLAGS) -c $< -o $@
 $(COMMONDIR)/memfuncs.o: memfuncs.c | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 $(COMMONDIR)/module_info.o: module_info.c | $(COMMONDIR)
@@ -163,7 +166,7 @@ $(COMMONDIR)/exception.o: exception.c video.h cache.h hw_trace.h $(KOSLOAD_VERSI
 	$(CC) $(CFLAGS) -c $< -o $@
 $(COMMONDIR)/exception_entry.o: exception.S | $(COMMONDIR)
 	$(CC) $(ASFLAGS) -c $< -o $@
-$(COMMONDIR)/serial_io.o: serial_io.c usb/usb_dev.h $(KOSLOAD_VERSION_MK) FORCE_PSP_IMAGE | $(COMMONDIR)
+$(COMMONDIR)/serial_io.o: serial_io.c usb/usb_dev.h power.h $(KOSLOAD_VERSION_MK) FORCE_PSP_IMAGE | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 $(COMMONDIR)/usb_dev.o: usb/usb_dev.c usb/usb_dev.h cache.h hw_trace.h $(KOSLOAD_VERSION_MK) FORCE_PSP_IMAGE | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@

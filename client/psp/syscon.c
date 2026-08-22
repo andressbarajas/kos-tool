@@ -87,6 +87,13 @@
 
 static bool inited;
 
+/* Most recent checksum-valid reply; byte 0 is the status byte (see syscon.h).
+ * sc_reply_seq separates "this call produced a reply" from "an older one is
+ * still on file". */
+static uint8_t  sc_reply[16];
+static int      sc_reply_len;
+static uint32_t sc_reply_seq;
+
 static inline void sc_sync(void) { __asm__ volatile("sync" ::: "memory"); }
 static inline uint32_t sc_count(void) {
     uint32_t value;
@@ -273,6 +280,13 @@ static int sc_exchange(const uint8_t *tx, int total, uint32_t settle_ticks) {
     if(rx[rlen] != (uint8_t)(~sum & 0xFF))
         goto cleanup;
 
+    /* Publish before classifying the result code below: the status byte
+     * describes the machine, not the command, so a refusal still carries it. */
+    sc_reply_len = rlen + 1;
+    for(i = 0; i < sc_reply_len; i++)
+        sc_reply[i] = rx[i];
+    sc_reply_seq++;
+
     /* 0x80/0x81 request Sony's special command-only second phase, not a replay
      * of the original parameterized command.  Return an internal sentinel only
      * after the response length and checksum have both been validated. */
@@ -405,4 +419,86 @@ int psp_syscon_wdt_disable(void) {
     if(!inited)
         psp_syscon_init();
     return psp_syscon_cmd(SYSCON_CMD_CTRL_TACHYON_WDT, &off, 1);
+}
+
+/* ===== Status byte, power switch and power off ===========================*/
+
+#define SYSCON_CMD_NOP                 0x00 /* sceSysconNop, no parameters   */
+#define SYSCON_CMD_GET_BARYON_VERSION  0x01
+#define SYSCON_CMD_POWER_STANDBY       0x35
+
+/* The 16-bit parameter newer baryons expect with 0x35.  power_04g.prx
+ * initialises the field it passes to 8 (text+0x11f0), so 8 is retail's default;
+ * its meaning is not RE'd. */
+#define PSP_SYSCON_STANDBY_PARAM       0x0008
+
+bool psp_syscon_status(uint8_t *status) {
+    if(sc_reply_seq == 0)
+        return false;
+    if(status)
+        *status = sc_reply[0];
+    return true;
+}
+
+int psp_syscon_poll_status(uint8_t *status) {
+    uint32_t seq = sc_reply_seq;
+    int result;
+
+    if(!inited)
+        psp_syscon_init();
+
+    /* Any reply that passed the checksum carries a usable status byte, so
+     * success is "the sequence moved", not "result == 0". */
+    result = psp_syscon_cmd(SYSCON_CMD_NOP, 0, 0);
+    if(sc_reply_seq == seq)
+        return result ? result : -1;
+    if(status)
+        *status = sc_reply[0];
+    return 0;
+}
+
+int psp_syscon_baryon_version(uint32_t *version) {
+    uint32_t seq = sc_reply_seq;
+    uint32_t value = 0;
+    int i, payload;
+
+    if(!version)
+        return -1;
+    if(!inited)
+        psp_syscon_init();
+
+    if(psp_syscon_cmd(SYSCON_CMD_GET_BARYON_VERSION, 0, 0) != 0)
+        return -1;
+    if(sc_reply_seq == seq)
+        return -1;
+
+    /* [status][len][code][payload...][hash], len counting all but the hash, so
+     * the payload is bytes 3..len-1, little-endian (syscon.prx text+0x1c5c). */
+    payload = sc_reply_len - 1 - 3;
+    if(payload < 1 || payload > 4)
+        return -1;
+    for(i = 0; i < payload; i++)
+        value |= (uint32_t)sc_reply[3 + i] << (8 * i);
+
+    *version = value;
+    return 0;
+}
+
+int psp_syscon_power_standby(void) {
+    uint32_t version = 0;
+    uint8_t  params[2];
+
+    if(!inited)
+        psp_syscon_init();
+
+    /* Guessing the packet form is worse than not sending one. */
+    if(psp_syscon_baryon_version(&version) != 0)
+        return -1;
+
+    if((((version >> 16) & 0xF0u) < 0x30u))
+        return psp_syscon_cmd(SYSCON_CMD_POWER_STANDBY, 0, 0);
+
+    params[0] = (uint8_t)(PSP_SYSCON_STANDBY_PARAM & 0xFFu);
+    params[1] = (uint8_t)((PSP_SYSCON_STANDBY_PARAM >> 8) & 0xFFu);
+    return psp_syscon_cmd(SYSCON_CMD_POWER_STANDBY, params, 2);
 }

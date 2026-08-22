@@ -63,6 +63,50 @@ void psp_syscon_backlight(bool on);
  * command retires the watchdog for good; no periodic servicing needed. */
 int psp_syscon_wdt_disable(void);
 
+/* ===== Status byte, power switch and power off =============================
+ *
+ * Syscon reports the switches and supply flags in byte 0 of EVERY reply, which
+ * sc_exchange() already receives and checksums -- so reading the power switch
+ * costs no more than sending any command.
+ *
+ * Bit 4, ACTIVE HIGH; measured on a PSP-1000 as 0x08 idle, 0x18 held.  RE'd
+ * from 6.61 syscon.prx: text+0x2434 returns the reply's first byte, the ISR
+ * dispatches bit 4 uninverted to callback slot K=92, and power_04g.prx's
+ * handler there (text+0x2ee0) sets scePower 0x80000000 = POWERSWITCH.  Slot
+ * K = 80 + 12*idx: the ISR loads the handler from K+12, and dropping that +12
+ * shifts every bit by one slot. */
+#define PSP_SYSCON_STATUS_POWER_SWITCH 0x10
+
+static inline bool psp_syscon_power_switch_held(uint8_t status) {
+    return (status & PSP_SYSCON_STATUS_POWER_SWITCH) != 0;
+}
+
+/* Status byte from the most recent checksum-valid reply.  False if no reply has
+ * ever validated, in which case *status is untouched. */
+bool psp_syscon_status(uint8_t *status);
+
+/* Fetch a fresh status byte with the syscon NOP (command 0x00, no parameters --
+ * what sceSysconNop at syscon.prx text+0x2d88 builds).  Below 0x20, so it skips
+ * the settle delay and is cheap to poll.  Returns 0 and stores the status, else
+ * the psp_syscon_cmd() result or -1. */
+int psp_syscon_poll_status(uint8_t *status);
+
+/* Read the baryon (syscon MCU) version, command 0x01.  The reply payload is
+ * little-endian, so the generation nibble retail tests lands in bits 20..23. */
+int psp_syscon_baryon_version(uint32_t *version);
+
+/* Power the console off: syscon command 0x35.  sceSysconPowerStandby (syscon.prx
+ * text+0x2b40) picks the packet form from the baryon version -- `35 02 C8` with
+ * no parameters below 0x30 (PSP-1000/2000), `35 04 lo hi <hash>` at or above it
+ * (PSP-3000; see PSP_SYSCON_STANDBY_PARAM in syscon.c).  Both confirmed on
+ * hardware.
+ *
+ * Not the 0x32 reset that never worked: that one is gated on a physical input
+ * and answers 0x83 when the gate is closed.  Non-zero means the packet was
+ * refused, so the caller needs a fallback; on success it should spin, as
+ * retail's call site does. */
+int psp_syscon_power_standby(void);
+
 /* Send a harmless command purely to prove the CPU is still alive.
  *
  * Syscon holds the power rail and cuts it if the main CPU goes quiet -- on
