@@ -30,22 +30,7 @@
 #include "../iop_smap.h"
 #include "../iop/smap_protocol.h"
 #include "../bootstrap/iop_bootstrap.h"
-
-/* clear_lines lives in video.h but that header declares setup_video
- * with a uint32_t-typed prototype that conflicts with kosload.h's
- * unsigned-int-typed one under the MIPS ABI we use here.  Forward-
- * declare the one symbol we actually need so we don't have to drag
- * the entire video.h in. */
-extern void clear_lines(int y, int height, unsigned int color);
-
-#ifdef SMAP_DIAG
-/* Diagnostic-dump helpers (also forward-declared to avoid the video.h
- * include conflict).  Constants mirror video.h literals. */
-extern void ps2_video_draw_string(int x, int y, const char *str, uint32_t color);
-extern void ps2_video_fill_rect(int x, int y, int w, int h, uint32_t color);
-#define PS2_DIAG_SCREEN_WIDTH 640
-#define PS2_DIAG_CHAR_HEIGHT  24
-#endif
+#include "../video.h"
 
 /*--------------------------------------------------------------------------*/
 /* adapter_t entry-point declarations                                       */
@@ -247,7 +232,7 @@ static void smap_diag_dump(void) {
     dump_skip = 0;
 
     if(ps2_smap_get_hot_snapshot(&hot) < 0) {
-        ps2_video_fill_rect(16, 174, PS2_DIAG_SCREEN_WIDTH - 32, PS2_DIAG_CHAR_HEIGHT, 0x000000);
+        ps2_video_fill_rect(16, 174, PS2_SCREEN_WIDTH - 32, PS2_CHAR_HEIGHT, 0x000000);
         ps2_video_draw_string(16, 174, "smap diag: not initialized", 0xff4040);
         return;
     }
@@ -267,7 +252,7 @@ static void smap_diag_dump(void) {
     p = append_str_d(p, " hb:");
     p = append_hex4(p, hot.heartbeat);
     *p = '\0';
-    ps2_video_fill_rect(16, 174, PS2_DIAG_SCREEN_WIDTH - 32, PS2_DIAG_CHAR_HEIGHT, 0x000000);
+    ps2_video_fill_rect(16, 174, PS2_SCREEN_WIDTH - 32, PS2_CHAR_HEIGHT, 0x000000);
     ps2_video_draw_string(16, 174, buf, 0xffffff);
 
     /* Row 2: link, drops, rpc state, batch sizes.  TX slot states for
@@ -291,7 +276,7 @@ static void smap_diag_dump(void) {
     p = append_str_d(p, " sb:");
     p = append_hex4(p, hot.last_submit_batch_size);
     *p = '\0';
-    ps2_video_fill_rect(16, 198, PS2_DIAG_SCREEN_WIDTH - 32, PS2_DIAG_CHAR_HEIGHT, 0x000000);
+    ps2_video_fill_rect(16, 198, PS2_SCREEN_WIDTH - 32, PS2_CHAR_HEIGHT, 0x000000);
     ps2_video_draw_string(16, 198, buf, 0xffffff);
 
     /* Row 3: per-slot TX states (16 nibbles), pending TX queue depth. */
@@ -309,7 +294,7 @@ static void smap_diag_dump(void) {
     p = append_str_d(p, " pr:");
     p = append_hex4(p, hot.ee_pending_releases);
     *p = '\0';
-    ps2_video_fill_rect(16, 222, PS2_DIAG_SCREEN_WIDTH - 32, PS2_DIAG_CHAR_HEIGHT, 0x000000);
+    ps2_video_fill_rect(16, 222, PS2_SCREEN_WIDTH - 32, PS2_CHAR_HEIGHT, 0x000000);
     ps2_video_draw_string(16, 222, buf, 0xffffff);
 }
 #endif /* SMAP_DIAG */
