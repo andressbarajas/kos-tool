@@ -3,9 +3,10 @@
  * Platform-independent screensaver for kosload.
  *
  * Bouncing white box on a black screen, activates after 30 seconds
- * of inactivity. Also wakes on controller/keyboard input.
+ * of inactivity.  Waking is push, not polled: the NIC drivers and the serial
+ * transport call screensaver_wake() when traffic arrives.
  *
- * Uses target_ops_t for all hardware access (timer, video, input).
+ * Uses target_ops_t for all hardware access (timer, video).
  */
 
 #ifndef KOSLOAD_SCREENSAVER_H
@@ -20,8 +21,7 @@
 void screensaver_init(void (*restore_cb)(void), unsigned int bg_color);
 
 /* Call from idle loops. Checks the timer and activates the screensaver
- * after 30 seconds, then animates the bouncing box each call.
- * Also polls controller/keyboard input to auto-wake. */
+ * after 30 seconds, then animates the bouncing box each call. */
 void screensaver_poll(void);
 
 /* Wake from screensaver. If active, calls the restore callback and
