@@ -124,6 +124,7 @@ IP_COMMON_OBJS := \
     $(IPDIR)/network_syscalls.o \
     $(IPDIR)/net.o \
     $(IPDIR)/packet_helpers.o \
+    $(IPDIR)/checksum.o \
     $(IPDIR)/dhcp.o
 
 # Xbox-specific objects.
@@ -159,6 +160,8 @@ $(IPDIR)/network_syscalls.o: $(CLIENTDIR)/common/network/network_syscalls.c $(KO
 $(IPDIR)/net.o: $(CLIENTDIR)/common/network/net.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 $(IPDIR)/packet_helpers.o: $(CLIENTDIR)/common/network/packet_helpers.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+$(IPDIR)/checksum.o: $(CLIENTDIR)/common/network/checksum.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 $(IPDIR)/dhcp.o: $(CLIENTDIR)/common/network/dhcp.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
