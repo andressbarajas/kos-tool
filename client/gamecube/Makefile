@@ -117,6 +117,7 @@ COMMON_C_OBJS := \
     $(COMMONDIR)/video.o \
     $(COMMONDIR)/cache.o \
     $(COMMONDIR)/memfuncs.o \
+    $(COMMONDIR)/libc_generic.o \
     $(COMMONDIR)/usbgecko.o \
     $(COMMONDIR)/serial_io.o
 
@@ -153,6 +154,9 @@ $(COMMONDIR)/cache.o: cache.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(COMMONDIR)/memfuncs.o: memfuncs.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(COMMONDIR)/libc_generic.o: $(CLIENTDIR)/common/core/libc_generic.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(COMMONDIR)/usbgecko.o: serial/usbgecko.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)

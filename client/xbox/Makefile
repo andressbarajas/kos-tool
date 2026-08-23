@@ -136,6 +136,7 @@ IP_PLATFORM_OBJS := \
     $(IPDIR)/rtc.o \
     $(IPDIR)/video.o \
     $(IPDIR)/memfuncs.o \
+    $(IPDIR)/libc_generic.o \
     $(IPDIR)/syscall.o \
     $(IPDIR)/kosload_header.o \
     $(IPDIR)/adapter.o \
@@ -178,6 +179,8 @@ $(IPDIR)/rtc.o: rtc.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 $(IPDIR)/video.o: video.c video.h $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 $(IPDIR)/memfuncs.o: memfuncs.c | $(IPDIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+$(IPDIR)/libc_generic.o: $(CLIENTDIR)/common/core/libc_generic.c | $(IPDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 $(IPDIR)/syscall.o: syscall.c $(KOSLOAD_VERSION_MK) | $(IPDIR)
 	$(CC) $(CFLAGS) -c $< -o $@

@@ -116,6 +116,7 @@ COMMON_C_OBJS := \
     $(COMMONDIR)/video.o \
     $(COMMONDIR)/cache.o \
     $(COMMONDIR)/memfuncs.o \
+    $(COMMONDIR)/libc_generic.o \
     $(COMMONDIR)/ios_net.o
 
 COMMON_S_OBJS := \
@@ -147,6 +148,9 @@ $(COMMONDIR)/cache.o: $(CLIENTDIR)/gamecube/cache.c $(KOSLOAD_VERSION_MK) | $(CO
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(COMMONDIR)/memfuncs.o: $(CLIENTDIR)/gamecube/memfuncs.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(COMMONDIR)/libc_generic.o: $(CLIENTDIR)/common/core/libc_generic.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(COMMONDIR)/ios_net.o: ios_net.c ios_net.h $(KOSLOAD_VERSION_MK) $(COMMON_CONFIG_STAMP) | $(COMMONDIR)

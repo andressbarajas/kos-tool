@@ -130,6 +130,7 @@ COMMON_OBJS := \
     $(COMMONDIR)/syscon.o \
     $(COMMONDIR)/power.o \
     $(COMMONDIR)/memfuncs.o \
+    $(COMMONDIR)/libc_generic.o \
     $(COMMONDIR)/module_info.o \
     $(COMMONDIR)/exception.o \
     $(COMMONDIR)/exception_entry.o \
@@ -159,6 +160,8 @@ $(COMMONDIR)/syscon.o: syscon.c syscon.h $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 $(COMMONDIR)/power.o: power.c power.h syscon.h video.h $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 $(COMMONDIR)/memfuncs.o: memfuncs.c | $(COMMONDIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+$(COMMONDIR)/libc_generic.o: $(CLIENTDIR)/common/core/libc_generic.c | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 $(COMMONDIR)/module_info.o: module_info.c | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@

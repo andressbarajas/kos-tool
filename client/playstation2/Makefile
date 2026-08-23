@@ -154,7 +154,8 @@ COMMON_C_OBJS := \
     $(COMMONDIR)/sif_broker.o \
     $(COMMONDIR)/video.o \
     $(COMMONDIR)/cache.o \
-    $(COMMONDIR)/memfuncs.o
+    $(COMMONDIR)/memfuncs.o \
+    $(COMMONDIR)/libc_generic.o
 
 COMMON_S_OBJS := \
     $(COMMONDIR)/crt0.o \
@@ -189,6 +190,9 @@ $(COMMONDIR)/cache.o: cache.c cache.h ee_cop0.h $(KOSLOAD_VERSION_MK) | $(COMMON
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(COMMONDIR)/memfuncs.o: memfuncs.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(COMMONDIR)/libc_generic.o: $(CLIENTDIR)/common/core/libc_generic.c $(KOSLOAD_VERSION_MK) | $(COMMONDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Common ASM object rules
