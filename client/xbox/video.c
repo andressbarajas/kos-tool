@@ -26,6 +26,7 @@
 #define NV2A_R8(off)         (*(volatile uint8_t  *)(NV2A_BASE + (off)))
 
 #define NV_PCRTC_START       0x600800u   /* scanout base (physical) */
+#define NV_PFB_CSTATUS       0x10020Cu   /* PFB: installed main RAM, in bytes */
 
 /* NV2A PFIFO — the GPU command pushbuffer engine.  Halting it is part of the
  * kernel takeover: crt0's cli stops the kernel's CPU-side threads, but the NV2A
@@ -45,7 +46,6 @@
  * silently has no effect. */
 #define NV_VGA_SEQ_IDX       0x0C03C4u   /* VGA sequencer index (PRMVIO) */
 #define NV_VGA_SEQ_DAT       0x0C03C5u   /* VGA sequencer data  (PRMVIO) */
-#define XBOX_RAM_PHYS_MASK   0x03FFFFFFu /* 64 MB */
 #define XBOX_FB_PHYS         0x03C00000u /* fallback framebuffer if PCRTC reads 0 */
 
 /* MCPX SMBus (x86 port I/O).  Only the SMC below is driven over it: the video
@@ -74,6 +74,16 @@ static volatile uint32_t *fb;      /* framebuffer, XRGB8888  */
 static uint32_t fb_phys;           /* physical scanout base  */
 static uint32_t fb_stride = XBOX_SCREEN_WIDTH;  /* pixels per scanline (=pitch/4); read from the mode in xbox_video_init() */
 static uint32_t fb_height = XBOX_SCREEN_HEIGHT;  /* visible scanlines; read from the mode (480 NTSC / 576 PAL) */
+
+/* Installed main RAM, read straight from the memory controller.  Only 64 MB
+ * and 128 MB exist; anything else is a misread, so fall back to retail. */
+uint32_t xbox_ram_size(void) {
+    uint32_t bytes = NV2A_R32(NV_PFB_CSTATUS);
+
+    if(bytes != XBOX_RAM_64MB && bytes != XBOX_RAM_128MB)
+        bytes = XBOX_RAM_64MB;
+    return bytes;
+}
 
 static inline uint16_t inw(uint16_t port) {
     uint16_t v;
@@ -211,7 +221,9 @@ void xbox_video_init(void) {
     NV2A_R32(NV_PFIFO_CACHE1_PULL0)    = 0;
     NV2A_R32(NV_PFIFO_CACHES)          = 0;
 
-    fb_phys = NV2A_R32(NV_PCRTC_START) & XBOX_RAM_PHYS_MASK;
+    /* Mask by the RAM this board actually has — a fixed 64 MB mask would fold a
+     * 128 MB board's scanout address back down into the low half. */
+    fb_phys = NV2A_R32(NV_PCRTC_START) & (xbox_ram_size() - 1);
     if(fb_phys == 0)
         fb_phys = XBOX_FB_PHYS;
     NV2A_R32(NV_PCRTC_START) = fb_phys;                     /* pin scanout       */

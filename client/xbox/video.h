@@ -25,6 +25,13 @@
 #define XBOX_CHAR_WIDTH     12
 #define XBOX_CHAR_HEIGHT    24
 
+/* The only two RAM configurations that exist: retail, and debug kits / Chihiro
+ * / RAM-modded retail.  NV_PFB_CSTATUS says which this board is. */
+#define XBOX_RAM_64MB    0x04000000
+#define XBOX_RAM_128MB   0x08000000
+
+uint32_t xbox_ram_size(void);   /* installed main RAM, bytes (NV_PFB_CSTATUS) */
+
 /* Front-panel LED boot breadcrumb (SMBus SMC; independent of NV2A video).
  * Pattern nibbles: high = red phases, low = green phases. */
 #define XBOX_LED_OFF     0x00u

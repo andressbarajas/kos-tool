@@ -137,7 +137,7 @@ SECTIONS
   .guest_arena @XBOX_DEFAULT_LOAD_ADDR@ (NOLOAD) :
   {
     __guest_arena_start__ = .;
-    . += 0x02000000;
+    . += @XBOX_GUEST_ARENA_SIZE@;
     __guest_arena_end__ = .;
   } :arena
 
@@ -176,6 +176,6 @@ SECTIONS
          "private startup stack must be exactly 8 KiB")
   ASSERT(__guest_arena_start__ == @XBOX_DEFAULT_LOAD_ADDR@,
          "guest arena does not begin at XBOX_DEFAULT_LOAD_ADDR")
-  ASSERT(__guest_arena_end__ - __guest_arena_start__ == 0x02000000,
-         "guest arena must be exactly 32 MiB")
+  ASSERT(__guest_arena_end__ - __guest_arena_start__ == @XBOX_GUEST_ARENA_SIZE@,
+         "guest arena must match XBOX_GUEST_ARENA_SIZE")
 }

@@ -927,7 +927,7 @@ static const uint8_t i386_xbox_trampoline[256] = {
     0x89, 0xc3,                         /* mov ebx, eax (save CR0) */
     0x25, 0xff, 0xff, 0xfe, 0xff,       /* and eax, ~CR0.WP */
     0x0f, 0x22, 0xc0,                   /* mov cr0, eax */
-    0xbc, LE32_BYTES(XBOX_DEFAULT_LOAD_ADDR + 0x02000000), /* mov esp, guest arena top */
+    0xbc, LE32_BYTES(XBOX_DEFAULT_LOAD_ADDR + XBOX_GUEST_ARENA_SIZE), /* mov esp, guest arena top */
     0xbe, LE32_BYTES(XBOX_DEFAULT_LOAD_ADDR + 0x100),      /* mov esi, firmware source */
     0xbf, LE32_BYTES(XBOX_KOSLOAD_BASE),            /* mov edi, loader base */
     0xb9, 0x00, 0x00, 0x00, 0x00,       /* mov ecx, SIZE (patched) */

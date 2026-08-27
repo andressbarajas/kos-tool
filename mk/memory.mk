@@ -87,7 +87,7 @@ PS2_LOADER_SIZE    := 0xFFD80     # 1 MB minus the 0x280 vector area
 # Virtual layout:
 #   VA 0x00010000..0x00010FFF  generated XBE headers (launch-time only)
 #   VA 0x00011000..0x0003BFFF  loader identity window (maximum)
-#   VA 0x0003C000..0x0203BFFF  mapped 32 MiB guest arena
+#   VA 0x0003C000..0x0203BFFF  mapped guest arena (XBOX_GUEST_ARENA_SIZE)
 #
 # After takeover, only the loader window above has the same physical addresses.
 # The guest arena remains kernel-paged and can be backed by scattered physical
@@ -104,6 +104,7 @@ XBOX_LOADER_SIZE       := 0x0002C000  # max XBE header + loader window, ending a
 XBOX_HEADER_RESERVE    := 0x1000      # XBE header page (must match elf2xbe HEADER_RESERVE)
 XBOX_KOSLOAD_BASE      := 0x00011000  # = XBOX_LOADER_BASE + XBOX_HEADER_RESERVE
 XBOX_DEFAULT_LOAD_ADDR := 0x0003C000  # first guest VA, immediately after loader window
+XBOX_GUEST_ARENA_SIZE  := 0x02000000  # 32 MiB guest arena reserved by the linker
 
 # Sony PSP (Allegrex / MIPS32-ish, single-float).  The PSP main RAM window is
 # 0x08000000..0x09FFFFFF (32 MB on PSP-1000).  VRAM is the separate 2 MB block

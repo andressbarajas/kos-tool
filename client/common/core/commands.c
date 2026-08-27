@@ -72,7 +72,8 @@ static bool payload1024 = false;
 /*
  * Binary load tracking map (bitfield).
  * Each bit tracks whether a packet-sized chunk has been received.
- * MAX_RAM_BYTES is defined per platform via CMake (e.g. 32MB for DC, 24MB for GC).
+ * MAX_RAM_BYTES is defined per platform in MEMORY_DEFS/IP_DEFS in the per-console
+ * Makefile (e.g. 32MB for DC, 24MB for GC, 64MB for Xbox).
  * Map entries = ceil(MAX_RAM_BYTES / 1440), stored as 1 bit per entry.
  */
 #ifndef MAX_RAM_BYTES

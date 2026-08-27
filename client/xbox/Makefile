@@ -54,7 +54,8 @@ INCLUDES := -I$(ROOT)/include -I$(CLIENTDIR)/include -I$(CURDIR) -I$(CURDIR)/net
 MEMORY_DEFS := -DXBOX_LOADER_BASE=$(XBOX_LOADER_BASE) \
                -DXBOX_RAM_TOP=$(XBOX_RAM_TOP) \
                -DXBOX_KOSLOAD_BASE=$(XBOX_KOSLOAD_BASE) \
-               -DXBOX_DEFAULT_LOAD_ADDR=$(XBOX_DEFAULT_LOAD_ADDR)
+               -DXBOX_DEFAULT_LOAD_ADDR=$(XBOX_DEFAULT_LOAD_ADDR) \
+               -DXBOX_GUEST_ARENA_SIZE=$(XBOX_GUEST_ARENA_SIZE)
 
 IP_DEFS := -DLOADER_NAME=\"xbox-load-ip\" -DMAX_RAM_BYTES=67108864
 # Optional static IP (matches DC/GC/PS2): make xbox STATICIP=192.168.1.50
@@ -91,6 +92,7 @@ $(IP_LD): kosload-ip.ld.in $(ROOT)/mk/memory.mk | $(IPDIR)
 	     -e 's/@XBOX_KOSLOAD_BASE@/$(XBOX_KOSLOAD_BASE)/g' \
 	     -e 's/@XBOX_LOADER_SIZE@/$(XBOX_LOADER_SIZE)/g' \
 	     -e 's/@XBOX_DEFAULT_LOAD_ADDR@/$(XBOX_DEFAULT_LOAD_ADDR)/g' \
+	     -e 's/@XBOX_GUEST_ARENA_SIZE@/$(XBOX_GUEST_ARENA_SIZE)/g' \
 	     $< > $@
 	@echo "  GEN     $@"
 
