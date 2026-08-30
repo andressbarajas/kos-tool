@@ -73,7 +73,7 @@ static bool payload1024 = false;
  * Binary load tracking map (bitfield).
  * Each bit tracks whether a packet-sized chunk has been received.
  * MAX_RAM_BYTES is defined per platform in MEMORY_DEFS/IP_DEFS in the per-console
- * Makefile (e.g. 32MB for DC, 24MB for GC, 64MB for Xbox).
+ * Makefile (16MB for DC, 24MB for GC, 32MB for PS2/Xbox, 64MB for Wii).
  * Map entries = ceil(MAX_RAM_BYTES / 1440), stored as 1 bit per entry.
  */
 #ifndef MAX_RAM_BYTES
@@ -228,6 +228,9 @@ void cmd_loadbin(ip_header_t *ip, udp_header_t *udp, command_t *command) {
     } else {
         const target_ops_t *t = target_get_ops();
         uint32_t max_size = t->detect_ram_size();
+
+        if(max_size > MAX_RAM_BYTES)
+            max_size = MAX_RAM_BYTES;
         if(bin_info.load_size > max_size) {
             write(1, "ERROR: Size exceeds RAM\r\n", 25);
             progexit(-1);

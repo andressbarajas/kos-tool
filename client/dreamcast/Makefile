@@ -232,7 +232,7 @@ $(SERIAL_BIN): $(SERIAL_ELF)
 # IP build (dc-load-ip)
 # ============================================================
 
-IP_DEFS := -DLOADER_NAME=\"dc-load-ip\" -DMAX_RAM_BYTES=33554432
+IP_DEFS := -DLOADER_NAME=\"dc-load-ip\" -DMAX_RAM_BYTES=16777216
 ifdef STATICIP
 IP_DEFS += -DKOSLOAD_IP=\"$(STATICIP)\"
 endif

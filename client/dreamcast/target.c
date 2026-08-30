@@ -359,22 +359,21 @@ static void dc_draw_bitmap(int x, int y, int w, int h, const uint32_t *bits, uin
 }
 
 /*
- * Detect installed RAM size via mirror test (same technique as KOS).
+ * Report the retail 16 MB, unconditionally.
  *
- * Write different values to the top of the 16MB and 32MB ranges
- * using P2 (uncached) addresses, then read back. If they match,
- * the upper 16MB mirrors the lower 16MB (standard 16MB console).
- * If different, the upper 16MB is real RAM (32MB mod).
+ * To add 32 MB-mod support, raise MAX_RAM_BYTES in client/dreamcast/
+ * Makefile to 33554432 first (costs ~1.4 KB of BSS), then uncomment the
+ * mirror test here.
  */
 static uint32_t dc_detect_ram_size(void) {
-    volatile unsigned char *addr_16m = (volatile unsigned char *)0xACFFFFFF;
-    volatile unsigned char *addr_32m = (volatile unsigned char *)0xADFFFFFF;
+    // volatile unsigned char *addr_16m = (volatile unsigned char *)0xACFFFFFF;
+    // volatile unsigned char *addr_32m = (volatile unsigned char *)0xADFFFFFF;
 
-    *addr_16m = 0xBA;
-    *addr_32m = 0xAB;
+    // *addr_16m = 0xBA;
+    // *addr_32m = 0xAB;
 
-    if(*addr_16m != *addr_32m)
-        return 32 * 1024 * 1024;
+    // if(*addr_16m != *addr_32m)
+    //     return 32 * 1024 * 1024;
 
     return 16 * 1024 * 1024;
 }
