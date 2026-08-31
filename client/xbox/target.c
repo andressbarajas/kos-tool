@@ -30,6 +30,23 @@ extern int  xbox_clean_get_rtc(uint32_t *unix_timestamp);
 static bool console_enabled = true;
 static uint64_t monotonic_epoch_ticks;
 
+/* Divide a 64-bit value by a 32-bit one.  x86 does this in a single divl, but
+ * divl faults (#DE) when the quotient will not fit in 32 bits, and there is no
+ * OS here to catch that -- so check first.  Letting the compiler do the divide
+ * instead pulls in __udivdi3, 303 bytes. */
+static uint32_t div64_32(uint64_t n, uint32_t d) {
+    uint32_t q, r;
+
+    if((uint32_t)(n >> 32) >= d)
+        return 0xFFFFFFFF;
+
+    __asm__("divl %4"
+            : "=a"(q), "=d"(r)
+            : "0"((uint32_t)n), "1"((uint32_t)(n >> 32)), "rm"(d));
+    (void)r;
+    return q;
+}
+
 static uint64_t read_tsc(void) {
     uint32_t lo, hi;
     __asm__ volatile("rdtsc" : "=a"(lo), "=d"(hi));
@@ -315,7 +332,7 @@ static uint32_t xbox_get_rtc(void) {
     /* Unreadable: fall back to seconds since loader start.  Every consumer
      * differences get_rtc (DHCP lease expiry), so a monotonic counter still
      * works — it just isn't wall-clock.  RDTSC runs across guest execution. */
-    return (uint32_t)((read_tsc() - monotonic_epoch_ticks) / XBOX_CPU_HZ);
+    return div64_32(read_tsc() - monotonic_epoch_ticks, XBOX_CPU_HZ);
 }
 
 static uint64_t xbox_get_ticks(void) {

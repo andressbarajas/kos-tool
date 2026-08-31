@@ -22,6 +22,7 @@
 #include <kosload/dhcp.h>
 #include <kosload/target.h>
 #include <kosload/screensaver.h>
+#include <kosload/divutil.h>
 
 /* ===== SPI backend (set by platform) ===== */
 
@@ -271,7 +272,7 @@ int w5500_ethernet_link_up(void)
 
 static uint64_t w5500_ms_to_ticks(const target_ops_t *t, unsigned int ms)
 {
-    return ((uint64_t)t->ticks_per_second * ms) / 1000;
+    return ms_to_ticks(t->ticks_per_second, ms);
 }
 
 static void w5500_reset_link_state(void)

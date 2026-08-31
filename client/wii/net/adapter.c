@@ -15,6 +15,7 @@
 #include <kosload/net_stack.h>
 #include <kosload/screensaver.h>
 #include <kosload/target.h>
+#include <kosload/divutil.h>
 #include "adapter.h"
 #include "kosload.h"
 #include "packet.h"
@@ -139,7 +140,7 @@ static void wii_adapter_stop(void) {
 }
 
 static uint64_t wii_ms_to_ticks(const target_ops_t *t, unsigned int ms) {
-    return ((uint64_t)t->ticks_per_second * ms) / 1000;
+    return ms_to_ticks(t->ticks_per_second, ms);
 }
 
 static void wii_poll_link_change(void) {

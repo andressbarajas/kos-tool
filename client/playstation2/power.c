@@ -18,6 +18,7 @@
 
 #include <kosload/display.h>
 #include <kosload/target.h>
+#include <kosload/divutil.h>
 
 #include "iop_smap.h"
 #include "net/kosload.h"
@@ -51,9 +52,8 @@ static bool     timers_started;
 static bool     armed;         /* seen ARM_SAMPLES quiet polls */
 static unsigned quiet_polls;
 
-/* Divide the 32-bit rate first so this needs no 64-bit divide. */
 static uint64_t ps2_power_ms_to_ticks(const target_ops_t *t, uint32_t ms) {
-    return (uint64_t)((t->ticks_per_second / 1000u) * ms);
+    return ms_to_ticks(t->ticks_per_second, ms);
 }
 
 void ps2_power_note_activity(void) {

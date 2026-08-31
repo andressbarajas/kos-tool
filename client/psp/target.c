@@ -172,10 +172,24 @@ static void psp_set_rtc(uint32_t unix_timestamp) {
 }
 
 static uint32_t psp_get_rtc(void) {
+    uint64_t now;
+
     if(rtc_epoch == 0)
         return 0; /* never set — report "unknown" rather than 1970 plus uptime */
 
-    return rtc_epoch + (uint32_t)((psp_get_ticks() - rtc_epoch_ticks) / PSP_TICKS_PER_SEC);
+    now = psp_get_ticks();
+
+    /* A lost Count wrap can rewind the clock; re-anchor, don't spin. */
+    if(now < rtc_epoch_ticks)
+        rtc_epoch_ticks = now;
+
+    /* Step the anchor a second at a time; avoids __udivdi3. */
+    while(now - rtc_epoch_ticks >= PSP_TICKS_PER_SEC) {
+        rtc_epoch_ticks += PSP_TICKS_PER_SEC;
+        rtc_epoch++;
+    }
+
+    return rtc_epoch;
 }
 
 static void psp_restart_timer(void) {

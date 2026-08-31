@@ -18,6 +18,7 @@
 #include <kosload/net_stack.h>
 #include <kosload/target.h>
 #include <kosload/commands.h>
+#include <kosload/divutil.h>
 #include "packet.h"
 
 /* ===== Syscall shared state ===== */
@@ -232,7 +233,7 @@ static void kos_syscall_wait_for_retval(void) {
         return;
     }
 
-    timeout_ticks = ((uint64_t)t->ticks_per_second * KOS_SYSCALL_RETRY_MS) / 1000;
+    timeout_ticks = ms_to_ticks(t->ticks_per_second, KOS_SYSCALL_RETRY_MS);
     if(timeout_ticks == 0)
         timeout_ticks = 1;
     kos_syscall_timeout_ticks = timeout_ticks;
