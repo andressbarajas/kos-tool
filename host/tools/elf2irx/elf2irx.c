@@ -1,28 +1,31 @@
-/* elf2irx — convert a relocatable MIPS ELF (output of `ld -r`) into a
- * PS2 IRX module that the IOP-side LoadModuleBuffer can load.
+/*
+ * Application: elf2irx
  *
- * Independent reimplementation based on reverse-engineering of the
- * BIOS LOADCORE/MODLOAD.
+ * Why we need it:
+ * The PlayStation 2 has a smaller helper processor called the IOP. Programs
+ * for the IOP are loaded as IRX modules, not as the ordinary ELF files made by
+ * the linker. This tool performs that final conversion.
  *
- * Usage: elf2irx input.elf output.irx
+ * What it does:
+ * elf2irx reads a 32-bit, little-endian MIPS ELF that can still be moved in
+ * memory. It keeps the program's code and data, builds the IRX module
+ * information, and prepares the address-fixup records used when the PS2 loads
+ * the module. If the input has no `.iopmod` module-information block, the tool
+ * creates one from information already stored in the ELF.
  *
- * Accepted input: ELF32, little-endian, MIPS, ET_REL (relocatable from
- * `ld -r`). If no `.iopmod` section is present, it is synthesized from
- * `_irx_id`, the ELF entry point, and `.reginfo`.
+ * Output file structure:
+ *   - ELF header identifying the file as an IRX module
+ *   - module-information and load-description headers
+ *   - `.iopmod` module name, entry point, and memory-size information
+ *   - program code and initialized data
+ *   - section descriptions and names
+ *   - address-fixup records needed when the module is loaded
  *
- * Output: IRX file (ELF32 with e_type = 0xFF80) containing:
- *   - ELF header
- *   - 2 program headers (iopmod info, load segment)
- *   - Allocated data (text, rodata, sdata, data)
- *   - .iopmod section
- *   - Section headers (only for kept sections)
- *   - Relocation tables (only types 1, 2, 3, 4, 5, 6 — others rejected)
- *   - Section header string table
+ * Uninitialized data does not take up space in the file; the IRX records how
+ * much zero-filled memory the loader must reserve for it.
  *
- * The MIPS R3000 / IOP loader applies relocation types 1..6 in the
- * LOADCORE type-4 path. GPREL16 (7) is resolved statically here because
- * the BIOS relocation loop ignores relocation types >= 7.
- *
+ * Usage:
+ *   elf2irx [-v] -o output.irx input.elf
  */
 
 #include <stdio.h>
@@ -31,6 +34,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <limits.h>
 
 #define ET_REL              1
 #define ET_EXEC             2
@@ -226,7 +230,15 @@ static uint32_t g_padlo_name_off = 0; /* offset of PADLO_NAME in shstrtab */
 static int      g_padlo_index = 0;    /* output section index */
 
 /* Diag helper. */
-static void die(const char *fmt, ...) {
+#if defined(_MSC_VER)
+#define ELF2IRX_NORETURN __declspec(noreturn)
+#elif defined(__GNUC__) || defined(__clang__)
+#define ELF2IRX_NORETURN __attribute__((noreturn))
+#else
+#define ELF2IRX_NORETURN
+#endif
+
+static ELF2IRX_NORETURN void die(const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
     fprintf(stderr, "elf2irx: ");
@@ -236,16 +248,64 @@ static void die(const char *fmt, ...) {
     exit(1);
 }
 
+/* Checked arithmetic and range helpers.  ELF32 offsets and the IRX output
+ * layout are 32-bit values, while the host input buffer is addressed with
+ * size_t.  Keep the two domains explicit so a malformed input cannot wrap an
+ * offset back into either buffer. */
+static uint32_t checked_add_u32(uint32_t a, uint32_t b, const char *what) {
+    if(a > UINT32_MAX - b)
+        die("%s overflows ELF32 address space", what);
+    return a + b;
+}
+
+static uint32_t checked_mul_u32(uint32_t a, uint32_t b, const char *what) {
+    if(a != 0 && b > UINT32_MAX / a)
+        die("%s overflows ELF32 address space", what);
+    return a * b;
+}
+
+static int is_power_of_two_u32(uint32_t value) {
+    return value != 0 && (value & (value - 1)) == 0;
+}
+
+static uint32_t checked_align_u32(uint32_t value, uint32_t alignment, const char *what) {
+    if(!is_power_of_two_u32(alignment))
+        die("%s has invalid alignment %u", what, alignment);
+    return checked_add_u32(value, alignment - 1, what) & ~(alignment - 1);
+}
+
+static void require_input_range(uint64_t offset, uint64_t size, const char *what) {
+    if(offset > g_in_size || size > (uint64_t)g_in_size - offset)
+        die("%s lies outside the input file", what);
+}
+
+static size_t input_string_length(uint32_t table_offset, uint32_t table_size,
+                                  uint32_t string_offset, const char *what) {
+    if(string_offset >= table_size)
+        die("%s has an invalid string-table offset", what);
+
+    const char *text = (const char *)g_in + table_offset + string_offset;
+    size_t available = (size_t)(table_size - string_offset);
+    size_t length = bounded_strlen(text, available);
+    if(length == available)
+        die("%s is not NUL-terminated inside its string table", what);
+    return length;
+}
+
 /* Load the input file into a buffer. */
 static void load_input(void) {
     FILE *f = fopen(g_in_name, "rb");
     if(!f)
         die("cannot open input %s", g_in_name);
-    fseek(f, 0, SEEK_END);
+    if(fseek(f, 0, SEEK_END) != 0)
+        die("cannot seek input %s", g_in_name);
     long sz = ftell(f);
     if(sz < 52)
         die("input too small to be ELF (%ld bytes)", sz);
-    fseek(f, 0, SEEK_SET);
+    if((uint64_t)sz > UINT32_MAX)
+        die("input is too large for ELF32 (%ld bytes)", sz);
+    if(fseek(f, 0, SEEK_SET) != 0)
+        die("cannot rewind input %s", g_in_name);
     g_in = (uint8_t *)malloc((size_t)sz);
     if(!g_in)
         die("oom %ld bytes", sz);
@@ -263,6 +323,8 @@ static void parse_elf_header(void) {
         die("not ELFCLASS32");
     if(g_in[5] != 1)
         die("not little-endian");
+    if(g_in[6] != 1)
+        die("unsupported ELF identification version %u", g_in[6]);
     g_e_type = rd16(g_in + 16);
     g_e_machine = rd16(g_in + 18);
     g_e_entry = rd32(g_in + 24);
@@ -282,10 +344,14 @@ static void parse_elf_header(void) {
             g_e_type);
     if(g_e_shentsize != 40)
         die("section header size %u != 40", g_e_shentsize);
+    if(g_e_ehsize != 52)
+        die("ELF header size %u != 52", g_e_ehsize);
     if(g_e_shnum == 0)
         die("no sections");
     if(g_e_shstrndx >= g_e_shnum)
         die("invalid shstrndx %u (only %u sections)", g_e_shstrndx, g_e_shnum);
+    require_input_range(g_e_shoff, (uint64_t)g_e_shnum * g_e_shentsize,
+                        "section header table");
 }
 
 /* Parse the section header table into g_sections[]. */
@@ -307,16 +373,27 @@ static void parse_section_headers(void) {
         s->sh_info = rd32(sh + 28);
         s->sh_addralign = rd32(sh + 32);
         s->sh_entsize = rd32(sh + 36);
+
+        if(s->sh_addralign != 0 && !is_power_of_two_u32(s->sh_addralign))
+            die("section %d has invalid alignment %u", i, s->sh_addralign);
+        if(s->sh_type != SHT_NOBITS)
+            require_input_range(s->sh_offset, s->sh_size, "section data");
     }
 
     /* Resolve section names from the shstrtab. */
     const struct Section *shstr = &g_sections[g_e_shstrndx];
+    if(shstr->sh_type != SHT_STRTAB)
+        die("section-name table is not SHT_STRTAB");
     for(int i = 0; i < g_e_shnum; i++) {
         struct Section *s = &g_sections[i];
-        if(s->sh_name >= shstr->sh_size)
-            continue;
+        char description[48];
+        snprintf(description, sizeof(description), "section %d name", i);
+        size_t n = input_string_length(shstr->sh_offset, shstr->sh_size,
+                                       s->sh_name, description);
+        if(n >= sizeof(s->name))
+            die("section %d name is too long (%zu bytes, maximum %zu)", i, n,
+                sizeof(s->name) - 1);
         const char *nm = (const char *)(g_in + shstr->sh_offset + s->sh_name);
-        size_t n = bounded_strlen(nm, sizeof(s->name) - 1);
         memcpy(s->name, nm, n);
         s->name[n] = 0;
     }
@@ -326,10 +403,17 @@ static void parse_section_headers(void) {
         struct Section *s = &g_sections[i];
         if(strcmp(s->name, ".iopmod") == 0)
             g_iopmod_idx = i;
-        if(s->sh_type == SHT_SYMTAB)
+        if(s->sh_type == SHT_SYMTAB) {
+            if(g_symtab_idx >= 0)
+                die("multiple SHT_SYMTAB sections are not supported");
             g_symtab_idx = i;
+        }
     }
+    if(g_iopmod_idx >= 0 && g_sections[g_iopmod_idx].sh_type == SHT_NOBITS)
+        die(".iopmod cannot be SHT_NOBITS");
     if(g_iopmod_idx < 0) {
+        if(g_e_shnum == UINT16_MAX)
+            die("cannot synthesize .iopmod: section table is full");
         struct Section *grown = realloc(g_sections, (g_e_shnum + 1) * sizeof(*g_sections));
         if(!grown)
             die("oom");
@@ -355,10 +439,14 @@ static void parse_symbols(void) {
     if(symtab->sh_link >= g_e_shnum)
         die("invalid .symtab sh_link");
     struct Section *strtab = &g_sections[symtab->sh_link];
+    if(strtab->sh_type != SHT_STRTAB)
+        die(".symtab does not link to a string table");
     g_symbol_count = symtab->sh_size / 16;
-    g_symbols = calloc(g_symbol_count, sizeof(*g_symbols));
-    if(!g_symbols)
-        die("oom symbols");
+    if(g_symbol_count != 0) {
+        g_symbols = calloc(g_symbol_count, sizeof(*g_symbols));
+        if(!g_symbols)
+            die("oom symbols");
+    }
 
     for(uint32_t i = 0; i < g_symbol_count; i++) {
         const uint8_t *p = g_in + symtab->sh_offset + i * 16;
@@ -369,12 +457,16 @@ static void parse_symbols(void) {
         sym->st_info = p[12];
         sym->st_other = p[13];
         sym->st_shndx = rd16(p + 14);
-        if(sym->st_name < strtab->sh_size) {
-            const char *nm = (const char *)(g_in + strtab->sh_offset + sym->st_name);
-            size_t n = bounded_strlen(nm, sizeof(sym->name) - 1);
-            memcpy(sym->name, nm, n);
-            sym->name[n] = 0;
-        }
+        char description[48];
+        snprintf(description, sizeof(description), "symbol %u name", i);
+        size_t full_length = input_string_length(strtab->sh_offset, strtab->sh_size,
+                                                 sym->st_name, description);
+        size_t copy_length = full_length < sizeof(sym->name) - 1
+                                 ? full_length
+                                 : sizeof(sym->name) - 1;
+        const char *nm = (const char *)(g_in + strtab->sh_offset + sym->st_name);
+        memcpy(sym->name, nm, copy_length);
+        sym->name[copy_length] = 0;
     }
 }
 
@@ -390,7 +482,18 @@ static uint32_t symbol_out_addr(const struct Symbol *sym) {
     if(!sym || sym->st_shndx >= g_e_shnum)
         die("cannot translate symbol");
     const struct Section *s = &g_sections[sym->st_shndx];
-    return s->out_addr + sym->st_value;
+    /* GNU ld -r can express a linker-defined symbol just before the start of
+     * its associated section as a negative, section-relative st_value.  The
+     * generated PS2 IOP images use this for __bss_start.  Preserve that ELF32
+     * convention, but reject an actual underflow instead of relying on modulo
+     * arithmetic. */
+    if(sym->st_value > INT32_MAX) {
+        uint32_t magnitude = (uint32_t)(-(int64_t)(int32_t)sym->st_value);
+        if(s->out_addr < magnitude)
+            die("symbol %s lies below the output image", sym->name);
+        return s->out_addr - magnitude;
+    }
+    return checked_add_u32(s->out_addr, sym->st_value, "symbol output address");
 }
 
 static int translate_input_addr(uint32_t in_addr, uint32_t *out_addr) {
@@ -399,14 +502,15 @@ static int translate_input_addr(uint32_t in_addr, uint32_t *out_addr) {
         const struct Section *s = &g_sections[i];
         if(!(s->sh_flags & SHF_ALLOC))
             continue;
-        if(s->sh_addr > in_addr)
+        if(s->sh_addr > in_addr || (uint64_t)in_addr >= (uint64_t)s->sh_addr + s->sh_size)
             continue;
         if(!best || s->sh_addr > best->sh_addr)
             best = s;
     }
     if(!best)
         return 0;
-    *out_addr = best->out_addr + (in_addr - best->sh_addr);
+    *out_addr = checked_add_u32(best->out_addr, in_addr - best->sh_addr,
+                                "translated input address");
     return 1;
 }
 
@@ -423,6 +527,9 @@ static void mark_sections_to_keep(void) {
             continue;
         }
         if(s->sh_flags & SHF_ALLOC) {
+            if(s->sh_type != SHT_PROGBITS && s->sh_type != SHT_NOBITS)
+                die("allocated section %s has unsupported type 0x%x", s->name,
+                    s->sh_type);
             s->keep = 1;
             continue;
         }
@@ -493,10 +600,21 @@ static void validate_relocations(void) {
         struct Section *s = &g_sections[i];
         if(!s->keep || s->sh_type != SHT_REL)
             continue;
-        if(s->sh_size % 8 != 0)
+        if(s->sh_entsize != 8 || s->sh_size % 8 != 0)
             die(".rel section %s has invalid size %u", s->name, s->sh_size);
+        if(s->sh_info >= g_e_shnum)
+            die(".rel section %s has invalid target section %u", s->name, s->sh_info);
+        if(!(g_sections[s->sh_info].sh_flags & SHF_ALLOC))
+            die(".rel section %s targets a non-allocated section", s->name);
+        if(s->sh_link >= g_e_shnum || g_sections[s->sh_link].sh_type != SHT_SYMTAB)
+            die(".rel section %s does not link to a symbol table", s->name);
+        if((int)s->sh_link != g_symtab_idx)
+            die(".rel section %s links to an unsupported symbol table", s->name);
+
+        const struct Section *target = &g_sections[s->sh_info];
         size_t n = s->sh_size / 8;
         for(size_t k = 0; k < n; k++) {
+            uint32_t offset = rd32(g_in + s->sh_offset + k * 8);
             uint32_t info = rd32(g_in + s->sh_offset + k * 8 + 4);
             uint32_t type = ELF32_R_TYPE(info);
             switch(type) {
@@ -512,6 +630,19 @@ static void validate_relocations(void) {
             default:
                 die("unsupported relocation type %u in %s entry %zu", type, s->name, k);
             }
+
+            if(type == R_MIPS_NONE)
+                continue;
+            if(offset > target->sh_size || target->sh_size - offset < 4)
+                die("relocation %zu in %s patches outside section %s", k, s->name,
+                    target->name);
+            uint32_t symbol = ELF32_R_SYM(info);
+            if(symbol >= g_symbol_count)
+                die("relocation %zu in %s references invalid symbol %u", k,
+                    s->name, symbol);
+            if(g_symbols[symbol].st_shndx >= g_e_shnum)
+                die("relocation %zu in %s references non-section symbol %s", k,
+                    s->name, g_symbols[symbol].name);
         }
     }
 }
@@ -537,7 +668,8 @@ static uint32_t section_extra_lo_count(int rel_sec_idx) {
 }
 
 static uint32_t scratch_reloc_word_count(void) {
-    return g_stray_count + g_extra_lo_count;
+    return checked_add_u32(g_stray_count, g_extra_lo_count,
+                           "scratch relocation count");
 }
 
 static uint32_t output_relocation_size(const struct Section *s) {
@@ -552,7 +684,11 @@ static uint32_t output_relocation_size(const struct Section *s) {
     }
     /* Find the section's index in g_sections[] (pointer arithmetic). */
     int rel_sec_idx = (int)(s - g_sections);
-    return (kept + section_stray_count(rel_sec_idx) + section_extra_lo_count(rel_sec_idx)) * 8;
+    uint32_t count = checked_add_u32(kept, section_stray_count(rel_sec_idx),
+                                     "output relocation count");
+    count = checked_add_u32(count, section_extra_lo_count(rel_sec_idx),
+                            "output relocation count");
+    return checked_mul_u32(count, 8, "output relocation size");
 }
 
 /* Walk every kept SHT_REL section and identify stray HI16 entries
@@ -568,6 +704,8 @@ static void detect_stray_hi16(void) {
             continue;
         const uint8_t *src = g_in + s->sh_offset;
         uint32_t       n = s->sh_size / 8;
+        if(n == 0)
+            continue;
 
         /* For each LO16 entry, track the first HI16 that ABI-pairs
          * with it. A second HI16 finding the same LO16 is stray. */
@@ -636,6 +774,8 @@ static void detect_extra_lo16(void) {
             continue;
         const uint8_t *src = g_in + s->sh_offset;
         uint32_t n = s->sh_size / 8;
+        if(n == 0)
+            continue;
 
         uint8_t *hi_has_lo = calloc(n, 1);
         if(!hi_has_lo)
@@ -709,11 +849,14 @@ static void compute_layout(void) {
         if(s->sh_flags & SHF_ALLOC) {
             uint32_t align = s->sh_addralign ? s->sh_addralign : 1;
             if(align > 1)
-                alloc_cursor = (alloc_cursor + align - 1) & ~(align - 1);
+                alloc_cursor = checked_align_u32(alloc_cursor, align,
+                                                 "allocated section layout");
             s->out_addr = alloc_cursor;
             if(s->sh_type != SHT_NOBITS)
-                file_top = alloc_cursor + s->sh_size;
-            alloc_cursor += s->sh_size;
+                file_top = checked_add_u32(alloc_cursor, s->sh_size,
+                                           "file-backed section layout");
+            alloc_cursor = checked_add_u32(alloc_cursor, s->sh_size,
+                                           "allocated section layout");
             mem_top = alloc_cursor;
         }
     }
@@ -723,9 +866,11 @@ static void compute_layout(void) {
      * file-backed bytes for it (each scratch word is pre-initialized
      * with the low addend), so it must come before any NOBITS. */
     if(scratch_reloc_word_count() > 0) {
-        g_padlo_size = scratch_reloc_word_count() * 4;
-        g_padlo_addr = (file_top + 3) & ~3;
-        uint32_t padlo_end = g_padlo_addr + g_padlo_size;
+        g_padlo_size = checked_mul_u32(scratch_reloc_word_count(), 4,
+                                       "scratch relocation data");
+        g_padlo_addr = checked_align_u32(file_top, 4, "scratch relocation data");
+        uint32_t padlo_end = checked_add_u32(g_padlo_addr, g_padlo_size,
+                                             "scratch relocation data");
         uint32_t shift = padlo_end - file_top;
 
         /* Move any NOBITS sections that started at or after file_top
@@ -737,7 +882,8 @@ static void compute_layout(void) {
                 continue;
             if((s->sh_flags & SHF_ALLOC) && s->sh_type == SHT_NOBITS) {
                 if(s->out_addr >= file_top)
-                    s->out_addr += shift;
+                    s->out_addr = checked_add_u32(s->out_addr, shift,
+                                                  "shifted NOBITS section");
             }
         }
 
@@ -745,11 +891,11 @@ static void compute_layout(void) {
         if(mem_top < padlo_end)
             mem_top = padlo_end;
         else
-            mem_top += shift;
+            mem_top = checked_add_u32(mem_top, shift, "IRX memory size");
     }
 
-    g_out_filesz = (file_top + 3) & ~3;
-    g_out_memsz = (mem_top + 3) & ~3;
+    g_out_filesz = checked_align_u32(file_top, 4, "IRX file payload size");
+    g_out_memsz = checked_align_u32(mem_top, 4, "IRX memory size");
 
     /* Synthesize the new shstrtab. */
     g_out_shstr_size = 1; /* leading NUL */
@@ -757,13 +903,23 @@ static void compute_layout(void) {
         struct Section *s = &g_sections[i];
         if(!s->keep)
             continue;
-        g_out_shstr_size += (uint32_t)strlen(s->name) + 1;
+        g_out_shstr_size = checked_add_u32(
+            g_out_shstr_size, (uint32_t)strlen(s->name) + 1,
+            "section-name string table");
     }
     if(scratch_reloc_word_count() > 0)
-        g_out_shstr_size += (uint32_t)strlen(PADLO_NAME) + 1;
-    g_out_shstr_size += (uint32_t)strlen(".shstrtab") + 1;
-    g_out_shstr_size += (uint32_t)strlen(".symtab") + 1;
-    g_out_shstr_size += (uint32_t)strlen(".strtab") + 1;
+        g_out_shstr_size = checked_add_u32(
+            g_out_shstr_size, (uint32_t)strlen(PADLO_NAME) + 1,
+            "section-name string table");
+    g_out_shstr_size = checked_add_u32(
+        g_out_shstr_size, (uint32_t)strlen(".shstrtab") + 1,
+        "section-name string table");
+    g_out_shstr_size = checked_add_u32(
+        g_out_shstr_size, (uint32_t)strlen(".symtab") + 1,
+        "section-name string table");
+    g_out_shstr_size = checked_add_u32(
+        g_out_shstr_size, (uint32_t)strlen(".strtab") + 1,
+        "section-name string table");
 
     /* Layout:
      *   [0..52)         ELF header
@@ -780,27 +936,49 @@ static void compute_layout(void) {
      *   dummy .strtab
      */
     g_out_phoff = 52;
-    g_out_iopmod_off = g_out_phoff + 2 * 32;
-    g_out_alloc_off = (g_out_iopmod_off + g_sections[g_iopmod_idx].sh_size + 15) & ~15;
-    g_out_shstrtab_off = g_out_alloc_off + g_out_filesz;
+    g_out_iopmod_off = checked_add_u32(
+        g_out_phoff, checked_mul_u32(2, 32, "program header table"),
+        "program header table");
+    g_out_alloc_off = checked_add_u32(g_out_iopmod_off,
+                                      g_sections[g_iopmod_idx].sh_size,
+                                      ".iopmod layout");
+    g_out_alloc_off = checked_align_u32(g_out_alloc_off, 16,
+                                        "allocated payload offset");
+    g_out_shstrtab_off = checked_add_u32(g_out_alloc_off, g_out_filesz,
+                                         "section-name table offset");
 
-    g_out_shnum = (uint32_t)nkeep + (scratch_reloc_word_count() > 0 ? 1 : 0) + 4;
+    g_out_shnum = checked_add_u32((uint32_t)nkeep,
+                                  scratch_reloc_word_count() > 0 ? 1 : 0,
+                                  "output section count");
+    g_out_shnum = checked_add_u32(g_out_shnum, 4, "output section count");
+    if(g_out_shnum > UINT16_MAX)
+        die("output has too many sections (%u)", g_out_shnum);
     /* NULL + kept + (.elf2irx_padlo if any) + shstrtab/symtab/strtab */
     uint32_t iopmod_size = g_sections[g_iopmod_idx].sh_size;
     (void)iopmod_size;
-    g_out_shoff = (g_out_shstrtab_off + g_out_shstr_size + 3) & ~3;
+    g_out_shoff = checked_add_u32(g_out_shstrtab_off, g_out_shstr_size,
+                                  "section header offset");
+    g_out_shoff = checked_align_u32(g_out_shoff, 4, "section header offset");
 
-    g_out_relocbase = g_out_shoff + g_out_shnum * 40;
+    g_out_relocbase = checked_add_u32(
+        g_out_shoff, checked_mul_u32(g_out_shnum, 40, "section header table"),
+        "section header table");
     /* Reloc data has same size as input (we copy entries unchanged). */
     uint32_t reloc_total = 0;
     for(int i = 0; i < g_e_shnum; i++) {
         struct Section *s = &g_sections[i];
         if(s->keep && s->sh_type == SHT_REL)
-            reloc_total += s->out_size;
+            reloc_total = checked_add_u32(reloc_total, s->out_size,
+                                          "relocation tables");
     }
-    g_out_symtab_off = (g_out_relocbase + reloc_total + 3) & ~3;
-    g_out_strtab_off = g_out_symtab_off + 16;
-    g_out_total_size = g_out_strtab_off + 1;
+    g_out_symtab_off = checked_add_u32(g_out_relocbase, reloc_total,
+                                       "symbol table offset");
+    g_out_symtab_off = checked_align_u32(g_out_symtab_off, 4,
+                                         "symbol table offset");
+    g_out_strtab_off = checked_add_u32(g_out_symtab_off, 16,
+                                       "string table offset");
+    g_out_total_size = checked_add_u32(g_out_strtab_off, 1,
+                                       "IRX output size");
 
     /* Assign output offsets and indices. */
     uint32_t cur_reloc = g_out_relocbase;
@@ -815,24 +993,28 @@ static void compute_layout(void) {
         if(i == g_iopmod_idx) {
             s->out_offset = g_out_iopmod_off;
         } else if(s->sh_type == SHT_PROGBITS && (s->sh_flags & SHF_ALLOC)) {
-            s->out_offset = g_out_alloc_off + s->out_addr;
+            s->out_offset = checked_add_u32(g_out_alloc_off, s->out_addr,
+                                            "allocated section output offset");
         } else if(s->sh_type == SHT_NOBITS) {
             /* NOBITS sections don't take file space. iopfixup uses
              * the file offset where allocated PROGBITS ends (which
              * is also where the section header string table starts).
              * Same value for every NOBITS section regardless of its
              * IRX-relative address. */
-            s->out_offset = g_out_alloc_off + g_out_filesz;
+            s->out_offset = checked_add_u32(g_out_alloc_off, g_out_filesz,
+                                            "NOBITS output offset");
         } else if(s->sh_type == SHT_REL) {
             s->out_offset = cur_reloc;
-            cur_reloc += s->out_size;
+            cur_reloc = checked_add_u32(cur_reloc, s->out_size,
+                                        "relocation section output offset");
         } else {
             s->out_offset = 0;
         }
     }
     if(scratch_reloc_word_count() > 0) {
         g_padlo_index = sect++;
-        g_padlo_offset = g_out_alloc_off + g_padlo_addr;
+        g_padlo_offset = checked_add_u32(g_out_alloc_off, g_padlo_addr,
+                                         "scratch relocation output offset");
     }
 
     if(!translate_input_addr(g_e_entry, &g_e_entry_out))
@@ -1014,7 +1196,8 @@ static void synthesize_iopmod(void) {
     uint32_t name = 0;
     uint32_t version = 0;
     const struct Section *irx_sec = &g_sections[irx->st_shndx];
-    if(irx_sec->sh_type != SHT_NOBITS && irx->st_value + 8 <= irx_sec->sh_size)
+    if(irx_sec->sh_type != SHT_NOBITS &&
+       (uint64_t)irx->st_value + 8 <= irx_sec->sh_size)
         version = rd32(g_in + irx_sec->sh_offset + irx->st_value + 4);
     for(int i = 0; i < g_e_shnum; i++) {
         const struct Section *rel = &g_sections[i];
@@ -1057,9 +1240,11 @@ static void synthesize_iopmod(void) {
         if(!(s->sh_flags & SHF_ALLOC))
             continue;
         if(s->sh_type == SHT_NOBITS) {
-            bss_size += s->sh_size;
+            bss_size = checked_add_u32(bss_size, s->sh_size,
+                                       ".iopmod BSS size");
         } else if(!(s->sh_flags & SHF_EXECINSTR)) {
-            init_data_size += s->sh_size;
+            init_data_size = checked_add_u32(init_data_size, s->sh_size,
+                                             ".iopmod initialized-data size");
         }
     }
 
@@ -1115,6 +1300,9 @@ static void emit_relocation_section(const struct Section *s, uint8_t *out) {
     uint32_t base = (s->sh_info < g_e_shnum) ? g_sections[s->sh_info].out_addr : 0;
     int rel_sec_idx = (int)(s - g_sections);
 
+    if(n_in == 0)
+        return;
+
     /* Pass 1: collect kept entries; tag any stray HI16s. */
     struct KeptRel *kept = malloc(n_in * sizeof(*kept));
     if(!kept)
@@ -1127,7 +1315,8 @@ static void emit_relocation_section(const struct Section *s, uint8_t *out) {
         if(!relocation_kept_for_loader(type))
             continue;
         kept[nk].off_in = off;
-        kept[nk].off_out = off + base;
+        kept[nk].off_out = checked_add_u32(off, base,
+                                           "relocation output offset");
         kept[nk].type = type;
         kept[nk].sym = (uint32_t)ELF32_R_SYM(info);
         kept[nk].stray_idx = -1;
@@ -1148,6 +1337,11 @@ static void emit_relocation_section(const struct Section *s, uint8_t *out) {
             }
         }
         nk++;
+    }
+
+    if(nk == 0) {
+        free(kept);
+        return;
     }
 
     /* Pass 2: pair non-stray HI16s with their matching LO16. Stray
@@ -1545,25 +1739,44 @@ static void emit_irx(void) {
 }
 
 int main(int argc, char **argv) {
-    int argi = 1;
-    while(argi < argc && argv[argi][0] == '-') {
-        if(strcmp(argv[argi], "-v") == 0) {
+    const char *positional[2] = { NULL, NULL };
+    int positional_count = 0;
+    int output_was_set = 0;
+    int parse_options = 1;
+
+    for(int i = 1; i < argc; i++) {
+        if(parse_options && strcmp(argv[i], "--") == 0) {
+            parse_options = 0;
+        } else if(parse_options && strcmp(argv[i], "-v") == 0) {
             g_verbose = 1;
-            argi++;
-            continue;
+        } else if(parse_options && strcmp(argv[i], "-o") == 0) {
+            if(output_was_set)
+                die("output path specified more than once");
+            if(i + 1 >= argc)
+                die("-o requires an output path");
+            g_out_name = argv[++i];
+            output_was_set = 1;
+        } else if(parse_options && argv[i][0] == '-') {
+            die("unknown option %s", argv[i]);
+        } else {
+            if(positional_count == 2)
+                die("too many positional arguments");
+            positional[positional_count++] = argv[i];
         }
-        if(strcmp(argv[argi], "--") == 0) {
-            argi++;
-            break;
-        }
-        die("unknown option %s", argv[argi]);
     }
-    if(argc - argi != 2) {
-        fprintf(stderr, "Usage: %s [-v] input.elf output.irx\n", argv[0]);
+
+    if((output_was_set && positional_count != 1) ||
+       (!output_was_set && positional_count != 2)) {
+        fprintf(stderr,
+                "Usage: %s [-v] -o output.irx input.elf\n"
+                "       %s [-v] input.elf output.irx  (legacy form)\n",
+                argv[0], argv[0]);
         return 2;
     }
-    g_in_name = argv[argi];
-    g_out_name = argv[argi + 1];
+
+    g_in_name = positional[0];
+    if(!output_was_set)
+        g_out_name = positional[1];
 
     load_input();
     parse_elf_header();

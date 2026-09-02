@@ -276,7 +276,7 @@ $(ELF2IRX): $(ROOT)/host/tools/elf2irx/elf2irx.c $(ROOT)/host/tools/elf2irx/Make
 
 $(KOSDEV9_IRX): $(KOSDEV9_IRX_STRIPPED) $(ELF2IRX)
 	@echo "  ELF2IRX $@"
-	@$(ELF2IRX) $< $@
+	@$(ELF2IRX) -o $@ $<
 
 $(KOSDEV9_IRX_HDR): $(KOSDEV9_IRX)
 	@echo "  GEN     $@"
@@ -315,7 +315,7 @@ $(SMAP_IRX_STRIPPED_ELF): $(SMAP_IRX_ELF)
 
 $(SMAP_IRX): $(SMAP_IRX_STRIPPED_ELF) $(ELF2IRX)
 	@echo "  ELF2IRX $@"
-	@$(ELF2IRX) $< $@
+	@$(ELF2IRX) -o $@ $<
 
 $(SMAP_IRX_HDR): $(SMAP_IRX)
 	@echo "  GEN     $@"
