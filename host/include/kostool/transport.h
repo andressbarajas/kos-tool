@@ -20,6 +20,7 @@
 #define TRANSPORT_CAP_RECOVERY     (1 << 4) /* Packet recovery (network) */
 #define TRANSPORT_CAP_RTC          (1 << 5)
 #define TRANSPORT_CAP_SPEED_CHANGE (1 << 6)
+#define TRANSPORT_CAP_STATUS       (1 << 7)
 
 /*
  * Host-side transport interface.
@@ -56,6 +57,7 @@ typedef struct transport_ops {
     int (*pmcr_command)(kostool_context_t *ctx, const uint8_t *cmd, size_t cmd_size, uint8_t *resp,
                         size_t *resp_size);
     int (*set_rtc)(kostool_context_t *ctx, uint32_t timestamp);
+    int (*get_status)(kostool_context_t *ctx, uint32_t *status);
 } transport_ops_t;
 
 static inline int transport_has_capability(const transport_ops_t *ops, uint32_t capability) {
@@ -80,6 +82,10 @@ static inline int transport_can_pmcr(const transport_ops_t *ops) {
 
 static inline int transport_can_set_rtc(const transport_ops_t *ops) {
     return transport_has_capability(ops, TRANSPORT_CAP_RTC) && ops->set_rtc;
+}
+
+static inline int transport_can_get_status(const transport_ops_t *ops) {
+    return transport_has_capability(ops, TRANSPORT_CAP_STATUS) && ops->get_status;
 }
 
 static inline int transport_uses_compression(const transport_ops_t *ops) {

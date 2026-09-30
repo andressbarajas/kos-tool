@@ -208,6 +208,11 @@ static void process_udp(ether_header_t *ether, ip_header_t *ip, udp_header_t *ud
             pkt_match_id = 0;
         }
 
+        if((pkt_match_id) && (memcmp(&pkt_match_id, NET_CMD_STATUS, 4) == 0)) {
+            cmd_status(ip, udp, command);
+            pkt_match_id = 0;
+        }
+
         if((pkt_match_id) && (memcmp(&pkt_match_id, NET_CMD_SETRTC, 4) == 0)) {
             cmd_setrtc(ip, udp, command);
             pkt_match_id = 0;

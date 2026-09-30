@@ -107,6 +107,7 @@ static inline int map_test(int index) {
 void cmd_reboot(void) {
     booted = false;
     running = false;
+    receiving = false;
 
     const target_ops_t *t = target_get_ops();
     t->reboot();
@@ -115,6 +116,7 @@ void cmd_reboot(void) {
 void cmd_execute(ether_header_t *ether, ip_header_t *ip, udp_header_t *udp, command_t *command) {
     if(!running) {
         bb->stop();
+        receiving = false;
 
         tool_ip = ntohl(ip->src);
         tool_port = ntohs(udp->src);
@@ -241,6 +243,7 @@ void cmd_loadbin(ip_header_t *ip, udp_header_t *udp, command_t *command) {
 
     /* Zero out the received packet map */
     map_clear_all();
+    receiving = true;
 
     our_ip = ntohl(ip->dest);
 
@@ -359,6 +362,7 @@ void cmd_donebin(ip_header_t *ip, udp_header_t *udp, command_t *command) {
     if(i == map_index_verify) {
         response->address = 0;
         response->size = 0;
+        receiving = false;
     } else {
         response->address = htonl(bin_info.load_address + i * payload_size);
         response->size = htonl(min(bin_info.load_size - i * payload_size, payload_size));
@@ -459,6 +463,29 @@ void cmd_capabilities(ip_header_t *ip, udp_header_t *udp, command_t *command) {
     memcpy(response, command, COMMAND_LEN);
     response->address = htonl(kosload_info.capabilities);
     response->size = htonl(0);
+
+    make_ip(ntohl(ip->src), our_ip, UDP_H_LEN + COMMAND_LEN, IP_UDP_PROTOCOL,
+            (ip_header_t *)(pkt_buf + ETHER_H_LEN), ip->packet_id);
+    make_udp(ntohs(udp->src), kosload_syscall_port, COMMAND_LEN, (ip_header_t *)(pkt_buf + ETHER_H_LEN),
+             (udp_header_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN));
+    bb->tx(pkt_buf, ETHER_H_LEN + IP_H_LEN + UDP_H_LEN + COMMAND_LEN);
+}
+
+void cmd_status(ip_header_t *ip, udp_header_t *udp, command_t *command) {
+    unsigned char *buffer = pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN;
+    command_t *response = (command_t *)buffer;
+    uint32_t status = 0;
+
+    if(booted)
+        status |= KOSLOAD_STATUS_BOOTED;
+    if(running)
+        status |= KOSLOAD_STATUS_RUNNING;
+    if(receiving)
+        status |= KOSLOAD_STATUS_RECEIVING;
+
+    memcpy(response, command, COMMAND_LEN);
+    response->address = htonl(status);
+    response->size = 0;
 
     make_ip(ntohl(ip->src), our_ip, UDP_H_LEN + COMMAND_LEN, IP_UDP_PROTOCOL,
             (ip_header_t *)(pkt_buf + ETHER_H_LEN), ip->packet_id);

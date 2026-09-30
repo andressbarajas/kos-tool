@@ -243,6 +243,7 @@ static void usage(void) {
     printf("  -f           Fast mode (no FIFO delays)\n");
     printf("  -F           Enable automatic firmware update\n");
     printf("  -P, --diag   Print performance diagnostics\n");
+    printf("  --ready      Exit successfully only when a Dreamcast loader is idle\n");
     printf("  -w           Sync console RTC to host time\n");
     printf("  -U <file>    Update firmware from external file\n");
     printf("  -h           Show this help\n\n");
@@ -280,6 +281,7 @@ int main(int argc, char *argv[]) {
     int explicit_target = 0;
     int explicit_baud = 0;
     int explicit_address = 0;
+    int ready_check = 0;
 
     if(argc < 2) {
         usage();
@@ -299,6 +301,10 @@ int main(int argc, char *argv[]) {
         if(strcmp(argv[i], "--diag") == 0 || strcmp(argv[i], "--diagnostics") == 0 ||
            strcmp(argv[i], "--perf") == 0) {
             ctx.diagnostics_enabled = 1;
+            continue;
+        }
+        if(strcmp(argv[i], "--ready") == 0) {
+            ready_check = 1;
             continue;
         }
         switch(argv[i][1]) {
@@ -542,6 +548,26 @@ int main(int argc, char *argv[]) {
      * handshake unless the user explicitly supplied -a. */
     if(!explicit_address)
         ctx.load_address = default_load_address(ctx.console_type);
+
+    if(ready_check) {
+        uint32_t status;
+        int ready_ret;
+
+        if(ctx.console_type != CONSOLE_DC || !transport_can_get_status(ctx.transport) ||
+           ctx.transport->get_status(&ctx, &status) != 0) {
+            fprintf(stderr, "Dreamcast loader status is unavailable\n");
+            ready_ret = 1;
+        } else if((status & (KOSLOAD_STATUS_BOOTED | KOSLOAD_STATUS_RUNNING | KOSLOAD_STATUS_RECEIVING)) !=
+                  KOSLOAD_STATUS_BOOTED) {
+            fprintf(stderr, "Dreamcast loader is not idle (status 0x%08x)\n", status);
+            ready_ret = 1;
+        } else {
+            printf("Dreamcast loader ready\n");
+            ready_ret = 0;
+        }
+        ctx.transport->shutdown(&ctx);
+        return ready_ret;
+    }
 
     /* Firmware update if requested */
     if(!ctx.skip_update || ctx.firmware_path) {
