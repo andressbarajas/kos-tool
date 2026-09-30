@@ -229,6 +229,7 @@ make wii      # Wii firmware + examples + rebuild kos-tool
 make xbox     # Xbox firmware + examples + rebuild kos-tool
 make psp      # PSP firmware + EBOOT.PBP + examples + rebuild kos-tool
 make host     # Host tool only (embeds whatever firmware bins exist)
+make install  # Install kos-tool in /opt/toolchains/dc/bin
 make dist     # Delivery artifacts: CDI (DC), ISO (GC), Wii channel WAD, PS2 ISO, Xbox XISO, and PSP EBOOT.PBP
 make dist-dc  # Dreamcast-only bootable CDI images
 make dist-gc  # GameCube-only bootable ISO images
@@ -237,6 +238,15 @@ make dist-ps2 # PlayStation 2-only bootable ISO
 make dist-xbox # Xbox-only bootable XISO
 make dist-psp # PSP-only EBOOT.PBP
 make gc-dol   # GameCube DOL files only (no ISO)
+```
+
+Set `TOOLINSTALLDIR` to use another destination; package builds can stage it
+with `DESTDIR`.
+
+After booting `dc-load-ip.cdi`, verify that it is idle and ready for an upload:
+
+```bash
+kos-tool --ready -t 10.0.0.184
 ```
 
 You can also override toolchains per invocation:

@@ -53,6 +53,7 @@ include mk/toolchains.mk
 # deleted from client/examples/ lingers and ships in the release bundle.
 
 BUILDDIR := build
+TOOLINSTALLDIR ?= /opt/toolchains/dc/bin
 
 DC_OUT   := $(BUILDDIR)/dc
 GC_OUT   := $(BUILDDIR)/gc
@@ -122,7 +123,7 @@ endef
         auto-dc auto-gc auto-wii auto-ps2 auto-xbox auto-psp \
         dist-auto-dc dist-auto-gc dist-auto-wii dist-auto-ps2 dist-auto-xbox \
         dist-auto-psp \
-        release release-host release-firmware print-version clean \
+        release release-host release-firmware print-version install clean \
         check-dc-toolchain check-gc-toolchain check-wii-toolchain check-ps2-toolchain \
         check-xbox-toolchain check-psp-toolchain
 
@@ -232,6 +233,11 @@ host: | $(BUILDDIR)
 	$(MAKE) -C host ROOT=$(ROOT)
 	@cp host/build/kos-tool $(BUILDDIR)/ 2>/dev/null || cp host/build/kos-tool.exe $(BUILDDIR)/
 	@echo "  COPY    $(BUILDDIR)/kos-tool"
+
+install: host
+	@mkdir -p $(DESTDIR)$(TOOLINSTALLDIR)
+	install -m 755 $(BUILDDIR)/kos-tool $(DESTDIR)$(TOOLINSTALLDIR)/kos-tool
+	@echo "  INSTALL $(DESTDIR)$(TOOLINSTALLDIR)/kos-tool"
 
 dc: check-dc-toolchain | $(DC_OUT)
 	$(MAKE) -C client/dreamcast ROOT=$(ROOT) all

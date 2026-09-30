@@ -372,6 +372,28 @@ static int query_capabilities(kostool_context_t *ctx, uint32_t *capabilities) {
     return -1;
 }
 
+static int query_status(kostool_context_t *ctx, uint32_t *status) {
+    uint8_t buffer[2048];
+
+    for(int attempt = 0; attempt < 2; attempt++) {
+        uint64_t start = ctx->time_ops->time_usec();
+
+        send_cmd(ctx, NET_CMD_STATUS, 0, 0, NULL, 0);
+        while((ctx->time_ops->time_usec() - start) < NET_PACKET_TIMEOUT_USEC) {
+            int rv = recv_resp(ctx, buffer, sizeof(buffer), NET_PACKET_TIMEOUT_USEC);
+
+            if(rv <= 0)
+                break;
+            if(rv >= NET_COMMAND_LEN && memcmp(buffer, NET_CMD_STATUS, 4) == 0) {
+                *status = ntohl(((net_command_t *)buffer)->address);
+                return 0;
+            }
+        }
+    }
+
+    return -1;
+}
+
 /*
  * Encode kos-tool version into a uint32 for handshake:
  * (major<<16)|(minor<<8)|patch Returns 0 if force_legacy is set.
@@ -1261,10 +1283,16 @@ static int network_set_rtc(kostool_context_t *ctx, uint32_t timestamp) {
     return 0;
 }
 
+static int network_get_status(kostool_context_t *ctx, uint32_t *status) {
+    if(!(ctx->remote_capabilities & KOSLOAD_CAP_STATUS))
+        return -1;
+    return query_status(ctx, status);
+}
+
 const transport_ops_t network_transport_ops = {
     .name = "network",
     .capabilities = TRANSPORT_CAP_RESET | TRANSPORT_CAP_MAPLE | TRANSPORT_CAP_PMCR | TRANSPORT_CAP_RECOVERY |
-                    TRANSPORT_CAP_RTC,
+                    TRANSPORT_CAP_RTC | TRANSPORT_CAP_STATUS,
     .init = network_init,
     .shutdown = network_shutdown,
     .send_data = network_send_data,
@@ -1277,4 +1305,5 @@ const transport_ops_t network_transport_ops = {
     .maple_command = network_maple,
     .pmcr_command = network_pmcr,
     .set_rtc = network_set_rtc,
+    .get_status = network_get_status,
 };

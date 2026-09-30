@@ -72,6 +72,7 @@
 #define NET_CMD_SENDBINQ     "SBIQ" /* Send a binary, quiet */
 #define NET_CMD_VERSION      "VERS" /* Version info exchange */
 #define NET_CMD_CAPABILITIES "CAPS" /* Query capability bitmask */
+#define NET_CMD_STATUS       "STAT" /* Query loader state */
 #define NET_CMD_RETVAL       "RETV" /* Return value */
 #define NET_CMD_REBOOT       "RBOT" /* Reboot console */
 #define NET_CMD_MAPLE        "MAPL" /* Maple bus passthrough */
@@ -114,6 +115,13 @@
 #define KOSLOAD_CAP_CDFS_REDIR (1 << 4)
 #define KOSLOAD_CAP_ARGV       (1 << 5)
 #define KOSLOAD_CAP_FW_PREPARE (1 << 6) /* honours KOSLOAD_SERIAL_EXEC_FW_UPDATE */
+#define KOSLOAD_CAP_STATUS     (1 << 7) /* answers NET_CMD_STATUS */
+
+/* NET_CMD_STATUS state bits. A loader is ready to accept a new program when
+ * BOOTED is set and neither RUNNING nor RECEIVING is set. */
+#define KOSLOAD_STATUS_BOOTED    (1 << 0)
+#define KOSLOAD_STATUS_RUNNING   (1 << 1)
+#define KOSLOAD_STATUS_RECEIVING (1 << 2)
 
 /* ===== Host-side capabilities (kos-tool -> kosload) */
 #define KOSTOOL_CAP_GDB_ACTIVE (1 << 0) /* kos-tool started with -g */

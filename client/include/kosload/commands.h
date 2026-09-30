@@ -36,6 +36,7 @@ void cmd_donebin(ip_header_t *ip, udp_header_t *udp, command_t *command);
 void cmd_sendbinq(ip_header_t *ip, udp_header_t *udp, command_t *command);
 void cmd_sendbin(ip_header_t *ip, udp_header_t *udp, command_t *command);
 void cmd_capabilities(ip_header_t *ip, udp_header_t *udp, command_t *command);
+void cmd_status(ip_header_t *ip, udp_header_t *udp, command_t *command);
 void cmd_version(ip_header_t *ip, udp_header_t *udp, command_t *command);
 void cmd_retval(ip_header_t *ip, udp_header_t *udp, command_t *command);
 void cmd_maple(ip_header_t *ip, udp_header_t *udp, command_t *command);

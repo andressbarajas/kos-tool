@@ -134,7 +134,8 @@ static int network_transport_init(void) {
     /* Reset boot state so display is redrawn (needed after program return) */
     booted = false;
 
-    kosload_info.capabilities = KOSLOAD_CAP_NETWORK | KOSLOAD_CAP_GDB | KOSLOAD_CAP_ARGV;
+    kosload_info.capabilities = KOSLOAD_CAP_NETWORK | KOSLOAD_CAP_GDB | KOSLOAD_CAP_ARGV |
+                                KOSLOAD_CAP_STATUS;
     if(target_get_ops()->cdfs_redir_enable)
         kosload_info.capabilities |= KOSLOAD_CAP_CDFS_REDIR;
     set_network_init_error("NO ETHERNET ADAPTER DETECTED!");
