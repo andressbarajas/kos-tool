@@ -155,6 +155,9 @@ typedef struct kostool_context {
     /* Firmware update */
     int skip_update;
     const char *firmware_path;
+
+    /* --scrambled: always descramble raw Dreamcast uploads */
+    int force_descramble;
 } kostool_context_t;
 
 #endif /* KOSTOOL_CONTEXT_H */

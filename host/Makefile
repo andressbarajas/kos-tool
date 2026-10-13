@@ -212,6 +212,7 @@ CORE_SRCS := \
     src/binary/srec.c \
     src/binary/dol.c \
     src/binary/raw.c \
+    src/binary/scramble.c \
     $(USB_SRC)
 
 ALL_SRCS := $(CORE_SRCS) $(PLATFORM_SRCS)

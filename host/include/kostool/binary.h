@@ -34,4 +34,7 @@ extern const binary_ops_t raw_binary_ops;
 int binary_auto_load(const char *filename, uint32_t default_addr, uint32_t *entry_addr, binary_section_cb cb,
                      void *ud);
 
+/* Dreamcast binary descrambling */
+int dc_descramble(const uint8_t *in, uint8_t *out, size_t size);
+
 #endif /* KOSTOOL_BINARY_H */

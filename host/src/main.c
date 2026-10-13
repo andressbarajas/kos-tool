@@ -244,6 +244,7 @@ static void usage(void) {
     printf("  -F           Enable automatic firmware update\n");
     printf("  -P, --diag   Print performance diagnostics\n");
     printf("  -w           Sync console RTC to host time\n");
+    printf("  --scrambled  Descramble a raw Dreamcast binary (automatic for 1st_read.bin, case-insensitive)\n");
     printf("  -U <file>    Update firmware from external file\n");
     printf("  -h           Show this help\n\n");
 }
@@ -299,6 +300,10 @@ int main(int argc, char *argv[]) {
         if(strcmp(argv[i], "--diag") == 0 || strcmp(argv[i], "--diagnostics") == 0 ||
            strcmp(argv[i], "--perf") == 0) {
             ctx.diagnostics_enabled = 1;
+            continue;
+        }
+        if(strcmp(argv[i], "--scrambled") == 0) {
+            ctx.force_descramble = 1;
             continue;
         }
         switch(argv[i][1]) {
