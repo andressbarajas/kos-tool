@@ -2164,8 +2164,11 @@ static void net_syscall_write(kostool_context_t *ctx, uint8_t *pkt, int pkt_len)
 
     if(have_inline) {
         memcpy(data, pkt + inline_off, count);
-    } else {
-        ctx->transport->recv_data(ctx, data, addr, count, 1);
+    } else if(ctx->transport->recv_data(ctx, data, addr, count, 1) < 0) {
+        /* Incomplete pull: don't write a partly uninitialised buffer */
+        net_send_cmd(ctx, NET_CMD_RETVAL, (uint32_t)-1, (uint32_t)-1, NULL, 0);
+        free(data);
+        return;
     }
 
     int ret;
