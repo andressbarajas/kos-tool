@@ -149,6 +149,7 @@ typedef unsigned int uint32;
 #define DHCP_OPTION_IRC_SERVER          74
 #define DHCP_OPTION_STREETTALK_SERVER   75
 #define DHCP_OPTION_STDA_SERVER         76
+#define DHCP_OPTION_RAPID_COMMIT        80 /* RFC 4039 */
 #define DHCP_OPTION_END                 255
 
 /* DHCP Message Types, as defined in RFC 2132. */
@@ -195,6 +196,10 @@ typedef struct __attribute__((packed, aligned(4))) {
 
 #define DHCP_H_LEN 236
 
+/* Servers send from port 67 to clients on port 68 */
+#define DHCP_DEST_PORT   67
+#define DHCP_SOURCE_PORT 68
+
 extern volatile unsigned int dhcp_lease_time;
 extern unsigned char dhcp_nest_counter_maxed;
 extern unsigned int dhcp_attempts;
@@ -202,7 +207,9 @@ extern unsigned int dhcp_attempts;
 int handle_dhcp_reply(unsigned char *routersrcmac, dhcp_pkt_t *pkt_data,
                       unsigned short len);
 int dhcp_go(unsigned int *dhcp_ip_address_buffer);
-int dhcp_renew(unsigned int *dhcp_ip_address_buffer);
+/* rebind: broadcast to any server instead of unicast to ours.
+ * Returns 0 on ACK, -2 on NAK, -1 on no answer. */
+int dhcp_renew(unsigned int *dhcp_ip_address_buffer, int rebind);
 
 /* Lease-time countdown only — no network operations. */
 void dhcp_tick(void);
