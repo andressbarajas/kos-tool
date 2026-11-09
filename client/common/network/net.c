@@ -132,10 +132,11 @@ static void process_udp(ether_header_t *ether, ip_header_t *ip, udp_header_t *ud
     if(__builtin_expect(i != udp->checksum, 0))
         return;
 
-    /* Handle DHCP replies */
+    /* Handle DHCP replies (server port 67 to client port 68 only) */
     dhcp_pkt_t *udp_pkt_data = (dhcp_pkt_t *)udp->data;
-    if(__builtin_expect(udp_pkt_data->op == DHCP_OP_BOOTREPLY, 0)) {
-        if(!handle_dhcp_reply(ether->src, udp_pkt_data, udp_data_length)) {
+    if(__builtin_expect(udp->dest == htons(DHCP_SOURCE_PORT), 0)) {
+        if((udp->src == htons(DHCP_DEST_PORT)) && (udp_pkt_data->op == DHCP_OP_BOOTREPLY) &&
+           !handle_dhcp_reply(ether->src, udp_pkt_data, udp_data_length)) {
             escape_loop = 1;
         }
     } else {
