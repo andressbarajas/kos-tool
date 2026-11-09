@@ -2024,6 +2024,7 @@ static void ser_syscall_gdbpacket(kostool_context_t *ctx) {
 
     if(ctx->gdb_client_socket < 0) {
         printf("waiting for gdb client connection...\n");
+        fflush(stdout); /* stdout may be fully buffered (e.g. a pipe from an IDE) */
         ctx->gdb_client_socket = ctx->socket_ops->accept(ctx->gdb_server_socket);
         if(ctx->gdb_client_socket < 0) {
             fprintf(stderr, "error accepting gdb connection\n");
@@ -2473,6 +2474,7 @@ static void net_syscall_gdbpacket(kostool_context_t *ctx, uint8_t *pkt) {
 
     if(ctx->gdb_client_socket < 0) {
         printf("waiting for gdb client connection...\n");
+        fflush(stdout); /* stdout may be fully buffered (e.g. a pipe from an IDE) */
         ctx->gdb_client_socket = ctx->socket_ops->accept(ctx->gdb_server_socket);
         if(ctx->gdb_client_socket < 0) {
             fprintf(stderr, "error accepting gdb connection\n");
