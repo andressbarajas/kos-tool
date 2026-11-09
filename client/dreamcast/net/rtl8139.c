@@ -239,6 +239,9 @@ static int rtl_init(void) {
     /* Enable auto-negotiation and restart that process */
     nic16[RT_MII_BMCR / 2] = RTL_AUTONEG_RESTART;
 
+    /* Wait for the link-change interrupt the restart raises (every loader entry) */
+    rtl_link_up = false;
+
     /* Initialize status vars */
     rtl.cur_tx = 0;
     rtl.cur_rx = 0;
@@ -774,8 +777,8 @@ void rtl_bb_loop(bool is_main_loop) {
             disp_info();
         }
 
-        // Need to wait for a link change before it's OK to do anything
-        rtl_link_up = false;
+        // Don't clear rtl_link_up here (rtl_init() does): no link interrupt
+        // follows a main-loop re-entry, so DHCP would stop until a replug.
     }
 
     if(timeout_loop > 0) {
