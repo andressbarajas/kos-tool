@@ -323,8 +323,37 @@ static void dc_tmu2_start(void) {
     TMU_TSTR |= 4; /* Start TMU2 */
 }
 
+/* Monotonic ticks at Pclk/1024, accumulated from TMU2 deltas.  The loader
+ * sets TMU2 up as a free-running Pclk/1024 counter, but a running KOS
+ * program reprograms it (other prescaler, 1 s reload) and a syscall then
+ * reads the program's counter.  Fold each step modulo the current reload
+ * and scale by the current prescaler, so the count stays monotonic and in
+ * the same unit whoever configured the timer.  Valid while polled at least
+ * once per reload period (1 s under KOS; the wait loops poll continuously);
+ * time between polls longer than that is simply not counted. */
+static uint64_t dc_ticks_pclk4;  /* Pclk/4 units */
+static uint32_t dc_ticks_last_cnt;
+static bool dc_ticks_primed;
+
 static uint64_t dc_get_ticks(void) {
-    return (uint64_t)(0xFFFFFFFF - TMU_TCNT2); /* Convert count-down to count-up */
+    static const uint8_t shift[8] = { 0, 2, 4, 6, 8, 8, 8, 8 }; /* Pclk/4 << n */
+    uint32_t cnt = TMU_TCNT2;
+    uint32_t cor = TMU_TCOR2;
+    unsigned int tpsc = TMU_TCR2 & 7;
+
+    if(!dc_ticks_primed) {
+        dc_ticks_last_cnt = cnt;
+        dc_ticks_primed = true;
+    }
+    else {
+        /* Down-counter: elapsed = last - now, plus one period on reload. */
+        uint64_t elapsed = (cnt <= dc_ticks_last_cnt)
+            ? (uint64_t)(dc_ticks_last_cnt - cnt)
+            : (uint64_t)dc_ticks_last_cnt + ((uint64_t)cor + 1u - cnt);
+        dc_ticks_pclk4 += elapsed << shift[tpsc];
+        dc_ticks_last_cnt = cnt;
+    }
+    return dc_ticks_pclk4 >> 8;  /* Pclk/1024 */
 }
 
 static void dc_restart_timer(void) {

@@ -29,7 +29,7 @@ unsigned char *syscall_data = 0;
 unsigned int syscall_data_len = 0;
 
 /* Per-syscall bounded-wait deadline, armed only for a lossy adapter
- * (adapter_t.lossy — today the Wii's internal Wi-Fi).
+ * (adapter_t.lossy — the Wii's internal Wi-Fi, the DC Broadband Adapter).
  * kos_syscall_wait_for_retval() sets it before bb->loop(0); reliable
  * adapters never enter that path, so it stays 0 for them.  Defined here so
  * the variable has exactly one definition across all builds — the extern in
@@ -66,8 +66,8 @@ static uint64_t kos_syscall_timeout_ticks = 0;
 unsigned int kos_syscall_seq = 0;          /* echoed-back seq id of in-flight req */
 static unsigned int kos_syscall_next_seq = 1;
 
-/* Retransmit timing (used only for a lossy adapter — today the Wii's
- * internal Wi-Fi).  Per-attempt *idle* timeout: net_bump_syscall_deadline
+/* Retransmit timing (used only for a lossy adapter — the Wii's internal
+ * Wi-Fi, the DC Broadband Adapter).  Per-attempt *idle* timeout: net_bump_syscall_deadline
  * pushes the deadline forward on every inbound bulk-data packet, so it only
  * fires after a full interval of no progress (lost request or lost RETVAL),
  * never mid-transfer.
@@ -193,8 +193,8 @@ void net_bump_syscall_deadline(void) {
 
 /* Wait for the host's RETVAL.
  *
- * Reliable transports (bb->lossy == false — the raw-NIC drivers on
- * DC/GC/PS2, and the Wii's wired LAN Adapter): just bb->loop(0) and wait
+ * Reliable transports (bb->lossy == false — the DC LAN Adapter, the
+ * raw-NIC drivers on GC/PS2, and the Wii's wired LAN Adapter): just bb->loop(0) and wait
  * forever, exactly like dc-load 2.x.  The bounded-wait retransmit is
  * skipped — on a link that doesn't drop packets its per-syscall deadline
  * would fire spuriously and flood the host with duplicate requests (one
@@ -202,7 +202,7 @@ void net_bump_syscall_deadline(void) {
  * which collapses write()-heavy programs.
  *
  * Lossy transports (bb->lossy == true — the Wii's internal Wi-Fi over IOS
- * sockets): bounded retries + retransmit, so a single lost request/reply
+ * sockets, the DC Broadband Adapter): bounded retries + retransmit, so a single lost request/reply
  * recovers.  This also needs a dedup-aware host (kosload >= 3.0.0); against
  * a legacy host it falls back to wait-forever, since retransmitting could
  * re-execute a non-idempotent syscall (read, lseek, readdir).  On timeout
@@ -265,7 +265,7 @@ static void kos_syscall_wait_for_retval(void) {
 
         /* Stalled.  Retransmit the saved request — same seq id, so a host
          * that already serviced it replays the cached response without
-         * re-running the syscall.  Only a lossy adapter (the Wii wifi)
+         * re-running the syscall.  Only a lossy adapter (Wii Wi-Fi, DC BBA)
          * reaches here.  Copy the saved frame back into pkt_buf and TX
          * from there — pkt_buf is the buffer every send uses but gets
          * clobbered by response-building during the wait, hence the

@@ -56,8 +56,9 @@ typedef struct {
     /* True if this transport can silently drop datagrams, so the syscall
      * layer must use the bounded-wait retransmit (see
      * kos_syscall_wait_for_retval) instead of waiting forever for the
-     * RETVAL.  Defaults to false (raw-NIC drivers on DC/GC/PS2 don't lose
-     * packets); the Wii adapter sets it true for the internal Wi-Fi.
+     * RETVAL.  The Wii adapter sets it for the internal Wi-Fi and the DC
+     * Broadband Adapter sets it (a frame lost anywhere between console
+     * and host hung the program); the other raw NICs leave it false.
      * CONTRACT: any adapter that sets this true MUST honor
      * loop_deadline_ticks in its loop() — break (with escape_loop clear)
      * once it passes — so the retransmit can fire. */
@@ -82,9 +83,9 @@ extern int loop_secs_elapsed;
  * only for a lossy adapter (adapter_t.lossy): kos_syscall_wait_for_retval()
  * sets it before bb->loop(0) and that adapter's loop breaks (with
  * escape_loop still clear) when reached, so the syscall layer can
- * retransmit a lost request/reply.  Today only the Wii's internal Wi-Fi
- * sets lossy; reliable transports (DC/GC/PS2 raw NICs, the Wii LAN Adapter)
- * leave it 0 and wait forever for the RETVAL without consulting it. */
+ * retransmit a lost request/reply.  The Wii's internal Wi-Fi and the DC
+ * Broadband Adapter set lossy; the other transports (DC LAN Adapter,
+ * GC/PS2 raw NICs, the Wii LAN Adapter) leave it 0 and wait forever for the RETVAL without consulting it. */
 extern volatile uint64_t loop_deadline_ticks;
 
 /* All adapter drivers receive into this shared packet buffer. */

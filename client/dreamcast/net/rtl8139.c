@@ -45,7 +45,8 @@ adapter_t adapter_bba = {
     rtl_bb_stop,
     rtl_bb_loop,
     rtl_bb_tx,
-    false /* not lossy: reliable raw NIC, wait forever for RETVAL */
+    true /* a frame lost anywhere on the path would hang a syscall forever;
+          * rtl_bb_loop() honors loop_deadline_ticks, so retransmit instead */
 };
 
 static rtl_status_t  rtl = {0};
@@ -843,6 +844,13 @@ void rtl_bb_loop(bool is_main_loop) {
                 }
             }
         }
+
+        /* Bounded syscall wait (the lossy contract in kosload/net_adapter.h):
+         * after a full interval with no progress, return with escape_loop
+         * clear so the syscall layer can retransmit. */
+        if(!escape_loop && loop_deadline_ticks &&
+           t->get_ticks() >= loop_deadline_ticks)
+            break;
 
         if(is_main_loop && !escape_loop)
             screensaver_poll();
